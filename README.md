@@ -7,7 +7,7 @@
 
 <br/><br/>
 
-[![License: MIT](https://img.shields.io/github/license/JonneNieminen/Carthage?color=4fa8dc)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/github/license/JonneNieminen/Carthage?color=4fa8dc)](LICENSE)
 ![Status](https://img.shields.io/badge/status-foundations-3a434d)
 ![Last commit](https://img.shields.io/github/last-commit/JonneNieminen/Carthage?color=3a434d)
 
@@ -114,5 +114,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security problems: [SECURITY.md](SECURIT
 
 ## License
 
-The repository currently carries the [MIT](LICENSE) licence. The application will be released under
-the GPL once JUCE and Tracktion Engine are added; see [docs/DECISIONS.md](docs/DECISIONS.md).
+Carthage is free software under the [GNU Affero General Public License v3.0](LICENSE) or later. It is
+built on JUCE (AGPLv3) and Tracktion Engine (GPLv3-or-later); see [docs/DECISIONS.md](docs/DECISIONS.md), F16.

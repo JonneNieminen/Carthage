@@ -44,6 +44,6 @@ copyrighted audio or commercial plugin files; describe them instead.
 
 ## Licence
 
-The repository currently carries the MIT licence. The application will be released under the GPL once
-JUCE and Tracktion Engine are added ([docs/DECISIONS.md](docs/DECISIONS.md), F3 and O1). By
-contributing you agree that your contribution may be distributed under either.
+Carthage is licensed under the GNU Affero General Public License v3.0 or later ([LICENSE](LICENSE)),
+because JUCE is open source only under the AGPLv3 ([docs/DECISIONS.md](docs/DECISIONS.md), F16). By
+contributing you agree that your contribution is distributed under the same licence.
