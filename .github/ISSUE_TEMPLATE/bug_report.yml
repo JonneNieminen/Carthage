@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in Carthage doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report a problem. Please don't attach copyrighted audio or commercial plugin files — describe them instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. New project, 48 kHz, buffer 64
+        2. Arm channel 1 with input 1 and add an amp sim (VST3)
+        3. …
+  - type: input
+    id: version
+    attributes:
+      label: Carthage version
+      description: Carthage → About Carthage
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: machine
+    attributes:
+      label: Computer and OS version
+      placeholder: MacBook Pro M1 Pro, macOS 26.1
+    validations:
+      required: true
+  - type: input
+    id: audio
+    attributes:
+      label: Audio interface, sample rate and buffer size
+      placeholder: Focusrite Scarlett 2i2, 48 kHz, 64 samples
+  - type: input
+    id: plugin
+    attributes:
+      label: Plugin involved, if any
+      description: Name, vendor, format (AU or VST3) and version
+      placeholder: Example Amp 2.1, Example Audio, VST3
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error message, crash report or logs
+      render: text

@@ -1,0 +1,141 @@
+<!doctype html>
+<!--
+  Repo imagery for Carthage, rendered to PNG by design/banners/render.sh (headless Chrome).
+  ?art=hero|social|mark|palette|lanes|type  &theme=dark|light
+  Colours come from ../tokens.css. The copy lives in COPY and CARDS below: change it there.
+-->
+<html>
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: var(--font-ui); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; overflow: hidden; }
+  .art { position: relative; overflow: hidden; background: var(--bg); }
+  .wm { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.02em; line-height: 1; }
+  .tag { color: var(--muted); letter-spacing: -0.01em; line-height: 1.35; }
+  .card-title { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; }
+  .card-sub { margin-top: 10px; font-size: 18px; color: var(--muted); line-height: 1.45; max-width: 480px; }
+  .hex { font-family: var(--font-time); font-size: 12px; color: var(--muted); }
+  svg { display: block; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const art = q.get("art") || "hero";
+const theme = q.get("theme") || "dark";
+document.documentElement.dataset.theme = theme;
+const C = (n) => `var(--${n})`;
+
+const COPY = {
+  name: "carthage",
+  tagline: "A digital audio workstation for recording, arranging and mixing.",
+};
+const LANES = ["sky", "tide", "kelp", "sand", "coral", "murex", "rose", "slate"];
+
+// The Carthage mark ("Cothon"), 64-grid: a harbour ring open to the east around an island.
+const RING = "M44.63 20.62A17 17 0 1 0 44.63 43.38";
+function mark(size, ring = C("ring"), dot = C("accent")) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 64 64">
+    <path d="${RING}" fill="none" stroke="${ring}" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="32" cy="32" r="6" fill="${dot}"/></svg>`;
+}
+// The app icon is always the dark tile, in both themes.
+function appIcon(size, tile = "#1C2127", ring = "#D5DCE3", dot = "#8FD0F5") {
+  return `<div style="width:${size}px;height:${size}px;border-radius:${size * 0.225}px;background:${tile};box-shadow:0 ${size * 0.05}px ${size * 0.14}px rgba(0,0,0,${theme === "dark" ? 0.4 : 0.18});display:flex;align-items:center;justify-content:center;flex:none">
+    ${mark(size, ring, dot)}</div>`;
+}
+const wordmark = (px) => `<span class="wm" style="font-size:${px}px">${COPY.name}</span>`;
+
+// Small deterministic random, so every render is identical.
+function rng(seed) { let r = seed; return () => (r = (r * 9301 + 49297) % 233280) / 233280; }
+
+// The harbour seen from above: ring, ship sheds around the inside, island in the middle.
+// Track lanes leave through the channel and run off the right edge, carrying clips.
+function harbour(W, H, cx, cy, R, rows = 5) {
+  const gap = 42, rad = (a) => (a * Math.PI) / 180;
+  const ex = cx + R * Math.cos(rad(gap)), ey = R * Math.sin(rad(gap));
+  let s = `<path d="M${ex} ${cy - ey}A${R} ${R} 0 1 0 ${ex} ${cy + ey}" fill="none" stroke="${C("ring")}" stroke-width="${R * 0.15}" stroke-linecap="round"/>`;
+  for (let a = gap + 14; a <= 360 - gap - 14; a += 8.7) {
+    const c = Math.cos(rad(a)), n = Math.sin(rad(a));
+    s += `<path d="M${cx + R * 0.58 * c} ${cy - R * 0.58 * n}L${cx + R * 0.76 * c} ${cy - R * 0.76 * n}" stroke="${C("faint")}" stroke-width="${R * 0.028}" stroke-linecap="round"/>`;
+  }
+  const g = R * 0.235, ch = g * 0.6, rand = rng(7);
+  for (let i = 0; i < rows; i++) {
+    const y = cy + (i - (rows - 1) / 2) * g;
+    s += `<path d="M${cx + R * 0.5} ${y}H${W}" stroke="${C("line-strong")}" stroke-width="1.5"/>`;
+    let x = cx + R * (0.62 + rand() * 0.5);
+    while (x < W) {
+      const w = R * (0.3 + rand() * 0.75);
+      const hot = rand() > 0.72;
+      s += `<rect x="${x}" y="${y - ch / 2}" width="${w}" height="${ch}" rx="${ch * 0.22}" fill="${hot ? C("accent") : C("steel")}"/>`;
+      x += w + R * (0.07 + rand() * 0.32);
+    }
+  }
+  s += `<circle cx="${cx}" cy="${cy}" r="${R * 0.3}" fill="${C("accent")}"/>`;
+  return `<svg width="${W}" height="${H}" style="position:absolute;inset:0">${s}</svg>`;
+}
+
+const root = document.getElementById("root");
+if (art === "hero" || art === "social") {
+  const hero = art === "hero", W = 1280, H = hero ? 440 : 640;
+  root.innerHTML = `<div class="art" style="width:${W}px;height:${H}px;background:var(--well)">
+    ${harbour(W, H, hero ? 968 : 1040, H / 2, hero ? 122 : 150)}
+    <div style="position:absolute;right:0;top:0;bottom:0;width:140px;background:linear-gradient(90deg,transparent,var(--well))"></div>
+    <div style="position:absolute;left:96px;top:0;bottom:0;display:flex;align-items:center;gap:${hero ? 44 : 48}px">
+      ${appIcon(hero ? 208 : 236)}
+      <div>
+        ${wordmark(hero ? 104 : 112)}
+        <div class="tag" style="margin-top:${hero ? 20 : 24}px;font-size:${hero ? 24 : 26}px;max-width:${hero ? 430 : 420}px">${COPY.tagline}</div>
+      </div>
+    </div>
+  </div>`;
+} else {
+  const W = 640, H = 400;
+  const sw = (name, hex, border) => `<div style="flex:1">
+      <div style="height:84px;border-radius:10px;background:${hex};${border ? "border:1px solid var(--line-strong)" : ""}"></div>
+      <div style="margin-top:10px;font-size:14px;font-weight:600">${name}</div><div class="hex" style="margin-top:3px">${hex.toUpperCase()}</div></div>`;
+  const CARDS = {
+    mark: {
+      title: "The cothon", sub: "Carthage's round harbour, seen from above: a ring open to the sea, an island in the middle. It is also a C.",
+      art: `<div style="position:absolute;left:40px;right:40px;bottom:36px;display:flex;align-items:flex-end;gap:22px">
+        ${appIcon(150)}
+        ${appIcon(150, "#EEF2F5", "#3A434D", "#4FA8DC")}
+        <div style="width:150px;height:150px;border-radius:34px;border:1.5px dashed var(--line-strong);display:flex;align-items:center;justify-content:center;flex:none">${mark(150, C("text"), C("text"))}</div>
+        <div style="display:flex;flex-direction:column;gap:14px;align-items:center;padding-bottom:6px">${appIcon(48)}${appIcon(28)}${appIcon(16)}</div>
+      </div>` },
+    palette: {
+      title: "Slate and one blue", sub: "Greys carry the whole interface. Sky marks what is live: the playhead, the selection, the focused control.",
+      art: `<div style="position:absolute;left:40px;right:40px;bottom:36px;display:flex;gap:10px">
+        ${[["Graphite", "#1c2127", 1], ["Steel", "#3a434d"], ["Grey", "#8b96a1"], ["Mist", "#d5dce3"], ["Ice", "#eef2f5", 1], ["Sky", "#8fd0f5"]].map((a) => sw(...a)).join("")}</div>` },
+    lanes: {
+      title: "Eight lane colours", sub: "A track takes one, and its clips, meter and mixer strip follow. Named for what washes into a harbour.",
+      art: `<div style="position:absolute;left:40px;right:0;bottom:34px;display:flex;flex-direction:column;gap:5px">${(() => {
+        const rand = rng(11);
+        return LANES.map((l) => {
+          let x = Math.floor(rand() * 60), clips = "";
+          while (x < 520) { const w = 44 + Math.floor(rand() * 120); clips += `<span style="position:absolute;left:${x}px;top:0;width:${w}px;height:17px;border-radius:3px;background:${C("lane-" + l)}"></span>`; x += w + 5 + Math.floor(rand() * 44); }
+          return `<div style="display:flex;align-items:center;height:17px"><span style="width:62px;font-size:13px;font-weight:500;color:var(--muted)">${l[0].toUpperCase() + l.slice(1)}</span><span style="position:relative;flex:1;height:17px">${clips}</span></div>`;
+        }).join(""); })()}</div>` },
+    type: {
+      title: "Three voices", sub: "Futura for the name, the system typeface for the interface, fixed-width figures for anything that counts time.",
+      art: `<div style="position:absolute;left:40px;right:40px;bottom:36px;display:grid;grid-template-columns:1.25fr 1fr 1.25fr;gap:12px">
+        ${[[`<span class="wm" style="font-size:44px">carthage</span>`, "Display", "Futura Medium"],
+           [`<span style="font-size:40px;font-weight:600;letter-spacing:-0.02em">Mixer</span>`, "Interface", "System UI, 13 px"],
+           [`<span style="font-family:var(--font-time);font-size:24px;color:var(--accent-text)">017.3.240</span>`, "Time", "Fixed-width figures"]].map(([s, n, d]) => `
+        <div style="height:150px;border-radius:14px;background:var(--card);border:1px solid var(--line);padding:16px;display:flex;flex-direction:column;justify-content:space-between">
+          <div style="height:56px;display:flex;align-items:center">${s}</div>
+          <div><div style="font-size:14px;font-weight:600">${n}</div><div style="margin-top:4px;font-size:13px;color:var(--muted)">${d}</div></div>
+        </div>`).join("")}</div>` },
+  };
+  const body = CARDS[art];
+  root.innerHTML = `<div class="art" style="width:${W}px;height:${H}px;background:var(--bg2)">
+    <div style="position:absolute;left:40px;top:40px;right:40px"><div class="card-title">${body.title}</div><div class="card-sub">${body.sub}</div></div>
+    ${body.art}
+  </div>`;
+}
+</script>
+</body>
+</html>

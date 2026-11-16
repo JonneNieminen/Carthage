@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest something Carthage should do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Carthage is deliberately minimal and ships no plugins of its own. Please check docs/BRIEF.md and docs/DECISIONS.md first; some things are settled.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the task in your own workflow, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+  - type: textarea
+    id: now
+    attributes:
+      label: How do you do it today?
+      description: In Carthage or in another DAW.
