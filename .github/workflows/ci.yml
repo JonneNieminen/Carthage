@@ -47,7 +47,9 @@ jobs:
         run: .github/scripts/msvc-env.ps1
 
       - name: Configure
-        run: cmake --preset release
+        run: |
+          cmake --version
+          cmake --preset release
 
       - name: Build
         run: cmake --build --preset release

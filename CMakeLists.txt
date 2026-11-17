@@ -17,7 +17,13 @@ if(APPLE)
 endif()
 
 # C++ level (DECISIONS O2): the newest standard both toolchains and both libraries accept.
-set(CMAKE_CXX_STANDARD 26)
+# MSVC has no C++26 mode CMake can name; its C++23 setting is /std:c++latest, the newest it offers
+# (DECISIONS W11).
+if(MSVC)
+    set(CMAKE_CXX_STANDARD 23)
+else()
+    set(CMAKE_CXX_STANDARD 26)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)   # clangd reads build/<preset>/compile_commands.json
