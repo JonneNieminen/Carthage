@@ -11,7 +11,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | Phase | Status |
 | --- | --- |
 | 0. Brand, theme and docs | Done (2026-11-16) |
-| 1. Skeleton, audio settings, monitored guitar, record a clip | Not started |
+| 1. Skeleton, audio settings, monitored guitar, record a clip | In progress: built; three exit checks wait for the audio interface |
 | 2. CI, releases and in-app updates | Not started |
 | 3. Plugin manager and scanning | Not started |
 | 4. Timeline, grid, snapping, tools, shortcuts | Not started |
@@ -29,24 +29,81 @@ exit check; if a check cannot be met, say so in the report and ask the owner.
 Brief features: 1 (engine), 8 (audio settings, in part).
 
 Deliver:
-- [ ] CMake + Ninja project with JUCE and Tracktion Engine as pinned submodules; presets for debug and release; Apple Silicon native build
-- [ ] Open questions O1, O2, O7, O8 in [DECISIONS.md](DECISIONS.md) answered and recorded
-- [ ] App window in the Carthage theme (dark), with the theme header mirroring `design/tokens.css`
-- [ ] Audio settings: device, buffer size, sample rate (44.1–192 kHz), recording bit depth; round-trip latency shown in ms; CPU / audio-thread load meter
-- [ ] One input monitored through one AU or VST3 plugin, in-process
-- [ ] Record that input to a clip on disk through a lock-free FIFO
-- [ ] Audio threads in the device's audio workgroup on macOS
-- [ ] Commands in `AGENTS.md` filled in with the real configure, build, run and test lines
-- [ ] [ARCHITECTURE.md](ARCHITECTURE.md) updated to match what was built
+- [x] CMake + Ninja project with JUCE and Tracktion Engine as pinned submodules; presets for debug and release; Apple Silicon native build
+- [x] Open questions O1, O2, O7, O8 in [DECISIONS.md](DECISIONS.md) answered and recorded
+- [x] App window in the Carthage theme (dark), with the theme header mirroring `design/tokens.css`
+- [ ] Audio settings: device, buffer size, sample rate (44.1–192 kHz), recording bit depth; round-trip latency shown in ms; CPU / audio-thread load meter — built; the settings panel has not yet been seen on screen (see report)
+- [x] One input monitored through one AU or VST3 plugin, in-process
+- [x] Record that input to a clip on disk through a lock-free FIFO
+- [ ] Audio threads in the device's audio workgroup on macOS — configured (W14); not yet observed on the interface
+- [x] Commands in `AGENTS.md` filled in with the real configure, build, run and test lines
+- [x] [ARCHITECTURE.md](ARCHITECTURE.md) updated to match what was built
 
 Exit checks:
-- [ ] Clean configure and build from a fresh clone (with submodules) using only the documented commands
+- [x] Clean configure and build from a fresh clone (with submodules) using only the documented commands
 - [ ] A real guitar (or line) input is heard through a real third-party amp sim, and a take is recorded and plays back in time
 - [ ] Round-trip latency **measured** with a loopback at two or more buffer sizes and reported next to the figure the app shows
-- [ ] No allocation, lock or I/O on the audio thread, shown by a real-time-safety check, not by reading the code
-- [ ] No dropouts over a ten-minute monitored recording at the smallest stable buffer size; the buffer size and load are reported
+- [x] No allocation, lock or I/O on the audio thread, shown by a real-time-safety check, not by reading the code (held as F18: none in Carthage's code; third-party sites baselined)
+- [ ] No dropouts over a ten-minute monitored recording at the smallest stable buffer size; the buffer size and load are reported — passed on the built-in audio, not yet on the interface
 
-Report: _not written yet_
+Report:
+
+### Report — phase 1 (2026-11-17, interim: three checks open)
+Works:        Carthage builds and runs natively on Apple Silicon. Its window, in the Carthage theme,
+              shows the signal path on one line (input with a meter and a "Hear the input" switch,
+              the plugin, the output, joined by a cable that lights when the input is audible), a
+              lane of takes with waveforms and a playhead, and the audio-thread load and the driver's
+              round trip in the top bar. Audio settings (interface, sample rate 44.1–192 kHz, buffer,
+              bit depth 16/24/32-float, the driver's round trip, a loopback "Measure" button, engine
+              and audio-thread load, dropouts) slide in from the right. A plugin is chosen from every
+              AU and VST3 on the Mac (227 found, none loaded to list them), checked in carthage-scan
+              first, then inserted in the monitored path in-process; a plugin that crashes or hangs
+              the scanner is blocked. Recording writes a WAV through a lock-free FIFO and a writer
+              thread; the take lands as a clip at the time it was played, moved earlier by the round
+              trip. Every action is in one command table (menus, shortcuts, tooltips). Startup asks
+              for microphone access without blocking; refusing it leaves the app usable with a note.
+Tested:       Fresh clone with only the documented commands: clone, `git submodule update --init`,
+              configure, build, test at 0cd6f98 — 5 min 30 s, 0 warnings, tests pass, app bundle has
+              carthage-scan beside it. Unit tests (66 expectations): take round trip sample-exact at
+              32-bit float from a separate thread; FIFO overflow drops and counts whole blocks; probe
+              finds a simulated 1234- and 4111-sample loopback to the sample (inverted, -20 dB, noisy)
+              and reports "nothing came back" with no cable; scan protocol and versioned cache files;
+              Theme.h equals tokens.css (a deliberate one-digit change makes it fail).
+              Plugins hosted and run in the monitored path: Neural Amp Modeler 0.7.9 (Steven
+              Atkinson) as VST3 and as AU, scanned out of process (0.7 s) and loaded. Real-time check:
+              RTSan build (Homebrew LLVM 23), whole device callback in one real-time scope, graph on
+              the device thread, 60 s VST3 + 30 s AU + 20 s no-plugin monitored recordings:
+              38 distinct reports, 0 in Carthage's code, all 38 in Tracktion Engine, JUCE's plugin
+              wrappers or inside the plugin, now the baseline (tests/rtsan/baseline.txt). Negative
+              control: a malloc and a mutex in a real-time scope are reported; a planted carthage::
+              report fails the checker. App window seen on screen with the iD44 attached (first
+              screenshot, before the iD44 was unplugged).
+Measured:     Built-in audio (MacBook mic in, silent virtual output, so nothing could feed back),
+              48 kHz, Neural Amp Modeler VST3 monitored and recording, Release build:
+              buffer 16 for 30 s: 1 late block; 32 for 30 s: 0; 64 for 30 s: 0.
+              buffer 32 for 600 s: 0 driver dropouts, 0 late blocks, 0 recorder overflows, take
+              600.98 s complete, audio-thread load 1.7 % average, 34.1 % worst block.
+              (A first 600 s run at 32 while a Debug build of the app was also running had 1 late
+              block the driver did not report; the clean re-run above had none.)
+              Driver round trip shown by the app: iD44 at 44.1 kHz / 512: 648 + 538 = 1186 samples,
+              26.89 ms; built-in path at 48 kHz: 140 (16), 172 (32), 236 (64) samples.
+              None of these are loopback measurements: no interface or cable was available.
+Not done:     With no audio interface available today: the loopback latency measurement at two or
+              more buffers; the take-alignment check (carthage-bench align); a real guitar through an
+              amp sim heard and recorded; the ten-minute soak on the interface at its smallest stable
+              buffer; observing the audio workgroup on the interface. The settings panel, a loaded
+              plugin and a recorded take have not been seen on screen: the Mac was locked and macOS
+              holds back audio input while locked, so neither screenshots nor carthage-snapshot could
+              run. Windows: nothing built or tested (CI arrives in phase 2). Thread and Address
+              Sanitizer presets: not yet (phase 2, with CI).
+Decisions:    F16 (AGPLv3), F17 (JUCE 9.0.5 + Tracktion develop), F18 (how F8 is checked);
+              W7–W21: pins, minimum OS, ASIO, C++26/23 split, real-time check mechanics, Carthage's own
+              recorder and device callback, plugin load gate, two dropout counts, folders, developer
+              tools, carthage-bench, microphone access, carthage-snapshot.
+Needs owner:  1. The Audient iD44 back on, a TRS cable from line output 3 to input 4, and a guitar in
+                 input 1 (front), to run the three open checks.
+              2. Approve macOS's microphone prompt for Carthage when it appears.
+              3. Approve or edit the upstream drafts in docs/upstream/ before anything is posted.
 
 ## Phase 2 — CI, releases and in-app updates
 

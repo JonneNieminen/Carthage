@@ -177,6 +177,14 @@ namespace
                 say ("note: the interface chose a buffer of " + String (actual) + " instead of " + String (bufferSize));
 
             say ("device: " + describeDevice());
+            say ("audio workgroup: " + String (onMessageThread ([this]
+                 {
+                     return static_cast<bool> (session->getDeviceManager().getDeviceAudioWorkgroup()) ? "the device provides one; engine render threads join it"
+                                                                                                    : "none from this device";
+                 })) + "; engine render threads " + String (onMessageThread ([this]
+                 {
+                     return session->getEngine().getEngineBehaviour().getNumberOfCPUsToUseForAudio();
+                 })));
             return true;
         }
 
