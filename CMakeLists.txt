@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.30)
 
-# The version comes from the release tag in CI (-DCARTHAGE_VERSION=1.2.3). Local builds are 0.0.0.
-set(CARTHAGE_VERSION "0.0.0" CACHE STRING "Carthage version, injected from the release tag")
-set(CARTHAGE_BUILD_NUMBER "0" CACHE STRING "Monotonic build number, injected by the release workflow")
+# The version comes from the release tag (docs/RELEASING.md, "Versions and tags"): the release
+# workflow passes -DCARTHAGE_RELEASE=1.2.3 or 1.2.3-beta.4 (the tag without its "v"). Local and CI
+# builds leave it empty and are 0.0.0-dev, build 0, which every release is newer than.
+include(cmake/CarthageVersion.cmake)
 
 # Minimum OS versions (DECISIONS O8). Set before project() so every target, JUCE included, inherits them.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS version")
@@ -30,15 +31,16 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)   # clangd reads build/<preset>/compile_co
 
 if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    # Windows 10 1607 (DECISIONS O8)
-    add_compile_definitions(_WIN32_WINNT=0x0A00 WINVER=0x0A00 NTDDI_VERSION=0x0A000002)
+    # The minimum Windows (10 1607, DECISIONS W8) is enforced by the installer, not by _WIN32_WINNT
+    # or NTDDI_VERSION: setting those hides SDK interfaces JUCE uses behind runtime checks
+    # (IDWriteFontFace5 and friends), and JUCE's Windows code then does not compile.
 endif()
 
 option(CARTHAGE_RTSAN "Build with Clang's RealTimeSanitizer (needs a Clang that supports it)" OFF)
 option(CARTHAGE_TESTS "Build the unit and engine tests" ON)
 
 include(cmake/CarthageOptions.cmake)
-add_compile_definitions(CARTHAGE_VERSION_STRING="${CARTHAGE_VERSION}")
+add_compile_definitions(CARTHAGE_VERSION_STRING="${CARTHAGE_VERSION_STRING}" CARTHAGE_BUILD_NUMBER=${CARTHAGE_BUILD_NUMBER})
 
 # ---- Dependencies (git submodules, pinned: DECISIONS O7) -------------------------------------------
 add_subdirectory(external/JUCE EXCLUDE_FROM_ALL)
