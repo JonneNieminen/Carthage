@@ -1,0 +1,56 @@
+# CI: configure, build and test Carthage on every push to main, on macOS (Apple Silicon) and
+# Windows x64, with the same presets a developer uses (AGENTS.md, "Commands"). Needs no secrets.
+# The tests are headless: no audio hardware, no third-party plugins (docs/TESTING.md).
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "design/**", "docs/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS arm64, os: macos-26 }
+          - { name: Windows x64, os: windows-2025-vs2026 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      # Not recursive: Tracktion Engine's own nested JUCE is not used (DECISIONS W7).
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Tools (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ninja
+          cmake --version
+          clang++ --version
+
+      - name: Visual Studio environment (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .github/scripts/msvc-env.ps1
+
+      - name: Configure
+        run: cmake --preset release
+
+      - name: Build
+        run: cmake --build --preset release
+
+      - name: Test
+        run: ctest --preset release
