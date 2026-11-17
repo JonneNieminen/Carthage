@@ -10,6 +10,11 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 
 ## Unreleased
 
+## 0.1.2-beta.1 - 2026-11-18
+
+### Added
+- A Check now button beside the version in Settings, under Updates.
+
 ## 0.1.1 - 2026-11-18
 
 ### Added

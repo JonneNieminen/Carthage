@@ -67,7 +67,7 @@ namespace carthage::ui
         for (auto* c : { &inputDevice, &outputDevice, &rate, &buffer, &format, &loopOut, &loopIn })
             body.addAndMakeVisible (*c);
 
-        for (auto* c : std::initializer_list<Component*> { &versionLabel, &versionValue, &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
+        for (auto* c : std::initializer_list<Component*> { &versionLabel, &versionValue, &checkNow, &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
                                                            &latencyHeading, &loadHeading, &inputDeviceLabel, &outputDeviceLabel,
                                                            &rateLabel, &bufferLabel, &formatLabel, &reportedLabel, &reportedValue,
                                                            &measuredLabel, &measuredValue, &loopOutLabel, &loopInLabel, &loopHint,
@@ -78,6 +78,8 @@ namespace carthage::ui
         styleLabel (updatesHint, theme::textSm, theme::muted);
         updatesHint.setJustificationType (Justification::topLeft);
         betaUpdates.setTooltip ("Also get test versions before they are released. You can switch back at any time.");
+        checkNow.setTooltip ("See whether a newer Carthage is out");
+        checkNow.onClick = [this] { if (onCheckForUpdates) onCheckForUpdates(); };
         betaUpdates.onClick = [this] { if (onBetaUpdatesChanged) onBetaUpdatesChanged (betaUpdates.getToggleState()); };
 
         format.addItem ("16-bit", 1);
@@ -318,6 +320,7 @@ namespace carthage::ui
     {
         betaUpdates.setToggleState (on, dontSendNotification);
         betaUpdates.setEnabled (available);
+        checkNow.setEnabled (available);
         updatesHint.setText (note, dontSendNotification);
         resized();
     }
@@ -381,7 +384,13 @@ namespace carthage::ui
         dropoutsValue.setBounds (drops);
 
         heading (updatesHeading);
-        row (versionLabel, versionValue);
+        {
+            auto line = r.removeFromTop (rowHeight);
+            versionLabel.setBounds (line.removeFromLeft (labelWidth));
+            checkNow.setBounds (line.removeFromRight (96));
+            versionValue.setBounds (line);
+            r.removeFromTop (theme::space1);
+        }
         betaUpdates.setBounds (r.removeFromTop (rowHeight));
         const auto hintHeight = updatesHint.getText().isEmpty() ? 0 : 36;
         updatesHint.setBounds (r.removeFromTop (hintHeight));

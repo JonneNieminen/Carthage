@@ -26,6 +26,9 @@ namespace carthage::ui
         /** "Receive beta updates": the app's updater owns the setting; the panel shows it. `note`
             explains when the toggle is off (a development build). */
         std::function<void (bool)> onBetaUpdatesChanged;
+
+        /** "Check now", beside the version: the same as "Check for updates…" in the menu. */
+        std::function<void()> onCheckForUpdates;
         void setBetaUpdates (bool on, bool available, const juce::String& note);
 
         /** Scrolls the body so the Updates section is in view. */
@@ -44,6 +47,7 @@ namespace carthage::ui
         juce::Component body;
         juce::ToggleButton betaUpdates { "Receive beta updates" };
         juce::Label versionLabel, versionValue;
+        juce::TextButton checkNow { "Check now" };
         IconButton closeButton { IconButton::Glyph::close };
 
         juce::Label inputDeviceLabel, outputDeviceLabel, rateLabel, bufferLabel, formatLabel;

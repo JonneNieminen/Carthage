@@ -205,6 +205,7 @@ namespace carthage::app
             auto& settings = content.getSettings();
             settings.setBetaUpdates (updater->getReceivesBetaUpdates(), updater->isAvailable(),
                                      updater->isAvailable() ? String() : updater->whyUnavailable());
+            settings.onCheckForUpdates = [this] { updater->checkNow(); };
             settings.onBetaUpdatesChanged = [this] (bool beta)
             {
                 updater->setReceivesBetaUpdates (beta);
