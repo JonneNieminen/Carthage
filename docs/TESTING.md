@@ -74,6 +74,10 @@ Numbers go in the phase report. An impression ("feels smooth", "low latency") is
   round trip first and places the take with it instead of the driver's figure; `--settle-ms N` waits
   before recording. Run it with and without `--measured-out`, and once with no settling (a take started
   right after a device change must still land in time, or end cleanly and say so).
+- **Audio workgroup.** Every `carthage-bench` command that opens the device prints the device's
+  workgroup and how many threads have joined one, counted at `os_workgroup_join` (DECISIONS W24).
+  Report "joined / failed / in a workgroup now" from a monitored soak; `wgprobe` checks that the
+  workgroup is valid and joinable before and after a device restart.
 - **Back-to-back takes.** `carthage-bench takes` records takes the way a player does (record, stop,
   record again, every other one from the start, optionally `--while-playing` and with a plugin) and
   reports any that ended early. Run it at the smallest and the largest buffer you support.

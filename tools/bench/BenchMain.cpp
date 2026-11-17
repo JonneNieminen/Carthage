@@ -10,6 +10,8 @@
 //   carthage-bench latency --device NAME --rate HZ --buffers 32,64,128 --out N --in N [--repeat 5]
 //   carthage-bench soak    --device NAME --rate HZ --buffer N --input N [--stereo]
 //                          [--plugin-format VST3|AudioUnit --plugin FILE_OR_ID] [--seconds 600] [--keep]
+//   carthage-bench wgprobe --device NAME --rate HZ --buffer N
+//                          (is the device's workgroup valid and joinable, before and after a restart)
 //   carthage-bench takes   --device NAME --rate HZ --buffer N [--count 6] [--seconds 2] [--gap-ms 500]
 //                          [--plugin-format VST3|AudioUnit --plugin FILE_OR_ID] [--while-playing]
 //                          (records takes back to back the way a player does: R, play, R, R, ...;
@@ -17,9 +19,14 @@
 //   carthage-bench align   --device NAME --rate HZ --buffer N --in N [--seconds 10] [--click-out N] [--settle-ms N]
 //                          [--measured-out N]
 //
+// Every command that opens the device prints how many threads have joined an audio workgroup,
+// counted at os_workgroup_join (WorkgroupJoins.cpp).
+//
 // Channels are numbered from 1, as on the interface. `latency` and `align` need a cable from an
 // output to an input. `align` plays Tracktion Engine's metronome on outputs 1-2, or on the output pair
 // holding --click-out.
+
+#include "WorkgroupJoins.h"
 
 #include <engine/Session.h>
 
@@ -110,6 +117,7 @@ namespace
             else if (args.command == "soak")    result = soak();
             else if (args.command == "align")   result = align();
             else if (args.command == "takes")   result = takes();
+            else if (args.command == "wgprobe") result = wgprobe();
             else say ("unknown command: " + args.command);
 
             onMessageThreadVoid ([this] { session.reset(); });
@@ -184,14 +192,14 @@ namespace
                 say ("note: the interface chose a buffer of " + String (actual) + " instead of " + String (bufferSize));
 
             say ("device: " + describeDevice());
-            say ("audio workgroup: " + String (onMessageThread ([this]
+            say ("audio workgroup: " + onMessageThread ([this]
                  {
-                     return static_cast<bool> (session->getDeviceManager().getDeviceAudioWorkgroup()) ? "the device provides one; engine render threads join it"
-                                                                                                    : "none from this device";
-                 })) + "; engine render threads " + String (onMessageThread ([this]
-                 {
-                     return session->getEngine().getEngineBehaviour().getNumberOfCPUsToUseForAudio();
-                 })));
+                     const auto wg = session->getDeviceManager().getDeviceAudioWorkgroup();
+                     return wg ? "the device provides one, for up to " + String (static_cast<int> (wg.getMaxParallelThreadCount()))
+                                     + " threads with its own; the engine joins its render threads to it"
+                               : String ("none from this device");
+                 }));
+            sayWorkgroupJoins();
             return true;
         }
 
@@ -362,6 +370,7 @@ namespace
             }
 
             say ("recording and monitoring for " + String (seconds) + " s");
+            sayWorkgroupJoins();
             float worstPeak = 0.0f;
             double sumAverage = 0.0;
             int samples = 0;
@@ -398,6 +407,7 @@ namespace
             const auto rate = onMessageThread ([this] { return session->getCallback().getSampleRate(); });
             const auto processed = onMessageThread ([this] { return session->getCallback().getSamplesProcessed(); }) - startSamples;
             const auto shortfall = wallSeconds * rate - static_cast<double> (processed);
+            sayWorkgroupJoins();
 
             say ("RESULT soak: " + String (seconds) + " s at buffer " + args.get ("buffer", "64") + ", dropouts "
                  + String (dropouts) + ", recorder overflows " + String (result.overflows) + " (" + String (result.framesDropped)
@@ -430,6 +440,41 @@ namespace
             }
 
             return result;
+        }
+
+        static void sayWorkgroupJoins()
+        {
+            const auto j = bench::getWorkgroupJoins();
+
+            if (j.counted)
+                say ("workgroup joins (os_workgroup_join): " + String (j.joined) + " joined, " + String (j.failed)
+                     + " failed, " + String (j.left) + " left; threads in a workgroup now: " + String (j.inWorkgroupNow()));
+        }
+
+        int wgprobe()
+        {
+            auto current = [this] { return onMessageThread ([this] { return session->getDeviceManager().getDeviceAudioWorkgroup(); }); };
+            auto yesNo = [] (bool b) { return String (b ? "yes" : "no"); };
+            auto joinable = [] (const AudioWorkgroup& wg)
+            {
+                bool ok = false;
+                std::thread t ([&] { WorkgroupToken token; wg.join (token); ok = static_cast<bool> (token); });
+                t.join();
+                return ok;
+            };
+
+            const auto atStart = current();
+            say ("at start: valid " + yesNo (static_cast<bool> (atStart)) + ", joinable " + yesNo (joinable (atStart))
+                 + ", max threads " + String (static_cast<int> (atStart ? atStart.getMaxParallelThreadCount() : 0)));
+
+            if (! openDevice (args.getInt ("buffer", 64)))
+                return 1;
+
+            const auto after = current();
+            say ("after reopening: valid " + yesNo (static_cast<bool> (after)) + ", same as at start " + yesNo (after == atStart)
+                 + ", start one still joinable " + yesNo (joinable (atStart)) + ", new one joinable " + yesNo (joinable (after)));
+            sayWorkgroupJoins();   // the probe's own joins count here: a check that the counter works
+            return 0;
         }
 
         int takes()

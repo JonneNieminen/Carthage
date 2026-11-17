@@ -47,7 +47,8 @@ src/
   ui/                carthage_ui: MainComponent (transport, signal row, take lane), SettingsPanel,
     theme/           Theme.h (mirror of design/tokens.css) and the LookAndFeel
   scan/              carthage-scan
-tools/bench/         carthage-bench: latency, soak, align, devices, plugins
+tools/bench/         carthage-bench: latency, soak, align, takes, wgprobe, devices, plugins;
+                     libcarthage_bench_workgroups counts os_workgroup_join (bench only)
 tools/snapshot/      carthage-snapshot: the window content rendered to PNG in fixed states
 tests/               carthage-tests (juce::UnitTest), no-shared-mutex, rtsan/baseline.txt
 scripts/             rtsan_check.py
