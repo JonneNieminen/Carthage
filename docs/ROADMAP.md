@@ -63,7 +63,7 @@ Works:        Carthage builds and runs natively on Apple Silicon. Its window, in
               trip. Every action is in one command table (menus, shortcuts, tooltips). Startup asks
               for microphone access without blocking; refusing it leaves the app usable with a note.
 Tested:       Fresh clone with only the documented commands: clone, `git submodule update --init`,
-              configure, build, test at 0cd6f98 — 5 min 30 s, 0 warnings, tests pass, app bundle has
+              configure, build, test at 0cd6f98 (5 min 30 s) and again at 7fe7486 — 0 warnings, tests pass, app has
               carthage-scan beside it. Unit tests (66 expectations): take round trip sample-exact at
               32-bit float from a separate thread; FIFO overflow drops and counts whole blocks; probe
               finds a simulated 1234- and 4111-sample loopback to the sample (inverted, -20 dB, noisy)
