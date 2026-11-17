@@ -20,6 +20,8 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 - See the round trip latency the driver reports, and measure the real one with a cable from an output
   to an input.
 - See the audio-thread load, and how many dropouts there have been.
+- While a take records, the input, output and audio device settings stay locked. If playback stops
+  under a take, the take ends there, is saved in time, and the status line says so.
 - The Carthage mark, app icon and theme (design tokens, dark and light).
 - Project documentation: the brief, decisions, architecture, roadmap, testing and releasing guides.
 

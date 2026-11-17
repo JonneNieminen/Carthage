@@ -4,6 +4,7 @@ target_sources(carthage_tests PRIVATE
     TestMain.cpp
     LatencyProbeTests.cpp
     PluginScanTests.cpp
+    TakePlacementTests.cpp
     TakeRecorderTests.cpp
     ThemeTests.cpp)
 target_include_directories(carthage_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)

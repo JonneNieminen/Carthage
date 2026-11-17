@@ -72,8 +72,11 @@ build/rtsan/tools/bench/carthage_bench_artefacts/RelWithDebInfo/carthage_bench s
 build/release/tools/snapshot/carthage_snapshot_artefacts/Release/carthage_snapshot snapshots
 
 # Hardware measurements (loopback latency, dropouts, take alignment): see tools/bench/BenchMain.cpp
+# (owner's loopback: iD44 line out 3 -> input 4, with outputs 3+4 set to "DAW thru" in Audient's iD app)
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench latency --device "Audient iD44" \
-    --rate 48000 --buffers 32,64,128,256 --out 3 --in 3
+    --rate 48000 --buffers 32,64,128,256 --out 3 --in 4
+build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench align --device "Audient iD44" \
+    --rate 48000 --buffer 64 --in 4 --click-out 3 --measured-out 3
 ```
 
 - clangd reads `build/debug/compile_commands.json` (see `.clangd`); configure the `debug` preset once.

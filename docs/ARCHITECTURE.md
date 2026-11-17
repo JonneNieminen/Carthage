@@ -38,6 +38,7 @@ src/
     Session          owns tracktion::Engine, the edit, the track, input routing, the insert, takes
     AudioCallback    the one device callback: engine render, recorder, latency probe, meters, load
     TakeRecorder     audio thread -> lock-free FIFO -> writer thread -> WAV
+    TakePlacement.h  where a take lands in edit time; TakeWatch ends a take whose playback stopped
     LatencyProbe     loopback round-trip measurement (chirp + cross-correlation)
     PluginScan       carthage-scan protocol, the known-plugin list and the blocklist
     RealtimeCheck.h  RealTimeSanitizer scope and CARTHAGE_NONBLOCKING
@@ -112,10 +113,15 @@ writer thread: polls every 4 ms -> juce::AudioFormatWriter (WAV 16/24/32-float) 
 message thread: stop -> wait for the audio thread to acknowledge -> drain -> close -> insert clip
 ```
 
-The clip's start is the edit time the playhead mapped the take's first block to
-(`EditPlaybackContext::globalStreamTimeToEditTimeUnlooped`, read while the transport still rolls),
-minus the round trip: the driver's input + output latency, or a loopback measurement if the user
-chooses it. Tracktion's own recorder is not used: it locks and allocates on the audio thread.
+The clip's start is the take's first-sample stream time plus the stream-to-edit offset, plus one
+block, minus the round trip (`engine/TakePlacement.h`, DECISIONS W22). The offset (edit time minus
+stream time, `EditPlaybackContext::globalStreamTimeToEditTimeUnlooped`) is sampled every 5 ms on the
+message thread while the take plays (`TakeWatch`), not at stop, because the playhead may have stopped
+by then. If playback stops or jumps under a take, Session ends the take there, places it with the last
+good offset and tells the UI (`Session::onTakeEnded`). The round trip is the driver's input + output
+latency, or a loopback measurement if the user chooses it. The input and output pickers and the
+device settings lock while a take records, because changing them rebuilds the engine's device list,
+which stops playback. Tracktion's own recorder is not used: it locks and allocates on the audio thread.
 
 Rules that follow:
 

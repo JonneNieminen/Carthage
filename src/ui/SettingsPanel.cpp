@@ -265,6 +265,19 @@ namespace carthage::ui
 
         if (measureButton.isEnabled() == (isMeasuring() || session.isRecording()))
             updateLatency();
+
+        // The device stays as it is while a take records (applyDevice refuses); say so on the controls.
+        const bool recording = session.isRecording();
+
+        if (inputDevice.isEnabled() == recording)
+            for (auto* c : { &inputDevice, &outputDevice, &rate, &buffer, &format })
+            {
+                if (recording)
+                    c->getProperties().set ("tooltip", c->getTooltip());
+
+                c->setEnabled (! recording);
+                c->setTooltip (recording ? "Stop recording to change this" : c->getProperties()["tooltip"].toString());
+            }
     }
 
     void SettingsPanel::paint (Graphics& g)

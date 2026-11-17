@@ -1,9 +1,16 @@
 #include "Session.h"
 
+#include <tracktion_graph/tracktion_graph.h>
+
+#include <cmath>
+
 namespace carthage::engine
 {
     namespace
     {
+        // How often a running take checks that playback is still running under it (TakeWatch).
+        constexpr int watchIntervalMs = 5;
+
         /** Puts the engine's settings file in Carthage's settings folder. */
         class Storage final : public tracktion::PropertyStorage
         {
@@ -72,6 +79,11 @@ namespace carthage::engine
 
         auto& dm = engine->getDeviceManager();
         dm.initialise (tracktion::DeviceManager::defaultNumChannelsToOpen, tracktion::DeviceManager::defaultNumChannelsToOpen);
+
+        // The engine's first MIDI device scan runs on a 4-second timer and always rebuilds the
+        // device list, which stops playback: a take started in those first seconds would be cut
+        // short. Run it now, while nothing plays. Later scans only rebuild on a hardware change.
+        dm.rescanMidiDeviceList();
 
         callback = std::make_unique<AudioCallback> (*engine, recorder, probe);
         callback->attach();
@@ -278,24 +290,69 @@ namespace carthage::engine
             return r;
 
         auto& transport = edit->getTransport();
+        takeWatch = {};
+        takeStartedMs = juce::Time::getMillisecondCounter();
+        takeStartPosition = transport.getPosition().inSeconds();
+        takeBlockSamples = device->getCurrentBufferSizeSamples();
 
         if (! transport.isPlaying())
             transport.play (false);
 
+        startTimer (watchIntervalMs);
         return juce::Result::ok();
+    }
+
+    std::optional<double> Session::currentStreamToEditOffset() const
+    {
+        auto* context = edit->getTransport().getCurrentPlaybackContext();
+        auto* head = context != nullptr ? context->getNodePlayHead() : nullptr;
+
+        if (head == nullptr || ! head->isPlaying())
+            return std::nullopt;
+
+        // Any stream time gives the same offset while the mapping is linear; use the current one.
+        const auto stream = engine->getDeviceManager().getCurrentStreamTime();
+        const auto offset = context->globalStreamTimeToEditTimeUnlooped (stream).inSeconds() - stream;
+
+        if (! head->isPlaying())
+            return std::nullopt;   // stopped while we read it
+
+        return offset;
+    }
+
+    void Session::timerCallback()
+    {
+        if (! isRecording())
+        {
+            stopTimer();
+            return;
+        }
+
+        const auto elapsed = static_cast<int> (juce::Time::getMillisecondCounter() - takeStartedMs);
+
+        if (takeWatch.update (currentStreamToEditOffset(), elapsed) == TakeWatch::State::interrupted)
+        {
+            const auto result = stopRecording();
+
+            if (onTakeEnded)
+                onTakeEnded (result);
+        }
     }
 
     TakeRecorder::Result Session::stopRecording()
     {
+        stopTimer();
         auto result = recorder.stop();
 
-        // Map the first captured sample to edit time while the transport is still rolling: the
-        // mapping is the playhead's current linear one, so it is exact for every sample of the take.
+        // Map the first captured sample to edit time with the offset seen while the take played.
+        // If the take is stopped before the first check, use the live mapping; if playback never
+        // ran, place it where it began.
         auto& transport = edit->getTransport();
-        double startSeconds = 0.0;
+        const bool interrupted = takeWatch.getState() == TakeWatch::State::interrupted;
+        auto offset = takeWatch.getOffset();
 
-        if (auto* context = transport.getCurrentPlaybackContext())
-            startSeconds = context->globalStreamTimeToEditTimeUnlooped (result.firstBlockStreamTime).inSeconds();
+        if (! offset && ! interrupted)
+            offset = currentStreamToEditOffset();
 
         transport.stop (false, false);
 
@@ -304,7 +361,10 @@ namespace carthage::engine
 
         const auto rate = preparedRate > 0 ? preparedRate : 48000.0;
         const auto alignment = getAlignmentSamples();
-        startSeconds -= alignment / rate;
+        const bool placedByGuess = ! offset.has_value();
+        const auto startSeconds = placedByGuess
+                                    ? takeStartPosition - alignment / rate
+                                    : takeStartSeconds (result.firstBlockStreamTime, *offset, takeBlockSamples, alignment, rate);
 
         const auto length = static_cast<double> (result.framesWritten) / rate;
         tracktion::ClipPosition position;
@@ -324,7 +384,7 @@ namespace carthage::engine
         const auto clipName = result.file.getFileNameWithoutExtension();
         tracktion::insertWaveClip (*track, clipName, result.file, position, tracktion::DeleteExistingClips::yes);
 
-        lastTake = TakeInfo { result, startSeconds, alignment, clipName };
+        lastTake = TakeInfo { result, startSeconds, alignment, clipName, interrupted, placedByGuess };
         return result;
     }
 

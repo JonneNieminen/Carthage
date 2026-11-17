@@ -5,6 +5,7 @@ add_library(carthage_engine STATIC
     PluginScan.cpp PluginScan.h
     RealtimeCheck.h
     Session.cpp Session.h
+    TakePlacement.h
     TakeRecorder.cpp TakeRecorder.h)
 
 target_include_directories(carthage_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)

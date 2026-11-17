@@ -3,6 +3,7 @@
 #include "AudioCallback.h"
 #include "LatencyProbe.h"
 #include "PluginScan.h"
+#include "TakePlacement.h"
 #include "TakeRecorder.h"
 
 #include <tracktion_engine/tracktion_engine.h>
@@ -31,7 +32,8 @@ namespace carthage::engine
 
         All methods: message thread.
     */
-    class Session final : private juce::ChangeListener
+    class Session final : private juce::ChangeListener,
+                          private juce::Timer
     {
     public:
         Session (Folders, juce::File scannerExecutable);
@@ -71,6 +73,11 @@ namespace carthage::engine
         TakeRecorder::Result stopRecording();
         bool isRecording() const noexcept       { return recorder.isRecording(); }
 
+        /** Called when Session ends a take by itself because playback stopped under it (an engine
+            graph rebuild after a device change can stop the transport). The take is saved and
+            placed in time up to that point; TakeInfo::interrupted is set. */
+        std::function<void (const TakeRecorder::Result&)> onTakeEnded;
+
         void play();
         void stop();
         bool isPlaying() const;
@@ -84,6 +91,8 @@ namespace carthage::engine
             double startSeconds = 0.0;
             int alignmentSamples = 0;
             juce::String clipName;
+            bool interrupted = false;   ///< Playback stopped during the take, so Session ended it
+            bool placedByGuess = false; ///< Playback never ran during the take; placed where it began
         };
         const std::optional<TakeInfo>& getLastTake() const noexcept     { return lastTake; }
 
@@ -133,6 +142,15 @@ namespace carthage::engine
         unsigned groupedChannels = 0;
         bool routing = false;
 
+        // Take placement: the stream-to-edit offset is sampled while the take plays (TakeWatch),
+        // not at stop, when the playhead may already have stopped.
+        TakeWatch takeWatch;
+        juce::uint32 takeStartedMs = 0;
+        double takeStartPosition = 0.0;
+        int takeBlockSamples = 0;
+
+        std::optional<double> currentStreamToEditOffset() const;
+        void timerCallback() override;
         void changeListenerCallback (juce::ChangeBroadcaster*) override;
         void prepareForDevice();
         void applyInputRouting();

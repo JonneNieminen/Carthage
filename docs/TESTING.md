@@ -69,7 +69,11 @@ Numbers go in the phase report. An impression ("feels smooth", "low latency") is
   Do it at two or more buffer sizes and compare with the figure the app displays (the driver's input +
   output latency). Report the interface, sample rate and buffer size.
 - **Take alignment.** `carthage-bench align` records Tracktion's metronome through the loopback and
-  reports how far each recorded click lands from its beat, after Carthage's latency correction.
+  reports how far each recorded click lands from its beat, after Carthage's latency correction. The
+  click plays on outputs 1-2, or on the pair holding `--click-out N`; `--measured-out N` measures the
+  round trip first and places the take with it instead of the driver's figure; `--settle-ms N` waits
+  before recording. Run it with and without `--measured-out`, and once with no settling (a take started
+  right after a device change must still land in time, or end cleanly and say so).
 - **Dropouts.** `carthage-bench soak` monitors through a plugin and records for the given time, and
   counts dropouts two ways: the driver's overload count, and blocks whose host timestamp arrives more
   than 1.5 blocks late (DECISIONS W16). It also compares the audio the device asked for with

@@ -10,10 +10,12 @@
 //   carthage-bench latency --device NAME --rate HZ --buffers 32,64,128 --out N --in N [--repeat 5]
 //   carthage-bench soak    --device NAME --rate HZ --buffer N --input N [--stereo]
 //                          [--plugin-format VST3|AudioUnit --plugin FILE_OR_ID] [--seconds 600] [--keep]
-//   carthage-bench align   --device NAME --rate HZ --buffer N --in N [--seconds 10] [--measured-out N]
+//   carthage-bench align   --device NAME --rate HZ --buffer N --in N [--seconds 10] [--click-out N] [--settle-ms N]
+//                          [--measured-out N]
 //
 // Channels are numbered from 1, as on the interface. `latency` and `align` need a cable from an
-// output to an input. `align` plays Tracktion Engine's metronome on outputs 1-2.
+// output to an input. `align` plays Tracktion Engine's metronome on outputs 1-2, or on the output pair
+// holding --click-out.
 
 #include <engine/Session.h>
 
@@ -38,7 +40,7 @@ namespace
         }
 
         int getInt (const String& key, int fallback) const     { return values.contains (key) ? get (key).getIntValue() : fallback; }
-        bool has (const String& flag) const                    { return flags.contains (flag); }
+        bool has (const String& key) const                     { return flags.contains (key) || values.contains (key); }
     };
 
     Args parse (const StringArray& argv)
@@ -446,6 +448,34 @@ namespace
                 session->returnToStart();
             });
 
+            // Move the master output (the click with it) to the pair that holds the cable's output.
+            if (args.has ("click-out"))
+            {
+                const auto out = args.getInt ("click-out", 1) - 1;
+                const auto moved = onMessageThread ([&]
+                {
+                    auto& dm = session->getEngine().getDeviceManager();
+
+                    for (int i = 0; i < dm.getNumWaveOutDevices(); ++i)
+                        if (auto* wo = dm.getWaveOutDevice (i); wo != nullptr && wo->getChannels().containsDeviceChannel (out))
+                        {
+                            dm.setDefaultWaveOutDevice (wo->getDeviceID());
+                            return wo->getName();
+                        }
+
+                    return String();
+                });
+
+                if (moved.isEmpty())
+                {
+                    say ("no output holds channel " + String (out + 1));
+                    return 1;
+                }
+
+                say ("click plays on " + moved);
+                waitMs (500);
+            }
+
             if (args.has ("measured-out"))
             {
                 const auto out = args.getInt ("measured-out", 1) - 1;
@@ -460,26 +490,34 @@ namespace
                 }
             }
 
+            waitMs (args.getInt ("settle-ms", 0));
             onMessageThreadVoid ([this] { session->startRecording(); });
-            waitMs (seconds * 1000);
-            const auto result = onMessageThread ([this] { return session->stopRecording(); });
+
+            // Session may end the take itself if playback stops under it.
+            for (int t = 0; t < seconds * 100 && onMessageThread ([this] { return session->isRecording(); }); ++t)
+                waitMs (10);
+
+            onMessageThreadVoid ([this] { if (session->isRecording()) session->stopRecording(); });
             waitMs (300);
 
             const auto take = onMessageThread ([this] { return session->getLastTake(); });
 
-            if (! take)
+            if (! take || take->recording.file == File())
             {
                 say ("no take");
                 return 1;
             }
 
-            // The click as the engine plays it: its first sample over the threshold.
+            const auto& result = take->recording;
+
+            // The click as the engine plays it: its first sample over the threshold. Without bar
+            // emphasis (set above) the click node plays the little click on every beat.
             const auto rate = onMessageThread ([this] { return session->getCallback().getSampleRate(); });
             AudioFormatManager formats;
             formats.registerBasicFormats();
 
             std::unique_ptr<AudioFormatReader> clickReader (formats.createReaderFor (
-                std::make_unique<MemoryInputStream> (tracktion::TracktionBinaryData::bigclick_wav, static_cast<size_t> (tracktion::TracktionBinaryData::bigclick_wavSize), false)));
+                std::make_unique<MemoryInputStream> (tracktion::TracktionBinaryData::littleclick_wav, static_cast<size_t> (tracktion::TracktionBinaryData::littleclick_wavSize), false)));
             AudioBuffer<float> click (1, static_cast<int> (clickReader->lengthInSamples));
             clickReader->read (&click, 0, click.getNumSamples(), 0, true, false);
             const auto clickPeak = click.getMagnitude (0, 0, click.getNumSamples());
@@ -492,7 +530,7 @@ namespace
 
             if (peak < 0.01f)
             {
-                say ("the take is silent (peak " + String (peak) + "): check the cable from output 1 or 2 to input " + String (in + 1));
+                say ("the take is silent (peak " + String (peak) + "): check the cable from the click's output to input " + String (in + 1));
                 return 1;
             }
 
@@ -500,8 +538,17 @@ namespace
             // Session, corrected for latency). Beats at 120 bpm fall every 0.5 s.
             const auto beat = 60.0 / onMessageThread ([this] { return session->getEdit().tempoSequence.getTempos()[0]->getBpm(); });
             Array<double> errors;
+            const auto found = onsets (recorded, rate, peak * 0.3f);
+            String times;
+            for (auto t : found) times << String (t, 4) << " ";
+            if (take->interrupted || take->placedByGuess)
+                say (String ("note: playback stopped during the take, so it ended after ")
+                     + String (static_cast<double> (result.framesWritten) / rate, 3) + " s"
+                     + (take->placedByGuess ? "; it never ran, so the take was placed where it began" : ""));
 
-            for (auto t : onsets (recorded, rate, peak * 0.3f))
+            say ("take starts at edit time " + String (take->startSeconds, 4) + " s; click onsets in the file (s): " + times.trim());
+
+            for (auto t : found)
             {
                 const auto editTime = take->startSeconds + t;
                 const auto nearestBeat = std::round ((editTime - clickOnset) / beat) * beat;

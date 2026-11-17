@@ -62,6 +62,7 @@ namespace carthage::ui
 
         void frame (double timestampSeconds);
         void toggleRecord();
+        void takeFinished (const engine::TakeRecorder::Result&);
         void togglePlay();
         void updateTransportButtons();
         void choosePlugin();

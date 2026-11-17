@@ -171,6 +171,19 @@ namespace carthage::ui
             repaint();
         }
 
+        /** A take records the input it started with: the pickers lock until it ends. Changing either
+            would rebuild the engine's device list, which stops playback under the take. */
+        void setRecording (bool recording)
+        {
+            if (input.isEnabled() != recording)
+                return;
+
+            input.setEnabled (! recording);
+            output.setEnabled (! recording);
+            input.setTooltip (recording ? "Stop recording to change the input" : "The input your guitar is plugged into");
+            output.setTooltip (recording ? "Stop recording to change the output" : "Where you hear Carthage");
+        }
+
         void setMessage (const String& m, bool warning)   { message = m; messageIsWarning = warning; refreshPlugin(); }
         void setScanning (const String& name)             { scanning = name; refreshPlugin(); }
 
@@ -326,6 +339,13 @@ namespace carthage::ui
             settings.refresh();
         };
 
+        session.onTakeEnded = [this] (const engine::TakeRecorder::Result& result)
+        {
+            takeFinished (result);
+            updateTransportButtons();
+            commands.commandStatusChanged();
+        };
+
         setWantsKeyboardFocus (true);
         vblank = std::make_unique<VBlankAttachment> (this, [this] (double t) { frame (t); });
         updateTransportButtons();
@@ -336,6 +356,7 @@ namespace carthage::ui
     {
         vblank.reset();
         session.onDeviceChanged = nullptr;
+        session.onTakeEnded = nullptr;
         closePluginWindow();
     }
 
@@ -393,18 +414,7 @@ namespace carthage::ui
     {
         if (session.isRecording())
         {
-            const auto result = session.stopRecording();
-            recordingFrom.reset();
-
-            if (! result.succeeded())
-                setStatus (result.error, theme::warn);
-            else if (result.overflows > 0)
-                setStatus ("Take saved, but " + String (result.framesDropped) + " samples were lost: the disk could not keep up ("
-                               + String (result.overflows) + " times)", theme::warn);
-            else if (const auto& take = session.getLastTake())
-                setStatus ("Saved " + result.file.getFileName() + ", " + String (static_cast<double> (result.framesWritten)
-                               / std::max (1.0, session.getCallback().getSampleRate()), 2) + " s, placed "
-                               + String (take->alignmentSamples) + " samples earlier for latency");
+            takeFinished (session.stopRecording());
         }
         else
         {
@@ -427,6 +437,28 @@ namespace carthage::ui
         commands.commandStatusChanged();
     }
 
+    void MainComponent::takeFinished (const engine::TakeRecorder::Result& result)
+    {
+        recordingFrom.reset();
+        const auto& take = session.getLastTake();
+        const auto seconds = String (static_cast<double> (result.framesWritten) / std::max (1.0, session.getCallback().getSampleRate()), 2);
+
+        if (! result.succeeded())
+            setStatus (result.error, theme::warn);
+        else if (take && take->placedByGuess)
+            setStatus ("Recording stopped: playback did not start. Saved " + result.file.getFileName() + ", " + seconds
+                           + " s, placed where recording began; check its timing", theme::warn);
+        else if (take && take->interrupted)
+            setStatus ("Recording stopped because playback stopped. Saved " + result.file.getFileName() + ", " + seconds
+                           + " s, in time", theme::warn);
+        else if (result.overflows > 0)
+            setStatus ("Take saved, but " + String (result.framesDropped) + " samples were lost: the disk could not keep up ("
+                           + String (result.overflows) + " times)", theme::warn);
+        else if (take)
+            setStatus ("Saved " + result.file.getFileName() + ", " + seconds + " s, placed "
+                           + String (take->alignmentSamples) + " samples earlier for latency");
+    }
+
     void MainComponent::togglePlay()
     {
         if (session.isRecording())
@@ -446,6 +478,7 @@ namespace carthage::ui
         playButton.setGlyph (playing ? IconButton::Glyph::stop : IconButton::Glyph::play);
         playButton.setLit (theme::accent, playing);
         toStartButton.setEnabled (! session.isRecording());
+        signalRow->setRecording (session.isRecording());
     }
 
     //==============================================================================================
