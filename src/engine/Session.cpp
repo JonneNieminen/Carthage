@@ -290,10 +290,10 @@ namespace carthage::engine
             return r;
 
         auto& transport = edit->getTransport();
-        takeWatch = {};
         takeStartedMs = juce::Time::getMillisecondCounter();
         takeStartPosition = transport.getPosition().inSeconds();
         takeBlockSamples = device->getCurrentBufferSizeSamples();
+        takeWatch = TakeWatch (takeBlockSamples / device->getCurrentSampleRate());
 
         if (! transport.isPlaying())
             transport.play (false);
@@ -330,7 +330,9 @@ namespace carthage::engine
 
         const auto elapsed = static_cast<int> (juce::Time::getMillisecondCounter() - takeStartedMs);
 
-        if (takeWatch.update (currentStreamToEditOffset(), elapsed) == TakeWatch::State::interrupted)
+        const auto now = currentStreamToEditOffset();
+
+        if (takeWatch.update (now, elapsed) == TakeWatch::State::interrupted)
         {
             const auto result = stopRecording();
 

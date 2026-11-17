@@ -77,6 +77,8 @@ build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench latenc
     --rate 48000 --buffers 32,64,128,256 --out 3 --in 4
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench align --device "Audient iD44" \
     --rate 48000 --buffer 64 --in 4 --click-out 3 --measured-out 3
+build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench takes --device "Audient iD44" \
+    --rate 48000 --buffer 512 --plugin-format AudioUnit --plugin "AudioUnit:Effects/aufx,Akrc,Bgrn"
 ```
 
 - clangd reads `build/debug/compile_commands.json` (see `.clangd`); configure the `debug` preset once.

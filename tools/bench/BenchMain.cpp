@@ -10,6 +10,10 @@
 //   carthage-bench latency --device NAME --rate HZ --buffers 32,64,128 --out N --in N [--repeat 5]
 //   carthage-bench soak    --device NAME --rate HZ --buffer N --input N [--stereo]
 //                          [--plugin-format VST3|AudioUnit --plugin FILE_OR_ID] [--seconds 600] [--keep]
+//   carthage-bench takes   --device NAME --rate HZ --buffer N [--count 6] [--seconds 2] [--gap-ms 500]
+//                          [--plugin-format VST3|AudioUnit --plugin FILE_OR_ID] [--while-playing]
+//                          (records takes back to back the way a player does: R, play, R, R, ...;
+//                          every other one after returning to the start; reports any that ended early)
 //   carthage-bench align   --device NAME --rate HZ --buffer N --in N [--seconds 10] [--click-out N] [--settle-ms N]
 //                          [--measured-out N]
 //
@@ -105,6 +109,7 @@ namespace
             else if (args.command == "latency") result = latency();
             else if (args.command == "soak")    result = soak();
             else if (args.command == "align")   result = align();
+            else if (args.command == "takes")   result = takes();
             else say ("unknown command: " + args.command);
 
             onMessageThreadVoid ([this] { session.reset(); });
@@ -425,6 +430,50 @@ namespace
             }
 
             return result;
+        }
+
+        int takes()
+        {
+            if (! openDevice (args.getInt ("buffer", 64)))
+                return 1;
+
+            if (insertPlugin() != 0)
+                return 1;
+
+            const auto count = args.getInt ("count", 6);
+            const auto seconds = args.getInt ("seconds", 2);
+            const auto gap = args.getInt ("gap-ms", 500);
+            int early = 0;
+
+            for (int i = 0; i < count; ++i)
+            {
+                const bool fromStart = (i % 2) == 1;
+
+                if (fromStart)
+                    onMessageThreadVoid ([this] { session->returnToStart(); });
+
+                if (args.has ("while-playing"))
+                    onMessageThreadVoid ([this] { session->play(); });
+
+                waitMs (gap);
+                onMessageThreadVoid ([this] { session->startRecording(); });
+
+                for (int t = 0; t < seconds * 100 && onMessageThread ([this] { return session->isRecording(); }); ++t)
+                    waitMs (10);
+
+                onMessageThreadVoid ([this] { if (session->isRecording()) session->stopRecording(); });
+                waitMs (gap);
+
+                const auto take = onMessageThread ([this] { return session->getLastTake(); });
+                const auto length = take ? static_cast<double> (take->recording.framesWritten) / 48000.0 : 0.0;
+                const bool ended = take && (take->interrupted || take->placedByGuess);
+                early += ended ? 1 : 0;
+                say ("take " + String (i + 1) + (fromStart ? " (from start)" : "") + ": " + String (length, 3) + " s, starts at "
+                     + String (take ? take->startSeconds : 0.0, 4) + " s" + (ended ? ", ENDED EARLY" : ""));
+            }
+
+            say ("RESULT takes: " + String (count) + " takes, " + String (early) + " ended early");
+            return early == 0 ? 0 : 1;
         }
 
         int align()

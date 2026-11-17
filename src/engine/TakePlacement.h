@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <optional>
 
@@ -20,9 +21,16 @@ namespace carthage::engine
     public:
         enum class State { waiting, running, interrupted };
 
-        /** Just after playback starts the offset settles by one audio block; a relocation moves it
-            by far more than this. */
-        static constexpr double jumpToleranceSeconds = 0.010;
+        /** Just after playback starts the offset settles by one audio block, so a move of up to two
+            blocks (and never less than this) is not a jump. A relocation moves it by far more. A
+            fixed 10 ms was too tight: one block of 512 samples at 48 kHz is 10.7 ms, and takes
+            recorded at that buffer ended themselves after 11 ms. */
+        static constexpr double minimumJumpToleranceSeconds = 0.010;
+
+        explicit TakeWatch (double blockSeconds = 0.0) noexcept
+            : jumpToleranceSeconds (std::max (minimumJumpToleranceSeconds, 2.0 * blockSeconds)) {}
+
+        double getJumpTolerance() const noexcept                 { return jumpToleranceSeconds; }
 
         /** How long a take waits for playback to start before it gives up. */
         static constexpr int maxWaitForPlaybackMs = 2000;
@@ -63,6 +71,7 @@ namespace carthage::engine
         std::optional<double> getOffset() const noexcept         { return settled; }
 
     private:
+        double jumpToleranceSeconds;
         State state = State::waiting;
         std::optional<double> settled;
     };

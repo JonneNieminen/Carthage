@@ -45,9 +45,23 @@ public:
         {
             TakeWatch w;
             w.update (-1.0, 5);
-            expect (w.update (-1.0 + TakeWatch::jumpToleranceSeconds * 0.5, 10) == TakeWatch::State::running);
+            expect (w.update (-1.0 + w.getJumpTolerance() * 0.5, 10) == TakeWatch::State::running);
             expect (w.update (-1.0 + 0.5, 15) == TakeWatch::State::interrupted);
-            expectWithinAbsoluteError (*w.getOffset(), -1.0 + TakeWatch::jumpToleranceSeconds * 0.5, 1.0e-12);
+            expectWithinAbsoluteError (*w.getOffset(), -1.0 + w.getJumpTolerance() * 0.5, 1.0e-12);
+        }
+
+        beginTest ("At a large buffer, the one-block settle is not a jump");
+        {
+            // Seen in the app at 48 kHz / 512: the offset moved by 512 samples (10.67 ms) between
+            // the first two checks, and a fixed 10 ms tolerance ended the take after 11 ms.
+            constexpr double block = 512.0 / 48000.0;
+            TakeWatch w (block);
+            w.update (-178.464000, 4);
+            expect (w.update (-178.464000 - block, 10) == TakeWatch::State::running);
+            expect (w.update (-178.464000 - block, 15) == TakeWatch::State::running);
+
+            // A small buffer keeps the floor.
+            expectWithinAbsoluteError (TakeWatch (64.0 / 48000.0).getJumpTolerance(), TakeWatch::minimumJumpToleranceSeconds, 1.0e-12);
         }
 
         beginTest ("Playback that never starts gives up, with no offset");

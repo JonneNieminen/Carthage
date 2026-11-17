@@ -11,7 +11,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | Phase | Status |
 | --- | --- |
 | 0. Brand, theme and docs | Done (2026-11-16) |
-| 1. Skeleton, audio settings, monitored guitar, record a clip | In progress: built; latency measured; two exit checks open |
+| 1. Skeleton, audio settings, monitored guitar, record a clip | In progress: built; one exit check (soak on the interface) open |
 | 2. CI, releases and in-app updates | Not started |
 | 3. Plugin manager and scanning | Not started |
 | 4. Timeline, grid, snapping, tools, shortcuts | Not started |
@@ -41,14 +41,14 @@ Deliver:
 
 Exit checks:
 - [x] Clean configure and build from a fresh clone (with submodules) using only the documented commands
-- [ ] A real guitar (or line) input is heard through a real third-party amp sim, and a take is recorded and plays back in time
+- [x] A real guitar (or line) input is heard through a real third-party amp sim, and a take is recorded and plays back in time
 - [x] Round-trip latency **measured** with a loopback at two or more buffer sizes and reported next to the figure the app shows
 - [x] No allocation, lock or I/O on the audio thread, shown by a real-time-safety check, not by reading the code (held as F18: none in Carthage's code; third-party sites baselined)
 - [ ] No dropouts over a ten-minute monitored recording at the smallest stable buffer size; the buffer size and load are reported — passed on the built-in audio, not yet on the interface
 
 Report:
 
-### Report — phase 1 (2026-11-17, interim: two checks open)
+### Report — phase 1 (2026-11-17, interim: one check open)
 Works:        Carthage builds and runs natively on Apple Silicon. Its window, in the Carthage theme,
               shows the signal path on one line (input with a meter and a "Hear the input" switch,
               the plugin, the output, joined by a cable that lights when the input is audible), a
@@ -106,9 +106,18 @@ Measured:     Built-in audio (MacBook mic in, silent virtual output, so nothing 
               ms). The 8-sample remainder is constant in time and comes from how the bench finds a
               click (threshold onset) against how the probe measures (cross-correlation). A take
               started right after a device change, which before the fix landed up to 150 ms off,
-              now lands the same.
-Not done:     A real guitar through an amp sim heard and recorded; the ten-minute soak on the
-              interface at its smallest stable buffer; observing the audio workgroup on the
+              now lands the same. Buffers 512 and 1024 at 48 kHz: also 7.9 samples early.
+              Guitar: the owner played a guitar into the iD44's input 1 (instrument input) through
+              AmpKnob - RevC 1.3.140 by Bogren Digital (AudioUnit, reported latency 0.06 ms), checked
+              out of process, heard it in headphones, and recorded takes in the app at 48 kHz / 512:
+              one of 2 min 44 s (24-bit mono, peak -2.3 dBFS, no clipped samples, no gaps). Five
+              other takes ended themselves after 11 ms; the trace showed the one-block settle of the
+              time line (512 samples, 10.67 ms) exceeding a fixed 10 ms jump tolerance. Fixed (W22);
+              `carthage-bench takes` at buffer 512 with AmpKnob: 6 of 6 takes ran their full length
+              (the fixed app has not yet been played in by the owner). Before the app run,
+              `carthage-bench soak` with AmpKnob on input 1, buffer 64, 20 s: 0 dropouts, 0 late
+              blocks, audio-thread load 7.2 % average, 19.7 % worst block.
+Not done:     The ten-minute soak on the interface at its smallest stable buffer; observing the audio workgroup on the
               interface. The settings panel has been seen only through carthage-snapshot on the iD44,
               which showed three faults to fix in the UI pass: the loopback pickers default to the
               last channels ("24 ADAT-16" / "20 ADAT-16"), and the round-trip figure and load values
@@ -119,8 +128,8 @@ Decisions:    F16 (AGPLv3), F17 (JUCE 9.0.5 + Tracktion develop), F18 (how F8 is
               recorder and device callback, plugin load gate, two dropout counts, folders, developer
               tools, carthage-bench, microphone access, carthage-snapshot; W22 (take placement),
               W23 (first MIDI scan at startup).
-Needs owner:  1. A guitar in input 1 (front), to play through an amp sim and record a take; the
-                 iD44 connected for the ten-minute soak.
+Needs owner:  1. The iD44 connected and the Mac unlocked for the ten-minute soak (about 15 minutes
+                 with the buffer search); outputs 3+4 back to "main mix" in the iD app afterwards.
               2. Approve macOS's microphone prompt for Carthage when it appears.
               3. Approve or edit the upstream drafts in docs/upstream/ before anything is posted.
 
