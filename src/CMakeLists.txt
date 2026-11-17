@@ -60,6 +60,7 @@ set_target_properties(carthage_juce PROPERTIES
 
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/engine/CMakeLists.txt)
     add_subdirectory(engine)
+    add_subdirectory(ui)
     add_subdirectory(scan)
     add_subdirectory(app)
 endif()

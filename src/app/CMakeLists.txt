@@ -14,15 +14,16 @@ target_sources(Carthage PRIVATE
     Main.cpp
     Commands.h
     Paths.cpp Paths.h
-    ../ui/Controls.cpp ../ui/Controls.h
-    ../ui/MainComponent.cpp ../ui/MainComponent.h
-    ../ui/SettingsPanel.cpp ../ui/SettingsPanel.h
-    ../ui/TakeLane.cpp ../ui/TakeLane.h
-    ../ui/theme/LookAndFeel.cpp ../ui/theme/LookAndFeel.h
-    ../ui/theme/Theme.h)
+    platform/MicrophoneAccess.h
+    $<IF:$<PLATFORM_ID:Darwin>,platform/MicrophoneAccess_mac.mm,platform/MicrophoneAccess_other.cpp>
+)
 
 target_include_directories(Carthage PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(Carthage PRIVATE carthage_engine carthage_warnings)
+target_link_libraries(Carthage PRIVATE carthage_ui carthage_warnings)
+
+if(APPLE)
+    target_link_libraries(Carthage PRIVATE "-framework AVFoundation")   # platform/MicrophoneAccess_mac.mm
+endif()
 
 # carthage-scan ships next to the app's executable (app::Paths::scanner()).
 add_dependencies(Carthage carthage_scan)

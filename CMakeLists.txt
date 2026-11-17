@@ -41,6 +41,7 @@ add_subdirectory(external/tracktion_engine/modules EXCLUDE_FROM_ALL)
 # ---- Carthage ------------------------------------------------------------------------------------
 add_subdirectory(src)
 add_subdirectory(tools/bench)
+add_subdirectory(tools/snapshot)
 
 if(CARTHAGE_TESTS)
     enable_testing()

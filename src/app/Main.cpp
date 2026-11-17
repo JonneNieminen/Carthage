@@ -1,5 +1,6 @@
 #include "Commands.h"
 #include "Paths.h"
+#include "platform/MicrophoneAccess.h"
 
 #include <engine/Session.h>
 #include <ui/MainComponent.h>
@@ -62,25 +63,50 @@ namespace carthage::app
         ApplicationCommandManager& commands;
     };
 
+    /** Shown while the system asks the user for access to audio inputs. */
+    class WaitingForAccess final : public Component
+    {
+    public:
+        WaitingForAccess()  { setSize (1280, 780); }
+
+        void paint (Graphics& g) override
+        {
+            g.fillAll (theme::bg);
+            g.setColour (theme::muted);
+            g.setFont (theme::uiFont (theme::textLg));
+            g.drawFittedText ("Carthage is asking macOS for access to your audio inputs.\n"
+                              "Answer the system prompt to continue.",
+                              getLocalBounds().reduced (theme::space8), Justification::centred, 3);
+        }
+    };
+
     class MainWindow final : public DocumentWindow
     {
     public:
-        MainWindow (engine::Session& session, ApplicationCommandManager& commands)
+        MainWindow()
             : DocumentWindow ("Carthage", theme::bg, DocumentWindow::allButtons)
         {
             setUsingNativeTitleBar (true);
-            auto* content = new ui::MainComponent (session, commands);
-            setContentOwned (content, false);
-
-            commands.registerAllCommandsForTarget (content);
-            commands.setFirstCommandTarget (content);
-            addKeyListener (commands.getKeyMappings());
-
+            setContentOwned (new WaitingForAccess(), false);
             setResizable (true, false);
             setResizeLimits (960, 600, 10000, 10000);
             centreWithSize (1280, 780);
             setVisible (true);
+        }
+
+        /** Swaps in the real window content once the engine exists. */
+        ui::MainComponent& showSession (engine::Session& session, ApplicationCommandManager& commands)
+        {
+            const auto bounds = getBounds();
+            auto* content = new ui::MainComponent (session, commands);
+            setContentOwned (content, false);
+            setBounds (bounds);
+
+            commands.registerAllCommandsForTarget (content);
+            commands.setFirstCommandTarget (content);
+            addKeyListener (commands.getKeyMappings());
             content->grabKeyboardFocus();
+            return *content;
         }
 
         void closeButtonPressed() override   { JUCEApplication::getInstance()->systemRequestedQuit(); }
@@ -96,7 +122,16 @@ namespace carthage::app
         void initialise (const String&) override
         {
             LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
+            tooltips = std::make_unique<TooltipWindow> (nullptr, 600);
+            window = std::make_unique<MainWindow>();
 
+            // Ask for input access before the engine opens the device: on macOS an unanswered
+            // prompt would otherwise block startup inside CoreAudio with no window on screen.
+            requestMicrophoneAccess ([this] (bool granted) { start (granted); });
+        }
+
+        void start (bool inputAllowed)
+        {
             engine::Folders folders;
             folders.settings = Paths::settings();
             folders.pluginCache = Paths::pluginCache();
@@ -106,7 +141,7 @@ namespace carthage::app
             session = std::make_unique<engine::Session> (folders, Paths::scanner());
 
             menuBar = std::make_unique<MenuBar> (commands);
-            window = std::make_unique<MainWindow> (*session, commands);
+            auto& content = window->showSession (*session, commands);
 
            #if JUCE_MAC
             auto apple = menuBar->appleMenu();
@@ -115,7 +150,9 @@ namespace carthage::app
             window->setMenuBar (menuBar.get());
            #endif
 
-            tooltips = std::make_unique<TooltipWindow> (nullptr, 600);
+            if (! inputAllowed)
+                content.showProblem ("Carthage can not hear your inputs. Allow it in System Settings, "
+                                          "Privacy & Security, Microphone, then restart Carthage.");
         }
 
         void shutdown() override
@@ -123,8 +160,8 @@ namespace carthage::app
            #if JUCE_MAC
             MenuBarModel::setMacMainMenu (nullptr);
            #endif
+            window.reset();      // components go before the engine they show
             tooltips.reset();
-            window.reset();
             menuBar.reset();
             session.reset();
             LookAndFeel::setDefaultLookAndFeel (nullptr);

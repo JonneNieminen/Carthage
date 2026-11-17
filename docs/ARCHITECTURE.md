@@ -20,7 +20,7 @@ What Carthage must do is in [BRIEF.md](BRIEF.md). This file is about how.
 │  Tracktion Engine  →  JUCE  →  CoreAudio / ASIO / WASAPI,  AU / VST3         │
 └──────────────────────────────────────────────────────────────────────────────┘
         carthage-scan (separate process): loads one plugin at a time, reports, exits
-        carthage-bench (developer tool): drives engine/ on real hardware and prints measurements
+        carthage-bench, carthage-snapshot (developer tools): measure engine/ on real hardware; render ui/ to PNG
 ```
 
 Dependencies point downward only. `engine/` never includes anything from `ui/` or `app/`, so it can be
@@ -42,10 +42,12 @@ src/
     PluginScan       carthage-scan protocol, the known-plugin list and the blocklist
     RealtimeCheck.h  RealTimeSanitizer scope and CARTHAGE_NONBLOCKING
   app/               Carthage.app: application, window, menu bar, command table, path provider
-  ui/                components: MainComponent (transport, signal row, take lane), SettingsPanel,
+    platform/        the only place for OS-specific APIs (MicrophoneAccess_mac.mm, ..._other.cpp)
+  ui/                carthage_ui: MainComponent (transport, signal row, take lane), SettingsPanel,
     theme/           Theme.h (mirror of design/tokens.css) and the LookAndFeel
   scan/              carthage-scan
 tools/bench/         carthage-bench: latency, soak, align, devices, plugins
+tools/snapshot/      carthage-snapshot: the window content rendered to PNG in fixed states
 tests/               carthage-tests (juce::UnitTest), no-shared-mutex, rtsan/baseline.txt
 scripts/             rtsan_check.py
 .github/workflows/   ci.yml, release.yml (phase 2)
@@ -95,6 +97,12 @@ Carthage registers its own `AudioCallback` with the audio device instead of Trac
 
 The whole block is one RealTimeSanitizer scope in the `rtsan` build. Carthage's code in it has no
 violations; Tracktion's and JUCE's are listed in `tests/rtsan/baseline.txt` (DECISIONS F18).
+
+### Startup
+
+The window opens first. `app/platform` asks the OS for audio-input access without blocking (W20);
+only then is the `Session` created, which opens the device. Teardown runs the other way: components,
+then the engine.
 
 ### Recording (DECISIONS W13)
 

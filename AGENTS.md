@@ -68,6 +68,9 @@ build/rtsan/tools/bench/carthage_bench_artefacts/RelWithDebInfo/carthage_bench s
     --device "Audient iD44" --rate 48000 --buffer 64 --input 1 \
     --plugin-format VST3 --plugin /Library/Audio/Plug-Ins/VST3/NeuralAmpModeler.vst3
 
+# UI snapshots of the real window content, no screen needed (tools/snapshot/SnapshotMain.cpp)
+build/release/tools/snapshot/carthage_snapshot_artefacts/Release/carthage_snapshot snapshots
+
 # Hardware measurements (loopback latency, dropouts, take alignment): see tools/bench/BenchMain.cpp
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench latency --device "Audient iD44" \
     --rate 48000 --buffers 32,64,128,256 --out 3 --in 3
@@ -82,9 +85,11 @@ build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench latenc
 ## Layout
 
 - `src/engine/` — the engine layer over Tracktion (no UI; runs headless). `src/app/` — application,
-  windows, command table (`Commands.h`), path provider (`Paths.cpp`). `src/ui/` — components;
+  windows, command table (`Commands.h`), path provider (`Paths.cpp`), platform files
+  (`platform/*_mac.mm`). `src/ui/` — components (the `carthage_ui` library);
   `src/ui/theme/Theme.h` mirrors `design/tokens.css`. `src/scan/` — `carthage-scan`.
-- `tools/bench/` — `carthage-bench`, the hardware measuring tool. `tests/` — unit/engine tests and the
+- `tools/bench/` — `carthage-bench`, the hardware measuring tool. `tools/snapshot/` — `carthage-snapshot`,
+  renders the window content to PNG. `tests/` — unit/engine tests and the
   RTSan baseline. `scripts/` — `rtsan_check.py`.
 - `external/` — JUCE and Tracktion Engine submodules (pinned, DECISIONS W7). Never edit inside them.
 - `design/tokens.css` — every colour, font, radius, spacing step and duration. Single source of truth.

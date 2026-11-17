@@ -33,6 +33,9 @@ namespace carthage::ui
 
         void toggleSettings();
 
+        /** Shows a problem the user has to fix outside Carthage, in the status line. */
+        void showProblem (const juce::String& text)    { setStatus (text, theme::warn); }
+
     private:
         class SignalRow;
 
