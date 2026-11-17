@@ -12,7 +12,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | --- | --- |
 | 0. Brand, theme and docs | Done (2026-11-16) |
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
-| 2. CI, releases and in-app updates | In progress: built, key in place; release tests next |
+| 2. CI, releases and in-app updates | In progress: v0.1.0 and v0.1.1 released, update tested; beta and Windows checks left |
 | 3. Plugin manager and scanning | Not started |
 | 4. Timeline, grid, snapping, tools, shortcuts | Not started |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
@@ -155,18 +155,18 @@ Needs owner:  1. The go-ahead for phase 2. Outputs 3+4 can go back to "main mix"
 Brief features: 12, and the whole "Updates and releases" section. Details in [RELEASING.md](RELEASING.md).
 
 Deliver:
-- [ ] `ci.yml`: build and test on every push to `main` (macOS arm64, Windows x64)
-- [ ] `release.yml`: tag-triggered; `.dmg` for macOS arm64, Inno Setup `.exe` for Windows x64; version injected from the tag into CMake, `Info.plist` and Windows resources
-- [ ] Sparkle 2 and WinSparkle behind one interface; background check on launch; non-blocking banner with release notes, "Install on quit" (default) and "Restart now"; "Check for updates…" menu item; "Receive beta updates" setting
-- [ ] Stable and beta appcasts, EdDSA-signed; the workflow still builds and skips the feed when `SPARKLE_ED_PRIVATE_KEY` is missing
-- [ ] Ad-hoc signing now; Developer ID + `notarytool` step present and switched off until `APPLE_*` secrets exist
-- [ ] Release notes include the one-time Gatekeeper step
+- [x] `ci.yml`: build and test on every push to `main` (macOS arm64, Windows x64)
+- [x] `release.yml`: tag-triggered; `.dmg` for macOS arm64, Inno Setup `.exe` for Windows x64; version injected from the tag into CMake, `Info.plist` and Windows resources
+- [x] Sparkle 2 and WinSparkle behind one interface; background check on launch; non-blocking banner with release notes, "Install on quit" (default) and "Restart now"; "Check for updates…" menu item; "Receive beta updates" setting
+- [ ] Stable and beta appcasts, EdDSA-signed; the workflow still builds and skips the feed when `SPARKLE_ED_PRIVATE_KEY` is missing — signed feeds published and verified; the no-key path is written but has not run
+- [x] Ad-hoc signing now; Developer ID + `notarytool` step present and switched off until `APPLE_*` secrets exist (the switched-off steps have not run)
+- [x] Release notes include the one-time Gatekeeper step
 - [x] The owner has the exact, tested steps to generate the key and add the secret (in RELEASING.md)
 
 Exit checks:
-- [ ] v0.1.0 installed from the published `.dmg` on a real Mac
-- [ ] v0.1.1 published; the installed app finds it, shows the banner and updates itself on quit
-- [ ] The update installs without repeating the Gatekeeper step (O6); if it does not, reported to the owner
+- [x] v0.1.0 installed from the published `.dmg` on a real Mac (owner, 2026-11-18, macOS 27: dragged to Applications, ran the `xattr` command from the notes, opened)
+- [x] v0.1.1 published; the installed app finds it, shows the banner and updates itself on quit (owner: card shown, Install on quit, reopened as 0.1.1)
+- [x] The update installs without repeating the Gatekeeper step (O6); if it does not, reported to the owner — it did not repeat: 0.1.1 opened directly. macOS did ask for microphone access again (ad-hoc signing; see report)
 - [ ] A `-beta.N` tag appears only on the beta feed, and only an app with the beta setting on sees it
 - [ ] An update is not offered a restart during playback or recording, and "Restart now" with unsaved work saves or asks first
 - [ ] Windows installer builds in CI and the WinSparkle path is exercised as far as the available hardware allows; what could not be tested is stated

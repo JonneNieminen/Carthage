@@ -144,12 +144,12 @@ prints the public key again at any time.
   Sparkle's helpers, the framework, `carthage-scan`, the app). A first install from a downloaded
   `.dmg` needs the one-time Gatekeeper step, which is in every release's notes and in the DMG's
   "Read me first.txt": open Carthage once, choose Done, then System Settings > Privacy & Security >
-  Open Anyway; or `xattr -dr com.apple.quarantine /Applications/Carthage.app`. *Not yet tested on a
-  downloaded release.*
-- The brief requires proof that updates after the first install go through Sparkle without that
-  step (O6). *Not yet tested*: phase 2's exit checks do it on a real install.
-- An ad-hoc signature changes with every build, so macOS may ask again for microphone access after an
-  update. *To be checked with the first update.*
+  Open Anyway; or `xattr -dr com.apple.quarantine /Applications/Carthage.app`. Tested on v0.1.0 with
+  the `xattr` route (2026-11-18); the Open Anyway route has not been tried.
+- Updates after the first install go through Sparkle without that step: 0.1.0 updated to 0.1.1 on a
+  real install and opened directly (DECISIONS W28).
+- An ad-hoc signature changes with every build, so macOS asks again for microphone access after every
+  update (seen with 0.1.1). A stable signing certificate would fix it (W28).
 - Developer ID signing and notarisation are written into `release.yml` and switch on when the
   `APPLE_*` secrets exist.
 - Windows builds are unsigned; SmartScreen warns on first install (the release notes say what to do).
