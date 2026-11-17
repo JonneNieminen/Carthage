@@ -708,4 +708,15 @@ namespace
     };
 }
 
+#if JUCE_WINDOWS
+// carthage_juce is compiled once, as for a GUI app, so on Windows it holds JUCE's GUI entry point
+// (JUCEApplicationBase::main(), which reads the command line from Windows) and not the console one
+// START_JUCE_APPLICATION calls from a console program. Start through the GUI one.
+int main()
+{
+    juce::JUCEApplicationBase::createInstance = []() -> juce::JUCEApplicationBase* { return new BenchApp(); };
+    return juce::JUCEApplicationBase::main();
+}
+#else
 START_JUCE_APPLICATION (BenchApp)
+#endif
