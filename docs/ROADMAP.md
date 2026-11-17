@@ -12,7 +12,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | --- | --- |
 | 0. Brand, theme and docs | Done (2026-11-16) |
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
-| 2. CI, releases and in-app updates | In progress: CI, release workflow and updater built; waiting for the update key |
+| 2. CI, releases and in-app updates | In progress: built, key in place; release tests next |
 | 3. Plugin manager and scanning | Not started |
 | 4. Timeline, grid, snapping, tools, shortcuts | Not started |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
@@ -161,7 +161,7 @@ Deliver:
 - [ ] Stable and beta appcasts, EdDSA-signed; the workflow still builds and skips the feed when `SPARKLE_ED_PRIVATE_KEY` is missing
 - [ ] Ad-hoc signing now; Developer ID + `notarytool` step present and switched off until `APPLE_*` secrets exist
 - [ ] Release notes include the one-time Gatekeeper step
-- [ ] The owner has the exact, tested steps to generate the key and add the secret (in RELEASING.md)
+- [x] The owner has the exact, tested steps to generate the key and add the secret (in RELEASING.md)
 
 Exit checks:
 - [ ] v0.1.0 installed from the published `.dmg` on a real Mac

@@ -64,7 +64,7 @@ The app reads the beta feed when "Receive beta updates" is on (Settings, Updates
 
 | Secret | Purpose | Status |
 | --- | --- | --- |
-| `SPARKLE_ED_PRIVATE_KEY` | Signs the update downloads for Sparkle and WinSparkle | Owner creates it (below) |
+| `SPARKLE_ED_PRIVATE_KEY` | Signs the update downloads for Sparkle and WinSparkle | Set by the owner, 2026-11-17 (keychain account `carthage`) |
 | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | Developer ID signing | Not available; the steps exist and are skipped |
 | `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` | Notarisation with `notarytool` | Not available; skipped |
 
