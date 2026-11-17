@@ -53,36 +53,36 @@ public:
         beginTest ("Every colour token in the header equals tokens.css");
         for (const auto& t : carthage::theme::colourTokens())
         {
-            const juce::String name (t.name.data(), t.name.size());
-            const auto it = tokens.find (name);
-            expect (it != tokens.end(), name + " is not in tokens.css");
+            const juce::String tokenName (t.name.data(), t.name.size());
+            const auto it = tokens.find (tokenName);
+            expect (it != tokens.end(), tokenName + " is not in tokens.css");
 
             if (it != tokens.end())
-                expectEquals (t.value.toString(), parseColour (it->second).toString(), name);
+                expectEquals (t.value.toString(), parseColour (it->second).toString(), tokenName);
         }
 
         beginTest ("Every size, radius, spacing and duration token equals tokens.css");
         for (const auto& t : carthage::theme::sizeTokens())
         {
-            const juce::String name (t.name.data(), t.name.size());
-            const auto it = tokens.find (name);
-            expect (it != tokens.end(), name + " is not in tokens.css");
+            const juce::String tokenName (t.name.data(), t.name.size());
+            const auto it = tokens.find (tokenName);
+            expect (it != tokens.end(), tokenName + " is not in tokens.css");
 
             if (it != tokens.end())
-                expectEquals (t.value, static_cast<float> (it->second.retainCharacters ("0123456789.").getDoubleValue()), name);
+                expectEquals (t.value, static_cast<float> (it->second.retainCharacters ("0123456789.").getDoubleValue()), tokenName);
         }
 
         beginTest ("Every colour in tokens.css has a mirror in the header");
-        for (const auto& [name, value] : tokens)
+        for (const auto& [tokenName, value] : tokens)
         {
             if (! (value.startsWith ("#") || value.startsWith ("rgba(")))
                 continue;
 
             bool found = false;
             for (const auto& t : carthage::theme::colourTokens())
-                found = found || name == juce::String (t.name.data(), t.name.size());
+                found = found || tokenName == juce::String (t.name.data(), t.name.size());
 
-            expect (found, name + " is in tokens.css but not in Theme.h");
+            expect (found, tokenName + " is in tokens.css but not in Theme.h");
         }
     }
 };
