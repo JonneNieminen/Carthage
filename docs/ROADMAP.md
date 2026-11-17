@@ -11,7 +11,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | Phase | Status |
 | --- | --- |
 | 0. Brand, theme and docs | Done (2026-11-16) |
-| 1. Skeleton, audio settings, monitored guitar, record a clip | In progress: built; one exit check (soak on the interface) open |
+| 1. Skeleton, audio settings, monitored guitar, record a clip | In progress: exit checks met; audio workgroup and settings panel deliverables open |
 | 2. CI, releases and in-app updates | Not started |
 | 3. Plugin manager and scanning | Not started |
 | 4. Timeline, grid, snapping, tools, shortcuts | Not started |
@@ -35,7 +35,7 @@ Deliver:
 - [ ] Audio settings: device, buffer size, sample rate (44.1–192 kHz), recording bit depth; round-trip latency shown in ms; CPU / audio-thread load meter — built; the settings panel has not yet been seen on screen (see report)
 - [x] One input monitored through one AU or VST3 plugin, in-process
 - [x] Record that input to a clip on disk through a lock-free FIFO
-- [ ] Audio threads in the device's audio workgroup on macOS — configured (W14); not yet observed on the interface
+- [ ] Audio threads in the device's audio workgroup on macOS — configured (W14); not shown on the interface: an Instruments trace hints they may not be joined (see report)
 - [x] Commands in `AGENTS.md` filled in with the real configure, build, run and test lines
 - [x] [ARCHITECTURE.md](ARCHITECTURE.md) updated to match what was built
 
@@ -44,11 +44,11 @@ Exit checks:
 - [x] A real guitar (or line) input is heard through a real third-party amp sim, and a take is recorded and plays back in time
 - [x] Round-trip latency **measured** with a loopback at two or more buffer sizes and reported next to the figure the app shows
 - [x] No allocation, lock or I/O on the audio thread, shown by a real-time-safety check, not by reading the code (held as F18: none in Carthage's code; third-party sites baselined)
-- [ ] No dropouts over a ten-minute monitored recording at the smallest stable buffer size; the buffer size and load are reported — passed on the built-in audio, not yet on the interface
+- [x] No dropouts over a ten-minute monitored recording at the smallest stable buffer size; the buffer size and load are reported — iD44 at 48 kHz / 32 with AmpKnob (16 was not stable)
 
 Report:
 
-### Report — phase 1 (2026-11-17, interim: one check open)
+### Report — phase 1 (2026-11-17, interim: exit checks met, two deliverables open)
 Works:        Carthage builds and runs natively on Apple Silicon. Its window, in the Carthage theme,
               shows the signal path on one line (input with a meter and a "Hear the input" switch,
               the plugin, the output, joined by a cable that lights when the input is audible), a
@@ -117,19 +117,37 @@ Measured:     Built-in audio (MacBook mic in, silent virtual output, so nothing 
               (the fixed app has not yet been played in by the owner). Before the app run,
               `carthage-bench soak` with AmpKnob on input 1, buffer 64, 20 s: 0 dropouts, 0 late
               blocks, audio-thread load 7.2 % average, 19.7 % worst block.
-Not done:     The ten-minute soak on the interface at its smallest stable buffer; observing the audio workgroup on the
-              interface. The settings panel has been seen only through carthage-snapshot on the iD44,
-              which showed three faults to fix in the UI pass: the loopback pickers default to the
-              last channels ("24 ADAT-16" / "20 ADAT-16"), and the round-trip figure and load values
-              are blank right after opening. A loaded plugin has not been seen on screen. Windows: nothing built or tested (CI arrives in phase 2). Thread and Address
-              Sanitizer presets: not yet (phase 2, with CI).
+              Ten-minute soak on the iD44, 48 kHz, AmpKnob monitored on input 1 and recorded,
+              Release build, Carthage app closed:
+                buffer 16 (the iD44's smallest), 30 s: 0 dropouts, 0 late blocks. 600 s: driver
+                  dropouts 0, recorder overflows 0, load 5.5 % average, but 3 late blocks between
+                  480 and 540 s from one stall (worst block 447 % of its 0.33 ms deadline). Not
+                  stable; the cause was not found.
+                buffer 32, 600 s: driver dropouts 0, late blocks 0, recorder overflows 0, take
+                  600.47 s complete, audio-thread load 3.2 % average, 19.4 % worst block. This is
+                  the smallest stable buffer: round trip 191 samples (3.98 ms) measured.
+              Audio workgroup: the iD44 provides one and Tracktion's render threads ask to join it
+              (W14), but Tracktion does not check the result. `ps -M` shows the device thread at
+              real-time priority 97 and seven render threads at real-time 47, which does not show
+              membership. An Instruments Audio System Trace attached to a running soak reported a
+              concurrent thread count of 1 on the device's I/O thread, in one reading covering the
+              last 0.5 s; with seven joined threads a higher count would be expected. Inconclusive.
+              (Tracing caused 5 late blocks in that run, so it is not a soak result.)
+Not done:     Showing that the render threads are in the device's audio workgroup (above). The
+              settings panel has been seen only through carthage-snapshot on the iD44, which showed
+              three faults to fix in the UI pass: the loopback pickers default to the last channels
+              ("24 ADAT-16" / "20 ADAT-16"), and the round-trip figure and load values are blank
+              right after opening. Windows: nothing built or tested (CI arrives in phase 2). Thread
+              and Address Sanitizer presets: not yet (phase 2, with CI).
 Decisions:    F16 (AGPLv3), F17 (JUCE 9.0.5 + Tracktion develop), F18 (how F8 is checked);
               W7–W21: pins, minimum OS, ASIO, C++26/23 split, real-time check mechanics, Carthage's own
               recorder and device callback, plugin load gate, two dropout counts, folders, developer
               tools, carthage-bench, microphone access, carthage-snapshot; W22 (take placement),
               W23 (first MIDI scan at startup).
-Needs owner:  1. The iD44 connected and the Mac unlocked for the ten-minute soak (about 15 minutes
-                 with the buffer search); outputs 3+4 back to "main mix" in the iD app afterwards.
+Needs owner:  1. Decide how to close the two open deliverables: the audio workgroup (investigate
+                 and fix if Tracktion's threads are not joined, or accept as unproven) and the
+                 settings panel faults (fix now, or in the UI pass). Outputs 3+4 can go back to
+                 "main mix" in the iD app.
               2. Approve macOS's microphone prompt for Carthage when it appears.
               3. Approve or edit the upstream drafts in docs/upstream/ before anything is posted.
 
