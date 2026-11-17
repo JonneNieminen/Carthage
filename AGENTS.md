@@ -6,8 +6,9 @@ through amp sims, arranging on a timeline, writing in a piano roll, mixing and m
 to be faster, smoother and more reliable than FL Studio on an ARM Mac: efficiency and minimalism
 first, no gimmicks.
 
-**State of the repo:** brand, theme and docs only. No application code, build system or tests exist
-yet. Phase 1 creates them. Update this file as soon as that stops being true.
+**State of the repo:** phase 1 in progress: the build system, the engine layer, the phase 1 app (audio
+settings, one input monitored through one plugin, takes recorded to clips), the plugin scanner, tests
+and the measuring tool exist. See `docs/ROADMAP.md` for what is verified.
 
 ## Read first
 
@@ -41,32 +42,63 @@ yet. Phase 1 creates them. Update this file as soon as that stops being true.
 
 ## Commands
 
-Not established yet. Phase 1 replaces this section with the exact configure, build, run, test and
-format lines, and they must work from a fresh clone with submodules.
+Tools: Xcode 27 command line tools (Apple Clang 21), CMake 3.30+ and Ninja. On the owner's Mac they
+come from Homebrew (`brew install cmake ninja`, in `/opt/homebrew/bin`); there is no `timeout` command.
+The real-time-safety build also needs Homebrew LLVM (`brew install llvm`), because Apple Clang has no
+RealTimeSanitizer.
 
-- On the owner's Mac, `cmake` is **not on PATH**, and there is no `timeout` command. Find or install
-  CMake and Ninja before the first configure, and record the working invocation here.
-- README art (works today): `design/banners/render.sh` (needs Google Chrome; `CHROME=…` overrides the path).
+```bash
+# Fresh clone. Not --recurse-submodules: Tracktion Engine's own nested JUCE is not used (DECISIONS W7).
+git clone https://github.com/JonneNieminen/Carthage.git && cd Carthage
+git submodule update --init
+
+# Configure and build (presets: debug, release, rtsan). Warnings are errors in Carthage's code.
+cmake --preset release
+cmake --build --preset release
+
+# Run the app (it has carthage-scan beside its executable)
+open build/release/src/app/Carthage_artefacts/Release/Carthage.app
+
+# Unit and engine tests (headless, no audio hardware)
+ctest --preset release
+
+# Real-time safety: build with RTSan, then exercise the audio thread (docs/TESTING.md)
+cmake --preset rtsan && cmake --build --preset rtsan
+build/rtsan/tools/bench/carthage_bench_artefacts/RelWithDebInfo/carthage_bench soak --seconds 60 \
+    --device "Audient iD44" --rate 48000 --buffer 64 --input 1 \
+    --plugin-format VST3 --plugin /Library/Audio/Plug-Ins/VST3/NeuralAmpModeler.vst3
+
+# Hardware measurements (loopback latency, dropouts, take alignment): see tools/bench/BenchMain.cpp
+build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench latency --device "Audient iD44" \
+    --rate 48000 --buffers 32,64,128,256 --out 3 --in 3
+```
+
+- clangd reads `build/debug/compile_commands.json` (see `.clangd`); configure the `debug` preset once.
+- Formatting: `.clang-format` at the root; there is no automatic formatter run yet.
+- README art: `design/banners/render.sh` (needs Google Chrome; `CHROME=…` overrides the path).
 - Preview one piece of art: open `design/banners/art.html?art=hero&theme=dark`
   (`art` = `hero|social|mark|palette|lanes|type`).
 
 ## Layout
 
-Today:
+- `src/engine/` — the engine layer over Tracktion (no UI; runs headless). `src/app/` — application,
+  windows, command table (`Commands.h`), path provider (`Paths.cpp`). `src/ui/` — components;
+  `src/ui/theme/Theme.h` mirrors `design/tokens.css`. `src/scan/` — `carthage-scan`.
+- `tools/bench/` — `carthage-bench`, the hardware measuring tool. `tests/` — unit/engine tests and the
+  RTSan baseline. `scripts/` — `rtsan_check.py`.
+- `external/` — JUCE and Tracktion Engine submodules (pinned, DECISIONS W7). Never edit inside them.
 - `design/tokens.css` — every colour, font, radius, spacing step and duration. Single source of truth.
 - `design/README.md` — the theme guide.
 - `design/icon/carthage-icon.svg` — app icon master (1024 canvas, 824 tile), plus a 1024 px PNG. This is the "01-cothon-dark" concept the brief names (DECISIONS W5).
 - `design/logo/` — the mark on dark, on light, mono (`currentColor`), favicon.
 - `design/banners/` — `art.html` + `render.sh` → `docs/art/*.png`. Never edit a PNG by hand.
-- `docs/` — the documents in the table above.
-
-Planned (see `docs/ARCHITECTURE.md`): `external/` submodules, `src/{engine,app,ui,scan}`, `tests/`,
-`packaging/{macos,windows}`, `scripts/`, `.github/workflows/`.
+- `docs/` — the documents in the table above. Full layout: `docs/ARCHITECTURE.md`.
+- Planned: `packaging/{macos,windows}`, `.github/workflows/` (phase 2).
 
 ## Rules
 
 ### Engine
-- **Nothing on an audio thread allocates, locks, waits, does I/O, logs or calls the UI.** This covers the device callback and every render thread. It is checked by a tool (`docs/TESTING.md`), not by review.
+- **Nothing on an audio thread allocates, locks, waits, does I/O, logs or calls the UI.** This covers the device callback and every render thread. It is checked by a tool (`docs/TESTING.md`), not by review. Known violations inside Tracktion, JUCE and plugins are listed in `tests/rtsan/baseline.txt`; Carthage's code can never be listed there (DECISIONS F18).
 - Audio → UI goes through atomics and lock-free FIFOs that the UI polls. UI → audio goes through the engine's real-time-safe mechanisms. No mutex the audio thread can wait on.
 - Recording reaches disk through a lock-free FIFO and a writer thread. An overflow is counted and reported, never hidden and never fixed by blocking.
 - Every audio thread joins the device's audio workgroup on macOS.
@@ -98,7 +130,7 @@ Planned (see `docs/ARCHITECTURE.md`): `external/` submodules, `src/{engine,app,u
 - The mark is fixed (64 grid: ring radius 17, stroke 5, 84° opening east, dot radius 6). Do not redraw, rotate or recolour it. The wordmark is lowercase `carthage`; Futura is for the wordmark artwork only and is not shipped in the app.
 
 ### Code
-- C++23 where both Apple Clang and MSVC allow (O2). Warnings are errors. Format with the repo's clang-format once phase 1 adds it.
+- C++26 for Carthage's code; JUCE and Tracktion compile as C++23 (DECISIONS W11). Warnings are errors. Format with the repo's `.clang-format`.
 - Dependencies are git submodules pinned to commits. Changing a pin is its own commit with the reason and a DECISIONS entry. Do not patch code inside a submodule.
 - Do not add a dependency the brief does not name without asking.
 - Paths to user folders come from one place in `app/`; the help page lists them from there.

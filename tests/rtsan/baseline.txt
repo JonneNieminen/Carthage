@@ -1,0 +1,67 @@
+# RealTimeSanitizer baseline: real-time violations inside third-party code (DECISIONS W12).
+#
+# Format: <unsafe call RTSan intercepted> | <innermost Tracktion/JUCE frame that owns it>
+# scripts/rtsan_check.py fails on any report not listed here, and on any report owned by Carthage's
+# code (carthage::), which can never be listed. Recorded 2026-11-17 against JUCE 9.0.5 and Tracktion
+# Engine develop c6293127 (DECISIONS W7) with Neural Amp Modeler 0.7.9 as VST3 and AU, and with no
+# plugin. Re-record when a pin changes, and delete entries upstream has fixed.
+
+# --- Tracktion Engine: the device callback, every block -------------------------------------------
+# contextLock (std::shared_mutex) around the active playback contexts.
+pthread_mutex_lock   | tracktion::engine::DeviceManager::audioDeviceIOCallbackInternal
+pthread_mutex_unlock | tracktion::engine::DeviceManager::audioDeviceIOCallbackInternal
+# midiInputsMutex (std::shared_mutex), and MIDI input threads woken with a condition variable.
+pthread_mutex_lock   | tracktion::engine::DeviceManager::broadcastStreamTimeToMidiDevices
+pthread_mutex_unlock | tracktion::engine::DeviceManager::broadcastStreamTimeToMidiDevices
+pthread_cond_signal  | tracktion::engine::DeviceManager::broadcastStreamTimeToMidiDevices
+pthread_mutex_lock   | tracktion::engine::MidiInputDevice::masterTimeUpdate
+
+# --- Tracktion Engine: the live input path, every block -------------------------------------------
+# consumerLock (CriticalSection) while handing the input to the graph.
+pthread_mutex_lock   | tracktion::engine::WaveInputDevice::consumeNextAudioBlock
+pthread_mutex_unlock | tracktion::engine::WaveInputDevice::consumeNextAudioBlock
+pthread_mutex_lock   | tracktion::engine::WaveInputDeviceInstance::acceptInputBuffer
+pthread_mutex_unlock | tracktion::engine::WaveInputDeviceInstance::acceptInputBuffer
+# The input copy buffer is resized from the audio thread when the channel count changes.
+malloc               | tracktion::engine::WaveInputDeviceInstance::copyIncomingDataIntoBuffer
+free                 | tracktion::engine::WaveInputDeviceInstance::copyIncomingDataIntoBuffer
+malloc               | tracktion::engine::WaveInputDevice::consumeNextAudioBlock
+free                 | tracktion::engine::WaveInputDevice::consumeNextAudioBlock
+# The retrospective-record buffer (always created for physical inputs) resizes itself and asks the
+# device for its rate and buffer size every block; JUCE's CoreAudio device answers by copying its
+# DeviceSetup, which holds BigIntegers: a malloc and a free per call.
+malloc               | tracktion::engine::AudioFifo::setSize
+free                 | tracktion::engine::AudioFifo::setSize
+malloc               | tracktion::engine::RetrospectiveRecordBuffer::syncToEdit
+malloc               | juce::DeviceConfigurator::getCurrentSetup
+free                 | juce::CoreAudioClasses::CoreAudioIODevice::getCurrentSampleRate
+free                 | juce::CoreAudioClasses::CoreAudioIODevice::getCurrentBufferSizeSamples
+
+# --- Tracktion Engine: the playback graph, every block ---------------------------------------------
+pthread_mutex_lock   | tracktion::engine::MidiNoteDispatcher::dispatchPendingMessagesForDevices
+pthread_mutex_unlock | tracktion::engine::MidiNoteDispatcher::dispatchPendingMessagesForDevices
+pthread_mutex_lock   | tracktion::engine::Edit::updateModifierTimers
+# The playback context's onContinuityUpdated lambda (inlined MidiNoteDispatcher::masterTimeUpdate).
+pthread_mutex_unlock | tracktion::engine::EditPlaybackContext::NodePlaybackContext::NodePlaybackContext
+pthread_mutex_lock   | tracktion::engine::LiveMidiInjectingNode::process
+# A node's own lock released in a tail call, so the node's frame is gone from the stack.
+pthread_mutex_unlock | tracktion::graph::Node::process
+# Level meters size their channel vectors on first use, from the audio thread.
+malloc               | tracktion::engine::LevelMeasurer::Client::ensureNumChannels
+malloc               | tracktion::engine::DbTimePair* std::__1::__libcpp_allocate<tracktion::engine::DbTimePair>
+
+# --- The plugin boundary ---------------------------------------------------------------------------
+# Tracktion's ExternalPlugin locks processMutex around every block.
+pthread_mutex_lock   | tracktion::engine::ExternalPlugin::applyToBuffer
+pthread_mutex_unlock | tracktion::engine::ExternalPlugin::applyToBuffer
+# JUCE's VST3 host wrapper locks its MIDI event lists every block.
+pthread_mutex_lock   | juce::MidiEventList::clear
+pthread_mutex_unlock | juce::MidiEventList::clear
+pthread_mutex_lock   | juce::MidiEventList::getEventCount
+pthread_mutex_unlock | juce::MidiEventList::getEventCount
+# Inside the plugin's own process call (juce_VST3PluginFormatImpl.h `processor->process (data)`,
+# and AudioUnitRender for AUs). Plugins break the rules in their own code (docs/TESTING.md).
+malloc               | juce::VST3PluginInstanceHeadless::processBlock
+malloc               | juce::AudioUnitPluginInstanceHeadless::processAudio
+pthread_mutex_lock   | juce::AudioUnitPluginInstanceHeadless::processAudio
+pthread_mutex_unlock | juce::AudioUnitPluginInstanceHeadless::processAudio

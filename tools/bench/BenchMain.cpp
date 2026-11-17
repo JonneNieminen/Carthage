@@ -1,0 +1,562 @@
+// carthage-bench: measures the engine on real hardware, through the same Session the app uses.
+//
+// It is how the phase reports' numbers are produced (docs/TESTING.md, "Measuring"), so that every
+// figure can be reproduced with one command. It never touches the user's settings or projects: it
+// works in a temporary folder unless --keep is given.
+//
+//   carthage-bench devices
+//   carthage-bench plugins [--name SUBSTRING]
+//   (every command takes --output-device NAME to listen on a different device than --device)
+//   carthage-bench latency --device NAME --rate HZ --buffers 32,64,128 --out N --in N [--repeat 5]
+//   carthage-bench soak    --device NAME --rate HZ --buffer N --input N [--stereo]
+//                          [--plugin-format VST3|AudioUnit --plugin FILE_OR_ID] [--seconds 600] [--keep]
+//   carthage-bench align   --device NAME --rate HZ --buffer N --in N [--seconds 10] [--measured-out N]
+//
+// Channels are numbered from 1, as on the interface. `latency` and `align` need a cable from an
+// output to an input. `align` plays Tracktion Engine's metronome on outputs 1-2.
+
+#include <engine/Session.h>
+
+#include <iostream>
+#include <map>
+
+using namespace carthage;
+using namespace juce;
+
+namespace
+{
+    struct Args
+    {
+        String command;
+        std::map<String, String> values;
+        StringArray flags;
+
+        String get (const String& key, const String& fallback = {}) const
+        {
+            const auto it = values.find (key);
+            return it != values.end() ? it->second : fallback;
+        }
+
+        int getInt (const String& key, int fallback) const     { return values.contains (key) ? get (key).getIntValue() : fallback; }
+        bool has (const String& flag) const                    { return flags.contains (flag); }
+    };
+
+    Args parse (const StringArray& argv)
+    {
+        Args a;
+        a.command = argv[0];
+
+        for (int i = 1; i < argv.size(); ++i)
+        {
+            if (! argv[i].startsWith ("--"))
+                continue;
+
+            const auto key = argv[i].substring (2);
+
+            if (i + 1 < argv.size() && ! argv[i + 1].startsWith ("--"))
+                a.values[key] = argv[++i];
+            else
+                a.flags.add (key);
+        }
+
+        return a;
+    }
+
+    void say (const String& s)    { std::cout << s << std::endl; }
+
+    template <typename F>
+    auto onMessageThread (F&& f)  { return *MessageManager::callSync (std::forward<F> (f)); }
+
+    template <typename F>
+    void onMessageThreadVoid (F&& f) { MessageManager::callSync (std::forward<F> (f)); }
+
+    /** Waits on the worker thread while the message loop runs. */
+    void waitMs (int ms)   { Thread::sleep (ms); }
+
+    //==============================================================================================
+    class Bench
+    {
+    public:
+        explicit Bench (Args a) : args (std::move (a)) {}
+
+        int run()
+        {
+            folder = File::getSpecialLocation (File::tempDirectory).getChildFile ("carthage-bench")
+                         .getNonexistentChildFile ("run", {}, false);
+
+            onMessageThreadVoid ([this]
+            {
+                engine::Folders f;
+                f.settings = folder.getChildFile ("Settings");
+                f.pluginCache = folder.getChildFile ("Plugins");
+                f.project = folder.getChildFile ("Project");
+                f.recordings = f.project.getChildFile ("Recordings");
+                session = std::make_unique<engine::Session> (f, File::getSpecialLocation (File::currentExecutableFile)
+                                                                     .getSiblingFile ("carthage-scan"));
+            });
+
+            waitMs (500);
+            int result = 2;
+
+            if (args.command == "devices")      result = devices();
+            else if (args.command == "plugins") result = plugins();
+            else if (args.command == "latency") result = latency();
+            else if (args.command == "soak")    result = soak();
+            else if (args.command == "align")   result = align();
+            else say ("unknown command: " + args.command);
+
+            onMessageThreadVoid ([this] { session.reset(); });
+
+            if (! args.has ("keep"))
+                folder.deleteRecursively();
+            else
+                say ("kept: " + folder.getFullPathName());
+
+            return result;
+        }
+
+    private:
+        Args args;
+        File folder;
+        std::unique_ptr<engine::Session> session;
+
+        //------------------------------------------------------------------------------------------
+        String describeDevice()
+        {
+            return onMessageThread ([this]
+            {
+                auto* d = session->getDeviceManager().getCurrentAudioDevice();
+                if (d == nullptr) return String ("no device");
+                const auto l = session->getReportedLatency();
+                return d->getTypeName() + " / " + d->getName() + ", " + String (d->getCurrentSampleRate()) + " Hz, buffer "
+                       + String (d->getCurrentBufferSizeSamples()) + ", inputs " + String (d->getActiveInputChannels().countNumberOfSetBits())
+                       + ", outputs " + String (d->getActiveOutputChannels().countNumberOfSetBits())
+                       + ", driver latency in " + String (l.inputSamples) + " + out " + String (l.outputSamples)
+                       + " = " + String (l.roundTripSamples()) + " samples (" + String (l.roundTripMs(), 2) + " ms)";
+            });
+        }
+
+        bool openDevice (int bufferSize)
+        {
+            const auto name = args.get ("device");
+            const auto rate = args.get ("rate", "48000").getDoubleValue();
+
+            const auto error = onMessageThread ([&]
+            {
+                auto& adm = session->getDeviceManager();
+                auto setup = adm.getAudioDeviceSetup();
+
+                if (name.isNotEmpty())
+                {
+                    setup.inputDeviceName = name;
+                    setup.outputDeviceName = args.get ("output-device", name);
+                }
+
+                setup.sampleRate = rate;
+                setup.bufferSize = bufferSize;
+                setup.useDefaultInputChannels = true;
+                setup.useDefaultOutputChannels = true;
+                return adm.setAudioDeviceSetup (setup, true);
+            });
+
+            waitMs (1500);   // the engine prepares asynchronously after a device restart
+
+            if (error.isNotEmpty())
+            {
+                say ("device error: " + error);
+                return false;
+            }
+
+            const auto actual = onMessageThread ([this]
+            {
+                auto* d = session->getDeviceManager().getCurrentAudioDevice();
+                return d != nullptr ? d->getCurrentBufferSizeSamples() : 0;
+            });
+
+            if (actual != bufferSize)
+                say ("note: the interface chose a buffer of " + String (actual) + " instead of " + String (bufferSize));
+
+            say ("device: " + describeDevice());
+            return true;
+        }
+
+        int xruns()
+        {
+            return onMessageThread ([this]
+            {
+                auto* d = session->getDeviceManager().getCurrentAudioDevice();
+                return d != nullptr ? d->getXRunCount() : -1;
+            });
+        }
+
+        //------------------------------------------------------------------------------------------
+        int devices()
+        {
+            onMessageThreadVoid ([this]
+            {
+                auto& adm = session->getDeviceManager();
+                for (auto* type : adm.getAvailableDeviceTypes())
+                {
+                    type->scanForDevices();
+                    say (type->getTypeName() + " inputs:  " + type->getDeviceNames (true).joinIntoString (" | "));
+                    say (type->getTypeName() + " outputs: " + type->getDeviceNames (false).joinIntoString (" | "));
+                }
+            });
+            say ("current: " + describeDevice());
+            return 0;
+        }
+
+        //------------------------------------------------------------------------------------------
+        int plugins()
+        {
+            const auto filter = args.get ("name").toLowerCase();
+            const auto candidates = onMessageThread ([this] { return session->getPlugins().findCandidates(); });
+
+            for (const auto& c : candidates)
+                if (filter.isEmpty() || c.name.toLowerCase().contains (filter))
+                    say (c.formatName + "\t" + c.name + "\t" + c.fileOrIdentifier);
+
+            say (String (static_cast<int> (candidates.size())) + " plugins found (not loaded)");
+            return 0;
+        }
+
+        //------------------------------------------------------------------------------------------
+        int latency()
+        {
+            const auto out = args.getInt ("out", 1) - 1;
+            const auto in = args.getInt ("in", 1) - 1;
+            const auto repeat = args.getInt ("repeat", 5);
+            auto buffers = StringArray::fromTokens (args.get ("buffers", "64,128,256"), ",", {});
+            int failures = 0;
+
+            onMessageThreadVoid ([this] { session->setMonitoring (false); });
+
+            for (const auto& b : buffers)
+            {
+                if (! openDevice (b.getIntValue()))
+                    return 1;
+
+                const auto reported = onMessageThread ([this] { return session->getReportedLatency(); });
+                Array<int> results;
+
+                for (int i = 0; i < repeat; ++i)
+                {
+                    onMessageThreadVoid ([&] { session->getProbe().start (out, in); });
+                    std::optional<engine::LatencyProbe::Measurement> m;
+
+                    for (int t = 0; t < 400 && ! m; ++t)
+                    {
+                        waitMs (10);
+                        m = onMessageThread ([this] { return session->getProbe().takeResult(); });
+                    }
+
+                    if (! m || m->confidence < engine::LatencyProbe::minimumConfidence)
+                    {
+                        say ("  run " + String (i + 1) + ": nothing came back"
+                             + (m ? " (clarity " + String (m->confidence, 1) + ")" : String()));
+                        ++failures;
+                        continue;
+                    }
+
+                    results.add (m->samples);
+                    say ("  run " + String (i + 1) + ": " + String (m->samples) + " samples, " + String (m->milliseconds(), 3)
+                         + " ms, clarity " + String (m->confidence, 1));
+                    waitMs (100);
+                }
+
+                if (! results.isEmpty())
+                {
+                    results.sort();
+                    const auto median = results[results.size() / 2];
+                    say ("RESULT buffer " + b + ": measured " + String (median) + " samples ("
+                         + String (median * 1000.0 / reported.sampleRate, 2) + " ms), spread "
+                         + String (results.getLast() - results.getFirst()) + " samples; driver reports "
+                         + String (reported.roundTripSamples()) + " samples (" + String (reported.roundTripMs(), 2)
+                         + " ms); difference " + String (median - reported.roundTripSamples()) + " samples");
+                }
+            }
+
+            return failures == 0 ? 0 : 1;
+        }
+
+        //------------------------------------------------------------------------------------------
+        int insertPlugin()
+        {
+            const auto format = args.get ("plugin-format");
+            const auto id = args.get ("plugin");
+
+            if (id.isEmpty())
+                return 0;
+
+            const auto scanner = File::getSpecialLocation (File::currentExecutableFile).getSiblingFile ("carthage-scan");
+            const auto outcome = engine::scan::runScanner (scanner, format, id, 60000);
+
+            if (outcome.kind != engine::scan::Outcome::Kind::found)
+            {
+                say ("scan failed: " + outcome.detail);
+                return 1;
+            }
+
+            const auto result = onMessageThread ([&]
+            {
+                session->getPlugins().addScanned (outcome.descriptions);
+                return session->insertPlugin (outcome.descriptions.getFirst());
+            });
+
+            if (result.failed())
+            {
+                say ("insert failed: " + result.getErrorMessage());
+                return 1;
+            }
+
+            waitMs (1500);
+            const auto& d = outcome.descriptions.getFirst();
+            say ("plugin: " + d.name + " " + d.version + " by " + d.manufacturerName + " (" + d.pluginFormatName
+                 + "), reported latency " + String (onMessageThread ([this]
+                 {
+                     auto* p = session->getInsertedPlugin();
+                     return p != nullptr ? p->getLatencySeconds() * 1000.0 : 0.0;
+                 }), 2) + " ms");
+            return 0;
+        }
+
+        int soak()
+        {
+            if (! openDevice (args.getInt ("buffer", 64)))
+                return 1;
+
+            onMessageThreadVoid ([this]
+            {
+                session->setInput (args.getInt ("input", 1) - 1, args.has ("stereo"));
+                session->setMonitoring (true);
+                session->setRecordFormat (engine::TakeRecorder::SampleFormat::int24);
+            });
+
+            if (insertPlugin() != 0)
+                return 1;
+
+            const auto seconds = args.getInt ("seconds", 600);
+            const auto startXruns = xruns();
+            const auto startLate = onMessageThread ([this] { return session->getCallback().getLateCallbackCount(); });
+            const auto startSamples = onMessageThread ([this] { return session->getCallback().getSamplesProcessed(); });
+
+            if (const auto r = onMessageThread ([this] { return session->startRecording(); }); r.failed())
+            {
+                say ("record failed: " + r.getErrorMessage());
+                return 1;
+            }
+
+            say ("recording and monitoring for " + String (seconds) + " s");
+            float worstPeak = 0.0f;
+            double sumAverage = 0.0;
+            int samples = 0;
+            float maxInput = 0.0f;
+            const auto start = Time::getMillisecondCounterHiRes();
+
+            onMessageThreadVoid ([this] { session->getCallback().takeLoad(); });
+
+            while (Time::getMillisecondCounterHiRes() - start < seconds * 1000.0)
+            {
+                waitMs (1000);
+                const auto load = onMessageThread ([this] { return session->getCallback().takeLoad(); });
+                const auto peaks = onMessageThread ([this] { return session->getCallback().takeInputPeaks(); });
+                maxInput = std::max ({ maxInput, peaks[0], peaks[1] });
+                worstPeak = std::max (worstPeak, load.peak);
+                sumAverage += load.average;
+                ++samples;
+
+                const auto elapsed = static_cast<int> ((Time::getMillisecondCounterHiRes() - start) / 1000.0);
+
+                if (elapsed % 60 == 0 || elapsed < 2)
+                    say ("  " + String (elapsed) + " s: load " + String (load.average * 100.0f, 1) + "% avg, "
+                         + String (load.peak * 100.0f, 1) + "% worst; engine cpu "
+                         + String (onMessageThread ([this] { return session->getEngine().getDeviceManager().getCpuUsage(); }) * 100.0f, 1)
+                         + "%; dropouts " + String (xruns() - startXruns) + "; late blocks "
+                         + String (onMessageThread ([this] { return session->getCallback().getLateCallbackCount(); }) - startLate) + "; overflows "
+                         + String (onMessageThread ([this] { return session->getRecorder().getOverflowCount(); })));
+            }
+
+            const auto wallSeconds = (Time::getMillisecondCounterHiRes() - start) / 1000.0;
+            const auto result = onMessageThread ([this] { return session->stopRecording(); });
+            const auto dropouts = xruns() - startXruns;
+            const auto late = onMessageThread ([this] { return session->getCallback().getLateCallbackCount(); }) - startLate;
+            const auto rate = onMessageThread ([this] { return session->getCallback().getSampleRate(); });
+            const auto processed = onMessageThread ([this] { return session->getCallback().getSamplesProcessed(); }) - startSamples;
+            const auto shortfall = wallSeconds * rate - static_cast<double> (processed);
+
+            say ("RESULT soak: " + String (seconds) + " s at buffer " + args.get ("buffer", "64") + ", dropouts "
+                 + String (dropouts) + ", recorder overflows " + String (result.overflows) + " (" + String (result.framesDropped)
+                 + " samples lost), audio-thread load " + String (sumAverage / std::max (1, samples) * 100.0, 1)
+                 + "% average and " + String (worstPeak * 100.0f, 1) + "% worst block, late blocks " + String (late) + ", device ran "
+                 + String (static_cast<double> (processed) / rate, 3) + " s of audio in " + String (wallSeconds, 3)
+                 + " s of wall time (shortfall " + String (roundToInt (shortfall)) + " samples), take "
+                 + String (static_cast<double> (result.framesWritten) / rate, 2) + " s ("
+                 + String (result.framesWritten) + " samples) in " + result.file.getFileName()
+                 + ", loudest input " + String (Decibels::gainToDecibels (maxInput), 1) + " dBFS");
+
+            return dropouts == 0 && late == 0 && result.overflows == 0 && result.succeeded() ? 0 : 1;
+        }
+
+        //------------------------------------------------------------------------------------------
+        /** First sample index where |x| exceeds `fraction` of the local peak, for each click. */
+        static Array<double> onsets (const AudioBuffer<float>& b, double rate, float threshold)
+        {
+            Array<double> result;
+            const auto* d = b.getReadPointer (0);
+            const int refractory = static_cast<int> (rate * 0.25);
+
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                if (std::abs (d[i]) > threshold)
+                {
+                    result.add (i / rate);
+                    i += refractory;
+                }
+            }
+
+            return result;
+        }
+
+        int align()
+        {
+            if (! openDevice (args.getInt ("buffer", 64)))
+                return 1;
+
+            const auto in = args.getInt ("in", 1) - 1;
+            const auto seconds = args.getInt ("seconds", 10);
+
+            // The metronome plays on the master output (outputs 1-2); the cable brings it back to
+            // `in`. Monitoring is off so the cable can not feed back.
+            onMessageThreadVoid ([&]
+            {
+                session->setInput (in, false);
+                session->setMonitoring (false);
+                auto& edit = session->getEdit();
+                edit.clickTrackEnabled = true;
+                edit.clickTrackRecordingOnly = false;
+                edit.clickTrackEmphasiseBars = false;
+                session->returnToStart();
+            });
+
+            if (args.has ("measured-out"))
+            {
+                const auto out = args.getInt ("measured-out", 1) - 1;
+                onMessageThreadVoid ([&] { session->getProbe().start (out, in); });
+                std::optional<engine::LatencyProbe::Measurement> m;
+                for (int t = 0; t < 400 && ! m; ++t) { waitMs (10); m = onMessageThread ([this] { return session->getProbe().takeResult(); }); }
+
+                if (m && m->confidence >= engine::LatencyProbe::minimumConfidence)
+                {
+                    say ("using the measured round trip: " + String (m->samples) + " samples");
+                    onMessageThreadVoid ([&] { session->setMeasuredRoundTrip (m->samples); });
+                }
+            }
+
+            onMessageThreadVoid ([this] { session->startRecording(); });
+            waitMs (seconds * 1000);
+            const auto result = onMessageThread ([this] { return session->stopRecording(); });
+            waitMs (300);
+
+            const auto take = onMessageThread ([this] { return session->getLastTake(); });
+
+            if (! take)
+            {
+                say ("no take");
+                return 1;
+            }
+
+            // The click as the engine plays it: its first sample over the threshold.
+            const auto rate = onMessageThread ([this] { return session->getCallback().getSampleRate(); });
+            AudioFormatManager formats;
+            formats.registerBasicFormats();
+
+            std::unique_ptr<AudioFormatReader> clickReader (formats.createReaderFor (
+                std::make_unique<MemoryInputStream> (tracktion::TracktionBinaryData::bigclick_wav, static_cast<size_t> (tracktion::TracktionBinaryData::bigclick_wavSize), false)));
+            AudioBuffer<float> click (1, static_cast<int> (clickReader->lengthInSamples));
+            clickReader->read (&click, 0, click.getNumSamples(), 0, true, false);
+            const auto clickPeak = click.getMagnitude (0, 0, click.getNumSamples());
+            const auto clickOnset = onsets (click, clickReader->sampleRate, clickPeak * 0.3f).getFirst();
+
+            std::unique_ptr<AudioFormatReader> reader (formats.createReaderFor (result.file));
+            AudioBuffer<float> recorded (1, static_cast<int> (reader->lengthInSamples));
+            reader->read (&recorded, 0, recorded.getNumSamples(), 0, true, false);
+            const auto peak = recorded.getMagnitude (0, 0, recorded.getNumSamples());
+
+            if (peak < 0.01f)
+            {
+                say ("the take is silent (peak " + String (peak) + "): check the cable from output 1 or 2 to input " + String (in + 1));
+                return 1;
+            }
+
+            // Edit time of each recorded click = clip start + time in file (the take was placed by
+            // Session, corrected for latency). Beats at 120 bpm fall every 0.5 s.
+            const auto beat = 60.0 / onMessageThread ([this] { return session->getEdit().tempoSequence.getTempos()[0]->getBpm(); });
+            Array<double> errors;
+
+            for (auto t : onsets (recorded, rate, peak * 0.3f))
+            {
+                const auto editTime = take->startSeconds + t;
+                const auto nearestBeat = std::round ((editTime - clickOnset) / beat) * beat;
+                errors.add ((editTime - clickOnset - nearestBeat) * rate);
+            }
+
+            if (errors.isEmpty())
+                return 1;
+
+            errors.sort();
+            String list;
+            for (auto e : errors) list << String (e, 1) << " ";
+
+            say ("clicks found: " + String (errors.size()) + "; error per click (samples): " + list.trim());
+            say ("RESULT align: buffer " + args.get ("buffer", "64") + ", take placed " + String (take->alignmentSamples)
+                 + " samples earlier; median error " + String (errors[errors.size() / 2], 1) + " samples ("
+                 + String (errors[errors.size() / 2] * 1000.0 / rate, 3) + " ms), range " + String (errors.getFirst(), 1)
+                 + " to " + String (errors.getLast(), 1));
+            return 0;
+        }
+    };
+
+    //==============================================================================================
+    class BenchApp final : public JUCEApplicationBase
+    {
+    public:
+        const String getApplicationName() override       { return "carthage-bench"; }
+        const String getApplicationVersion() override    { return CARTHAGE_VERSION_STRING; }
+        bool moreThanOneInstanceAllowed() override       { return true; }
+        void anotherInstanceStarted (const String&) override {}
+        void suspended() override {}
+        void resumed() override {}
+        void systemRequestedQuit() override              { quit(); }
+        void unhandledException (const std::exception*, const String&, int) override {}
+
+        void initialise (const String&) override
+        {
+            auto argv = getCommandLineParameterArray();
+
+            if (argv.isEmpty())
+            {
+                say ("usage: carthage-bench devices|latency|soak|align [options] (see tools/bench/BenchMain.cpp)");
+                setApplicationReturnValue (2);
+                quit();
+                return;
+            }
+
+            worker = std::make_unique<std::thread> ([this, argv]
+            {
+                const auto code = Bench (parse (argv)).run();
+                MessageManager::callAsync ([this, code] { setApplicationReturnValue (code); quit(); });
+            });
+        }
+
+        void shutdown() override
+        {
+            if (worker != nullptr && worker->joinable())
+                worker->join();
+        }
+
+    private:
+        std::unique_ptr<std::thread> worker;
+    };
+}
+
+START_JUCE_APPLICATION (BenchApp)

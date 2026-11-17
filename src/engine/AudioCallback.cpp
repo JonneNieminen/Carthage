@@ -1,0 +1,201 @@
+#include "AudioCallback.h"
+
+namespace carthage::engine
+{
+    namespace
+    {
+        // tracktion::DeviceManager implements juce::AudioIODeviceCallback as a private base. A
+        // C-style cast is the one conversion the language allows to an inaccessible base
+        // ([expr.cast]/4); it is well-defined and yields the same object the engine registers itself.
+        juce::AudioIODeviceCallback& engineCallbackOf (tracktion::DeviceManager& dm)
+        {
+           #if defined (__clang__)
+            #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Wold-style-cast"
+           #endif
+            return *(juce::AudioIODeviceCallback*) &dm;
+           #if defined (__clang__)
+            #pragma clang diagnostic pop
+           #endif
+        }
+
+        float peakOf (const float* data, int n) noexcept
+        {
+            const auto range = juce::FloatVectorOperations::findMinAndMax (data, n);
+            return std::max (std::abs (range.getStart()), std::abs (range.getEnd()));
+        }
+
+        void storeMax (std::atomic<float>& a, float v) noexcept
+        {
+            auto current = a.load (std::memory_order_relaxed);
+            while (v > current && ! a.compare_exchange_weak (current, v, std::memory_order_relaxed)) {}
+        }
+    }
+
+    AudioCallback::AudioCallback (tracktion::Engine& e, TakeRecorder& r, LatencyProbe& p)
+        : engine (e), engineCallback (engineCallbackOf (e.getDeviceManager())), recorder (r), probe (p)
+    {
+    }
+
+    AudioCallback::~AudioCallback()
+    {
+        detach();
+    }
+
+    void AudioCallback::attach()
+    {
+        if (attached)
+            return;
+
+        auto& adm = engine.getDeviceManager().deviceManager;
+        adm.removeAudioCallback (&engineCallback);
+        adm.addAudioCallback (this);
+        attached = true;
+    }
+
+    void AudioCallback::detach()
+    {
+        if (! attached)
+            return;
+
+        // Hand the device back to the engine, so its own shutdown path finds things as it left them.
+        auto& adm = engine.getDeviceManager().deviceManager;
+        adm.removeAudioCallback (this);
+        adm.addAudioCallback (&engineCallback);
+        attached = false;
+    }
+
+    void AudioCallback::setRecordChannels (int firstDeviceChannel, int numChannels)
+    {
+        firstDeviceInput = std::max (0, firstDeviceChannel);
+        numDeviceInputs = std::clamp (numChannels, 1, 2);
+        updateInputIndices();
+    }
+
+    void AudioCallback::updateInputIndices()
+    {
+        // The callback receives only the device's active input channels, packed in order, so a
+        // device channel number becomes "how many active channels come before it".
+        int first = -1, count = 0;
+
+        if (auto* device = engine.getDeviceManager().deviceManager.getCurrentAudioDevice())
+        {
+            const auto active = device->getActiveInputChannels();
+
+            if (active[firstDeviceInput])
+            {
+                first = 0;
+
+                for (int i = 0; i < firstDeviceInput; ++i)
+                    if (active[i])
+                        ++first;
+
+                count = (numDeviceInputs == 2 && active[firstDeviceInput + 1]) ? 2 : 1;
+            }
+        }
+
+        firstInput.store (first, std::memory_order_relaxed);
+        numInputs.store (count, std::memory_order_relaxed);
+    }
+
+    void AudioCallback::audioDeviceAboutToStart (juce::AudioIODevice* device)
+    {
+        lastHostTimeNs = 0;   // the device is stopped, so the audio thread is not running
+        engineCallback.audioDeviceAboutToStart (device);
+        sampleRate.store (device->getCurrentSampleRate(), std::memory_order_relaxed);
+        updateInputIndices();
+    }
+
+    void AudioCallback::audioDeviceStopped()
+    {
+        engineCallback.audioDeviceStopped();
+    }
+
+    void AudioCallback::audioDeviceError (const juce::String& message)
+    {
+        engineCallback.audioDeviceError (message);
+    }
+
+    void AudioCallback::audioDeviceIOCallbackWithContext (const float* const* inputChannelData, int numInputChannels,
+                                                          float* const* outputChannelData, int numOutputChannels,
+                                                          int numSamples,
+                                                          const juce::AudioIODeviceCallbackContext& context)
+    {
+        const rt::ScopedRealtime realtime;
+        const auto startTicks = juce::Time::getHighResolutionTicks();
+
+        // 1. The engine: inputs, monitored chain, playback, mix.
+        engineCallback.audioDeviceIOCallbackWithContext (inputChannelData, numInputChannels,
+                                                         outputChannelData, numOutputChannels,
+                                                         numSamples, context);
+
+        // 2. The recorder. The engine has just advanced its stream time to the end of this block.
+        const auto rate = sampleRate.load (std::memory_order_relaxed);
+        const auto blockStart = engine.getDeviceManager().getCurrentStreamTime()
+                                  - (rate > 0 ? numSamples / rate : 0.0);
+
+        const auto first = firstInput.load (std::memory_order_relaxed);
+        const auto count = numInputs.load (std::memory_order_relaxed);
+        std::array<const float*, 2> recorded { nullptr, nullptr };
+        int numRecorded = 0;
+
+        for (int i = 0; i < count; ++i)
+            if (first >= 0 && first + i < numInputChannels)
+                recorded[static_cast<size_t> (numRecorded++)] = inputChannelData[first + i];
+
+        recorder.pushBlock (recorded.data(), numRecorded, numSamples, blockStart);
+
+        // 3. The latency probe silences everything else while it runs.
+        probe.process (inputChannelData, numInputChannels, outputChannelData, numOutputChannels, numSamples);
+
+        // 4. Meters and load, for the UI to poll.
+        for (int i = 0; i < numRecorded; ++i)
+            storeMax (inputPeak[static_cast<size_t> (i)], peakOf (recorded[static_cast<size_t> (i)], numSamples));
+
+        if (rate > 0)
+        {
+            const auto seconds = juce::Time::highResolutionTicksToSeconds (juce::Time::getHighResolutionTicks() - startTicks);
+            const auto load = static_cast<float> (seconds / (numSamples / rate));
+            loadSum.store (loadSum.load (std::memory_order_relaxed) + load, std::memory_order_relaxed);
+            loadCount.fetch_add (1, std::memory_order_relaxed);
+            storeMax (loadPeak, load);
+        }
+
+        // A missed deadline shows up as a gap between blocks longer than the previous block lasted.
+        // The device's host time is exact; without it, the time this callback started is close.
+        const auto hostNs = context.hostTimeNs != nullptr
+                              ? *context.hostTimeNs
+                              : static_cast<std::uint64_t> (juce::Time::highResolutionTicksToSeconds (startTicks) * 1.0e9);
+
+        if (lastHostTimeNs != 0 && rate > 0 && hostNs > lastHostTimeNs)
+        {
+            const auto expectedNs = lastBlockSize / rate * 1.0e9;
+
+            if (static_cast<double> (hostNs - lastHostTimeNs) > expectedNs * 1.5)
+                lateCallbacks.fetch_add (1, std::memory_order_relaxed);
+        }
+
+        lastHostTimeNs = hostNs;
+        lastBlockSize = numSamples;
+        samplesProcessed.fetch_add (numSamples, std::memory_order_relaxed);
+        callbacks.fetch_add (1, std::memory_order_relaxed);
+    }
+
+    AudioCallback::Load AudioCallback::takeLoad() noexcept
+    {
+        // A sum read and reset by another thread can lose one block's contribution; for a meter
+        // that is fine, and it keeps the audio side to plain loads and stores.
+        const auto n = loadCount.exchange (0, std::memory_order_relaxed);
+        const auto sum = loadSum.exchange (0.0f, std::memory_order_relaxed);
+        Load l;
+        l.average = n > 0 ? sum / static_cast<float> (n) : 0.0f;
+        l.peak = loadPeak.exchange (0.0f, std::memory_order_relaxed);
+        return l;
+    }
+
+    std::array<float, 2> AudioCallback::takeInputPeaks() noexcept
+    {
+        return { inputPeak[0].exchange (0.0f, std::memory_order_relaxed),
+                 inputPeak[1].exchange (0.0f, std::memory_order_relaxed) };
+    }
+}

@@ -3,8 +3,8 @@
 Carthage is an audio application: most of what matters cannot be seen in a diff. A change is done when
 it has been **run and observed**, not when it compiles. This file says what "verified" means here.
 
-The commands to build and run the tests do not exist yet. Phase 1 creates them and records them in
-`AGENTS.md`; this file describes what has to be covered.
+The commands are in `AGENTS.md` ("Commands"). This file says what has to be covered and how each
+measurement is made.
 
 ## Layers
 
@@ -29,26 +29,51 @@ The commands to build and run the tests do not exist yet. Phase 1 creates them a
 
 ## Real-time safety
 
-The engine's first rule (F8) is checked by a tool, not by review:
+The engine's first rule (F8) is checked by a tool, not by review (how it is held: DECISIONS F18, W12).
 
-- Build a configuration that detects allocation, locking and blocking system calls on the audio thread
-  and fails loudly. Check what the current toolchain offers for this (for example Clang's real-time
-  sanitizer, if the installed compiler has it) before writing a custom allocator hook.
-- Run the engine tests and a monitored-recording session under it.
+- **The tool.** Clang's RealTimeSanitizer, from Homebrew LLVM (Apple Clang does not ship it). The
+  `rtsan` preset builds everything with `-fsanitize=realtime`. `AudioCallback` marks the whole device
+  callback as a real-time scope, so any allocation, free, lock, wait or blocking system call made
+  during a block is reported with its stack, wherever it happens. In this build Tracktion renders on
+  the device thread only, so every node is inside the scope.
+- **The run.** Exercise the audio thread for at least a minute with a real plugin in the monitored
+  path, while recording, with RTSan reporting every distinct violation instead of stopping at the first:
+
+  ```bash
+  RTSAN_OPTIONS=halt_on_error=false build/rtsan/tools/bench/carthage_bench_artefacts/RelWithDebInfo/carthage_bench \
+      soak --device "<interface>" --rate 48000 --buffer 128 --input 1 \
+      --plugin-format VST3 --plugin /Library/Audio/Plug-Ins/VST3/NeuralAmpModeler.vst3 --seconds 60 > rtsan.log 2>&1
+  python3 -I scripts/rtsan_check.py rtsan.log tests/rtsan/baseline.txt
+  ```
+
+  Repeat with an Audio Unit and with no plugin. The check fails on any report owned by Carthage's
+  code, and on any third-party report not in `tests/rtsan/baseline.txt`. It lists baseline entries
+  that no longer occur, so the file shrinks when upstream fixes them.
+- **Negative control.** A malloc and a mutex inside a `ScopedRealtime` scope must be reported; checked
+  when the tool was set up (phase 1 report) and worth repeating after a toolchain change.
+- **Timing is never judged in the RTSan build**: it renders on one thread and reports cost time.
+  Dropouts and load come from the normal build.
 - Run Thread Sanitizer and Address Sanitizer builds of the test suite regularly; they catch the data
-  races and lifetime bugs that show up as rare crashes in an audio app.
-- Third-party plugins break these rules inside their own code. Scope the checks to Carthage's code and
-  say so in the report.
+  races and lifetime bugs that show up as rare crashes in an audio app. (Presets for them arrive when
+  CI does, phase 2.)
+- Third-party plugins break these rules inside their own code; those reports are baseline entries at
+  the plugin boundary, and the report says which plugins were used.
 
 ## Measuring
 
 Numbers go in the phase report. An impression ("feels smooth", "low latency") is not a result.
 
-- **Round-trip latency.** Physical loopback: an output wired to an input, play a click, record it,
-  count the samples between the two. Do it at two or more buffer sizes and compare with the figure the
-  app displays. Report the interface, sample rate and buffer size.
-- **Dropouts.** Count device overruns/underruns during a long monitored recording; report the count,
-  duration, buffer size and audio-thread load.
+- **Round-trip latency.** Physical loopback: an output wired to an input. `carthage-bench latency`
+  (or "Measure" in the app's audio settings) plays a 40 ms chirp on the output and finds it in the
+  input by cross-correlation; output and input share one sample clock, so the lag is the round trip.
+  Do it at two or more buffer sizes and compare with the figure the app displays (the driver's input +
+  output latency). Report the interface, sample rate and buffer size.
+- **Take alignment.** `carthage-bench align` records Tracktion's metronome through the loopback and
+  reports how far each recorded click lands from its beat, after Carthage's latency correction.
+- **Dropouts.** `carthage-bench soak` monitors through a plugin and records for the given time, and
+  counts dropouts two ways: the driver's overload count, and blocks whose host timestamp arrives more
+  than 1.5 blocks late (DECISIONS W16). It also compares the audio the device asked for with
+  wall-clock time. Report the counts, duration, buffer size and audio-thread load.
 - **Frame time.** Measure the time per frame while zooming and scrolling a heavy project on the 120 Hz
   display; report the worst frames, not the average.
 - **CPU.** Report audio-thread load for a stated session, and idle load with an empty project.

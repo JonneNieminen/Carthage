@@ -1,0 +1,27 @@
+# Carthage's C++ style: close to JUCE's, so code that calls JUCE and Tracktion reads as one.
+Language: Cpp
+Standard: Latest
+BasedOnStyle: LLVM
+ColumnLimit: 130
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+BreakBeforeBraces: Allman
+NamespaceIndentation: All
+AccessModifierOffset: -4
+SpaceBeforeParens: NonEmptyParentheses
+SpaceAfterCStyleCast: true
+PointerAlignment: Left
+ReferenceAlignment: Left
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: All
+AlwaysBreakTemplateDeclarations: Yes
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerIndentWidth: 4
+IndentPPDirectives: AfterHash
+PPIndentWidth: 1
+IndentCaseLabels: true
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
+SpacesBeforeTrailingComments: 2

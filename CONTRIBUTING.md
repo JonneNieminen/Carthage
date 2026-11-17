@@ -14,14 +14,22 @@ the repository holds the brand, the theme and the plan. This file grows with the
 
 ## Setup
 
-Build instructions arrive with phase 1 (CMake + Ninja, JUCE and Tracktion Engine as git submodules).
-Until then, the only thing to run is the artwork:
+You need Xcode's command line tools (Apple Clang 21 or later), CMake 3.30+ and Ninja
+(`brew install cmake ninja`). Then:
 
 ```bash
-design/banners/render.sh
+git clone https://github.com/JonneNieminen/Carthage.git && cd Carthage
+git submodule update --init
+cmake --preset release
+cmake --build --preset release
+ctest --preset release
+open build/release/src/app/Carthage_artefacts/Release/Carthage.app
 ```
 
-It needs Google Chrome and writes the banners and cards to `docs/art`.
+Don't clone with `--recurse-submodules`: Tracktion Engine's own nested JUCE is not used. The full list
+of commands, including the real-time-safety build and the measuring tool, is in
+[AGENTS.md](AGENTS.md) under "Commands". The README artwork is rendered with
+`design/banners/render.sh` (needs Google Chrome).
 
 ## Guidelines
 

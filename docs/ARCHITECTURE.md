@@ -1,8 +1,9 @@
 # Architecture
 
-How Carthage is put together. **Nothing here is built yet.** This is the starting proposal
-([DECISIONS.md](DECISIONS.md) W6): phase 1 tests it against real code and rewrites whatever turns out
-wrong. Keep this file true: when the code and this file disagree, fix one of them in the same commit.
+How Carthage is put together. Phase 1 built the layers, the device callback, recording, the plugin
+scanner and the phase 1 window; the sections on the model, tools, grid and drawing describe what later
+phases build and are still a proposal ([DECISIONS.md](DECISIONS.md) W6). Keep this file true: when the
+code and this file disagree, fix one of them in the same commit.
 
 What Carthage must do is in [BRIEF.md](BRIEF.md). This file is about how.
 
@@ -19,29 +20,36 @@ What Carthage must do is in [BRIEF.md](BRIEF.md). This file is about how.
 │  Tracktion Engine  →  JUCE  →  CoreAudio / ASIO / WASAPI,  AU / VST3         │
 └──────────────────────────────────────────────────────────────────────────────┘
         carthage-scan (separate process): loads one plugin at a time, reports, exits
+        carthage-bench (developer tool): drives engine/ on real hardware and prints measurements
 ```
 
 Dependencies point downward only. `engine/` never includes anything from `ui/` or `app/`, so it can be
 driven by tests and by a headless tool without a window.
 
-## Proposed source layout
+## Source layout
 
 ```
-CMakeLists.txt  CMakePresets.json
-external/            JUCE, tracktion_engine (git submodules, pinned commits)
+CMakeLists.txt  CMakePresets.json    presets: debug, release, rtsan
+cmake/               shared compile settings (warnings as errors, sanitizers)
+external/            JUCE 9.0.5, tracktion_engine (git submodules, pinned: DECISIONS W7)
 src/
-  engine/            Carthage's layer over Tracktion: session, routing, devices, recording, export
-  app/               application object, windows, command table, tool state, project files, updater
-  ui/
-    theme/           the theme header mirroring design/tokens.css, shared drawing helpers
-    timeline/  mixer/  pianoroll/  plugins/  settings/  help/
-  scan/              carthage-scan: the out-of-process plugin scanner
-tests/               unit and engine tests (headless)
-packaging/
-  macos/             Info.plist template, entitlements, dmg script, icon build
-  windows/           resource script, Inno Setup script
-scripts/             developer scripts (icons, appcast, screenshots)
-.github/workflows/   ci.yml, release.yml
+  CMakeLists.txt     carthage_juce: JUCE + Tracktion compiled once (C++23), shared by every target
+  engine/            carthage_engine (static library, no UI, runs headless)
+    Session          owns tracktion::Engine, the edit, the track, input routing, the insert, takes
+    AudioCallback    the one device callback: engine render, recorder, latency probe, meters, load
+    TakeRecorder     audio thread -> lock-free FIFO -> writer thread -> WAV
+    LatencyProbe     loopback round-trip measurement (chirp + cross-correlation)
+    PluginScan       carthage-scan protocol, the known-plugin list and the blocklist
+    RealtimeCheck.h  RealTimeSanitizer scope and CARTHAGE_NONBLOCKING
+  app/               Carthage.app: application, window, menu bar, command table, path provider
+  ui/                components: MainComponent (transport, signal row, take lane), SettingsPanel,
+    theme/           Theme.h (mirror of design/tokens.css) and the LookAndFeel
+  scan/              carthage-scan
+tools/bench/         carthage-bench: latency, soak, align, devices, plugins
+tests/               carthage-tests (juce::UnitTest), no-shared-mutex, rtsan/baseline.txt
+scripts/             rtsan_check.py
+.github/workflows/   ci.yml, release.yml (phase 2)
+packaging/           macos/, windows/ (phase 2)
 ```
 
 ## The model
@@ -73,6 +81,34 @@ scripts/             developer scripts (icons, appcast, screenshots)
 | **Message** (UI) | All components, all model edits, all undo | Do work that can take longer than a frame: scanning, file decode, thumbnail building, export, saving large files |
 | **Workers** (background) | Plugin scan supervision, waveform thumbnails, disk writer for recordings, autosave, export, update check | Touch components directly; edit the model except by posting back to the message thread |
 
+### The device callback (phase 1, DECISIONS W14)
+
+Carthage registers its own `AudioCallback` with the audio device instead of Tracktion's
+`DeviceManager`, and calls the engine from inside it. In each block, in this order:
+
+1. Tracktion renders: device inputs, the monitored input through the track's plugin, playback, the mix.
+   Its worker threads (when it uses more than one core) join the device's audio workgroup.
+2. `TakeRecorder::pushBlock` copies the raw input for the chosen channel(s) into its FIFO, with the
+   engine's stream time for the block.
+3. `LatencyProbe::process`, only while a measurement runs, owns the outputs.
+4. Input peaks, audio-thread load and a missed-deadline count go to atomics the UI reads on its frame.
+
+The whole block is one RealTimeSanitizer scope in the `rtsan` build. Carthage's code in it has no
+violations; Tracktion's and JUCE's are listed in `tests/rtsan/baseline.txt` (DECISIONS F18).
+
+### Recording (DECISIONS W13)
+
+```
+device thread: AudioCallback -> TakeRecorder::pushBlock -> juce::AbstractFifo (8 s, preallocated)
+writer thread: polls every 4 ms -> juce::AudioFormatWriter (WAV 16/24/32-float) -> Recordings/
+message thread: stop -> wait for the audio thread to acknowledge -> drain -> close -> insert clip
+```
+
+The clip's start is the edit time the playhead mapped the take's first block to
+(`EditPlaybackContext::globalStreamTimeToEditTimeUnlooped`, read while the transport still rolls),
+minus the round trip: the driver's input + output latency, or a loopback measurement if the user
+chooses it. Tracktion's own recorder is not used: it locks and allocates on the audio thread.
+
 Rules that follow:
 
 - **Audio thread to UI:** atomics for single values, lock-free single-producer/single-consumer FIFOs for
@@ -82,8 +118,10 @@ Rules that follow:
   atomically, parameter smoothing). Never a mutex the audio thread could wait on.
 - **Recording** goes audio thread → lock-free FIFO → disk-writer thread → file (brief, feature 10). If
   the FIFO overflows, count and report the dropout; never block the audio thread to avoid it.
-- **macOS audio workgroups:** every thread that renders audio joins the device's workgroup (F8). Check
-  what the pinned JUCE and Tracktion already do before writing any of this by hand.
+- **macOS audio workgroups:** every thread that renders audio joins the device's workgroup (F8). The
+  device's own I/O thread is in it already; Tracktion's render threads join it because `Session` calls
+  `EditPlaybackContext::enableAudioWorkgroup (true)` before the playback context exists (off by
+  default in Tracktion). Carthage's writer and analysis threads are not audio threads and stay out.
 - **The monitored input chain stays in-process** (F8): input → plugin chain → output with no hop to
   another process and no extra buffering. Latency is measured, not assumed (see [TESTING.md](TESTING.md)).
 - **Plugin delay compensation** is on for playback and export. The low-latency monitoring mode
@@ -94,10 +132,15 @@ Rules that follow:
 
 - **Hosting** is AU and VST3 through JUCE/Tracktion. No built-in effects or instruments, ever (F4):
   gain, pan, sends and meters are channel features, not plugins.
-- **Scanning** happens in `carthage-scan`, a separate executable (F9). The app hands it one plugin
-  file at a time and reads the result. If the scanner dies or times out, the app records the file in
-  the blocklist and moves on. The app process never loads an unscanned plugin binary. Check what the
-  pinned JUCE/Tracktion provide for out-of-process scanning and use it before building a new one.
+- **Scanning** happens in `carthage-scan`, a separate executable next to the app's executable (F9).
+  The app runs it on one plugin (`--format VST3|AudioUnit --plugin <file or AU identifier>`) on a
+  worker thread; it prints the plugin's descriptions as one `<PLUGINS>` XML element and exits 0, or 2
+  if nothing loaded. A crash, a non-zero exit or a 60 s timeout puts the plugin on the blocklist.
+  The engine's `shouldLoadPlugin` refuses anything the scanner has not confirmed (DECISIONS W15).
+  Tracktion's own hook (`EngineBehaviour::canScanPluginsOutOfProcess`) is not used in phase 1; phase 3
+  reads what it does in the pinned version and decides whether to build the manager on it or on this.
+- **The monitored insert** in phase 1 is one `tracktion::ExternalPlugin` at index 0 of the track's
+  plugin list, before the track's own volume/pan and meter, which are channel features.
 - **The plugin list, blocklist, favourites and last-used list** are files in the settings folder, with a
   version field, so a newer Carthage can read an older cache.
 - **A plugin's own editor window** is the plugin's business; Carthage gives it a plain host window and
@@ -122,20 +165,21 @@ do not assume the older software renderer is the only path.
 
 ## Files and folders
 
-The help page must list every folder Carthage uses with a button to open each (feature 9), so there is
-exactly one place in `app/` that knows these paths, and everything else asks it:
+The help page must list every folder Carthage uses with a button to open each (feature 9), so exactly
+one place knows these paths: `src/app/Paths.cpp`. The engine receives them; nothing else builds a path
+to a user folder (DECISIONS W17).
 
-| What | Notes |
-| --- | --- |
-| Projects | User-chosen; default under the user's Music or Documents folder |
-| Recordings | Inside the project folder, so a project is self-contained |
-| Autosaves and crash recovery | Per project, plus a marker for "did not shut down cleanly" |
-| Settings | Audio device, shortcuts, window layout, update preferences |
-| Plugin scan cache | Known plugins, blocklist, favourites, last used |
-| AU and VST3 system folders | Read-only to Carthage; listed for the user's benefit |
+| What | macOS | Windows |
+| --- | --- | --- |
+| Settings (audio device, later shortcuts and updates) | `~/Library/Application Support/Carthage` | `%APPDATA%\Carthage` |
+| Plugin scan cache (`KnownPlugins.xml`, `Blocklist.xml`) | `<settings>/Plugins` | same |
+| Projects | `~/Music/Carthage` | `Music\Carthage` |
+| Recordings | `<project>/Recordings` (phase 1: `<projects>/Untitled/Recordings`) | same |
+| Autosaves and crash recovery (phase 4) | `<settings>/Autosave` | same |
+| AU and VST3 system folders (read only) | `/Library/Audio/Plug-Ins/{Components,VST3}`, and under `~` | `C:\Program Files\Common Files\VST3` |
 
-Exact paths are decided in phase 1 and recorded here. Project files carry a format version from the
-first commit that writes one; a project saved by an older Carthage must always open.
+Project files carry a format version from the first commit that writes one (phase 4); a project saved
+by an older Carthage must always open. The plugin cache files carry a version already.
 
 ## Updates
 
@@ -148,8 +192,8 @@ asks the app whether it may restart; the app says no while playing, recording or
 
 | Dependency | Role | How it is brought in |
 | --- | --- | --- |
-| JUCE | UI, audio devices, plugin hosting | Submodule, pinned commit |
-| Tracktion Engine | Edit model, playback graph, recording, time-stretch | Submodule, pinned commit |
+| JUCE 9.0.5 | UI, audio devices, plugin hosting | Submodule `external/JUCE`, tag 9.0.5 (W7) |
+| Tracktion Engine (develop) | Edit model, playback graph, time-stretch | Submodule `external/tracktion_engine`, commit c6293127 (W7); its nested JUCE is not initialised |
 | Sparkle 2 | macOS updates | Decide in phase 2: pinned release binary or package manager; record it here |
 | WinSparkle | Windows updates | Same |
 

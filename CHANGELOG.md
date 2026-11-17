@@ -11,6 +11,15 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Choose your audio interface, sample rate (44.1–192 kHz), buffer size and recording bit depth
+  (16-bit, 24-bit, 32-bit float).
+- Hear an input live through one Audio Unit or VST3 plugin, such as an amp sim. A plugin is checked in
+  a separate process before Carthage loads it, and one that crashes the check is blocked.
+- Record takes from that input. A take lands at the time you played it, corrected for the interface's
+  latency, and shows as a waveform on a lane of takes.
+- See the round trip latency the driver reports, and measure the real one with a cable from an output
+  to an input.
+- See the audio-thread load, and how many dropouts there have been.
 - The Carthage mark, app icon and theme (design tokens, dark and light).
 - Project documentation: the brief, decisions, architecture, roadmap, testing and releasing guides.
 
