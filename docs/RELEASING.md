@@ -58,6 +58,10 @@ The app reads the beta feed when "Receive beta updates" is on (Settings, Updates
      stdin, never to a file or the log), write the appcasts (`packaging/make_appcast.py`), publish
      the GitHub Release (pre-release for `-beta.N`) with install notes, and rewrite the beta feed.
 
+  If a release run fails before publishing, fix the workflow on `main`, then run **Release** from
+  the Actions tab ("Run workflow") with the existing tag: it builds that tag with the fixed workflow.
+  Tags are never moved or deleted.
+
   If `SPARKLE_ED_PRIVATE_KEY` is missing, the release is still built and published, without
   signatures or feeds, and the run shows a warning: installed apps will not see it.
 

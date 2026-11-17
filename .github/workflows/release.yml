@@ -17,9 +17,19 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Retry a release whose run failed before publishing: builds the existing tag with this workflow.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and publish, e.g. v0.1.0"
+        required: true
+        type: string
 
 permissions:
   contents: read
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 concurrency:
   group: release
@@ -34,14 +44,16 @@ jobs:
       prerelease: ${{ steps.v.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
       - id: v
         name: Version from the tag
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
+          version="${TAG#v}"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]] \
-            || { echo "::error::Tag $GITHUB_REF_NAME is not vX.Y.Z or vX.Y.Z-beta.N (docs/RELEASING.md)."; exit 1; }
+            || { echo "::error::Tag $TAG is not vX.Y.Z or vX.Y.Z-beta.N (docs/RELEASING.md)."; exit 1; }
           prerelease=false; [[ "$version" == *-* ]] && prerelease=true
           # The notes must exist before anything is built.
           python3 -I packaging/release_notes.py CHANGELOG.md "$version" --markdown /dev/null
@@ -69,6 +81,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
           submodules: true
 
       - name: Compiler cache
@@ -137,6 +150,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
           submodules: true
 
       - name: Compiler cache
@@ -199,6 +213,8 @@ jobs:
       SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
 
       - uses: actions/download-artifact@v8
         with:
@@ -259,7 +275,7 @@ jobs:
           build="$(cmake -DCARTHAGE_RELEASE="$VERSION" -P cmake/CarthageVersion.cmake 2>&1 | sed -n 's/.*build \([0-9]*\).*/\1/p')"
           [[ -n "$build" ]] || { echo "::error::No build number for $VERSION."; exit 1; }
 
-          common=(--version "$VERSION" --build "$build" --tag "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
+          common=(--version "$VERSION" --build "$build" --tag "$TAG" --repo "$GITHUB_REPOSITORY"
                   --notes changes.html --mac "$dmg" --mac-signature "$mac_sig" --win "$exe" --win-signature "$win_sig")
           mkdir -p feeds
           python3 -I packaging/make_appcast.py "${common[@]}" --title "Carthage (beta)" --output feeds/appcast-beta.xml
@@ -275,9 +291,9 @@ jobs:
           pre=""; [[ "$PRERELEASE" == "true" ]] && pre="--prerelease"
           files=(); while IFS= read -r f; do files+=("$f"); done < <(find dist -maxdepth 1 -type f | sort)
           printf 'Uploading %s\n' "${files[@]}"
-          gh release create "$GITHUB_REF_NAME" "${files[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag \
+          gh release create "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "Carthage $VERSION" --notes-file notes.md $pre
-          echo "Published $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Update the beta feed
         if: steps.feed.outputs.feeds == 'true'
@@ -286,7 +302,6 @@ jobs:
           # A fixed pre-release that only carries the beta appcast; a pre-release never becomes
           # "latest", so it can not hide a stable release.
           if ! gh release view beta-feed --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release create beta-feed --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
-              --title "Beta update feed" --notes "The feed Carthage reads when \"Receive beta updates\" is on. Not a download."
+            gh release create beta-feed --repo "$GITHUB_REPOSITORY" --prerelease --title "Beta update feed" --notes "The feed Carthage reads when \"Receive beta updates\" is on. Not a download."
           fi
           gh release upload beta-feed feeds/appcast-beta.xml --clobber --repo "$GITHUB_REPOSITORY"
