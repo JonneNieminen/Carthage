@@ -40,7 +40,11 @@ option(CARTHAGE_RTSAN "Build with Clang's RealTimeSanitizer (needs a Clang that 
 option(CARTHAGE_TESTS "Build the unit and engine tests" ON)
 
 include(cmake/CarthageOptions.cmake)
-add_compile_definitions(CARTHAGE_VERSION_STRING="${CARTHAGE_VERSION_STRING}" CARTHAGE_BUILD_NUMBER=${CARTHAGE_BUILD_NUMBER})
+# The version reaches Carthage's own code only (through carthage_warnings, which every Carthage
+# target links), never JUCE or Tracktion: a new version must not recompile the libraries, or the
+# compiler cache in CI would miss on every release.
+target_compile_definitions(carthage_warnings INTERFACE
+    CARTHAGE_VERSION_STRING="${CARTHAGE_VERSION_STRING}" CARTHAGE_BUILD_NUMBER=${CARTHAGE_BUILD_NUMBER})
 
 # ---- Dependencies (git submodules, pinned: DECISIONS O7) -------------------------------------------
 add_subdirectory(external/JUCE EXCLUDE_FROM_ALL)

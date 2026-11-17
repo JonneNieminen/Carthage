@@ -46,7 +46,8 @@ The app reads the beta feed when "Receive beta updates" is on (Settings, Updates
 
 - **`ci.yml`**: every push to `main`, configure, build and test with the release preset on macOS
   arm64 (`macos-26`) and Windows x64 (`windows-2025-vs2026`, MSVC through
-  `.github/scripts/msvc-env.ps1`).
+  `.github/scripts/msvc-env.ps1`). Both workflows compile through ccache, cached between runs
+  (DECISIONS W27).
 - **`release.yml`**: on a `v*` tag.
   1. Check the tag and that CHANGELOG has its section.
   2. macOS: build with the version, sign (`packaging/macos/sign.sh`: ad-hoc, or Developer ID once

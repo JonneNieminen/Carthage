@@ -10,7 +10,8 @@
 #
 # Without the SPARKLE_ED_PRIVATE_KEY secret the release is still built and published, without
 # signatures or feeds, and the run says so. Developer ID signing and notarisation run only when the
-# APPLE_* secrets exist; until then the app is ad-hoc signed.
+# APPLE_* secrets exist; until then the app is ad-hoc signed. Builds reuse CI's compiler cache
+# (ccache; the version only reaches Carthage's own files, so the libraries stay cached).
 name: Release
 
 on:
@@ -54,6 +55,11 @@ jobs:
     timeout-minutes: 60
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_COMPRESS: "true"
+      CCACHE_MAXSIZE: 2G
       APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
       APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -65,10 +71,18 @@ jobs:
         with:
           submodules: true
 
+      - name: Compiler cache
+        uses: actions/cache@v6
+        with:
+          path: .ccache
+          key: ccache-macos-26-${{ github.sha }}
+          restore-keys: ccache-macos-26-
+
       - name: Build
         run: |
-          brew install ninja
-          cmake --preset release -DCARTHAGE_RELEASE="$VERSION" -DCARTHAGE_TESTS=OFF
+          brew install ninja ccache
+          cmake --preset release -DCARTHAGE_RELEASE="$VERSION" -DCARTHAGE_TESTS=OFF \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache
           cmake --build --preset release --target Carthage
 
       - name: Developer ID certificate (off until the APPLE_* secrets exist)
@@ -115,19 +129,34 @@ jobs:
     timeout-minutes: 60
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_COMPRESS: "true"
+      CCACHE_MAXSIZE: 2G
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: true
 
+      - name: Compiler cache
+        uses: actions/cache@v6
+        with:
+          path: .ccache
+          key: ccache-windows-2025-vs2026-${{ github.sha }}
+          restore-keys: ccache-windows-2025-vs2026-
+
       - name: Visual Studio environment
         shell: pwsh
-        run: .github/scripts/msvc-env.ps1
+        run: |
+          choco install ccache --no-progress -y
+          .github/scripts/msvc-env.ps1
 
       - name: Build
         shell: bash
         run: |
-          cmake --preset release -DCARTHAGE_RELEASE="$VERSION" -DCARTHAGE_TESTS=OFF
+          cmake --preset release -DCARTHAGE_RELEASE="$VERSION" -DCARTHAGE_TESTS=OFF \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           cmake --build --preset release --target Carthage
 
       - name: Installer (Inno Setup)

@@ -1,6 +1,8 @@
 # CI: configure, build and test Carthage on every push to main, on macOS (Apple Silicon) and
 # Windows x64, with the same presets a developer uses (AGENTS.md, "Commands"). Needs no secrets.
 # The tests are headless: no audio hardware, no third-party plugins (docs/TESTING.md).
+# ccache keeps compiled objects between runs (JUCE and Tracktion barely change); the cache is the
+# same build, reused, so a run with a cold cache and one with a warm cache test the same code.
 name: CI
 
 on:
@@ -28,31 +30,48 @@ jobs:
           - { name: Windows x64, os: windows-2025-vs2026 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_COMPRESS: "true"
+      CCACHE_MAXSIZE: 2G
     steps:
       # Not recursive: Tracktion Engine's own nested JUCE is not used (DECISIONS W7).
       - uses: actions/checkout@v7
         with:
           submodules: true
 
+      - name: Compiler cache
+        uses: actions/cache@v6
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.os }}-${{ github.sha }}
+          restore-keys: ccache-${{ matrix.os }}-
+
       - name: Tools (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install ninja
+          brew install ninja ccache
           cmake --version
           clang++ --version
 
-      - name: Visual Studio environment (Windows)
+      - name: Tools (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: .github/scripts/msvc-env.ps1
+        run: |
+          choco install ccache --no-progress -y
+          .github/scripts/msvc-env.ps1
 
       - name: Configure
         run: |
           cmake --version
-          cmake --preset release
+          cmake --preset release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build --preset release
+        run: |
+          cmake --build --preset release
+          ccache --show-stats
 
       - name: Test
         run: ctest --preset release
