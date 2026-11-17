@@ -163,15 +163,21 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $iscc = Get-Command iscc.exe -ErrorAction SilentlyContinue
-          if (-not $iscc) {
-            $iscc = Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup *\ISCC.exe", "$env:ProgramFiles\Inno Setup *\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          # ISCC.exe as a path string: on PATH, in Program Files, or installed now.
+          $find = {
+            $c = Get-Command iscc.exe -ErrorAction SilentlyContinue
+            if ($c) { return $c.Source }
+            $f = Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup *\ISCC.exe", "$env:ProgramFiles\Inno Setup *\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($f) { return $f.FullName }
           }
-          if (-not $iscc) { choco install innosetup --no-progress -y; $iscc = Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup *\ISCC.exe" | Select-Object -First 1 }
+          $iscc = & $find
+          if (-not $iscc) { choco install innosetup --no-progress -y; $iscc = & $find }
+          if (-not $iscc) { throw "Inno Setup (ISCC.exe) not found" }
+          Write-Host "Using $iscc"
           $numeric = $env:VERSION -replace '-.*$', ''
           $appDir = Resolve-Path 'build\release\src\app\Carthage_artefacts\Release'
           New-Item -ItemType Directory -Force dist | Out-Null
-          & $iscc.FullName "/DVersion=$env:VERSION" "/DNumericVersion=$numeric" "/DAppDir=$appDir" "/DOutDir=$(Resolve-Path dist)" packaging\windows\Carthage.iss
+          & $iscc "/DVersion=$env:VERSION" "/DNumericVersion=$numeric" "/DAppDir=$appDir" "/DOutDir=$(Resolve-Path dist)" packaging\windows\Carthage.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
 
       - uses: actions/upload-artifact@v7
