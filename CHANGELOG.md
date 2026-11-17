@@ -20,6 +20,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 - See the round trip latency the driver reports, and measure the real one with a cable from an output
   to an input.
 - See the audio-thread load, and how many dropouts there have been.
+- Carthage checks for a new version when it opens and offers it in a small card: install it when
+  you quit, or restart now. "Check for updates…" is in the app menu, and Settings can switch to
+  beta versions.
 - The loopback measurement remembers which output and input your cable uses on each interface.
 - While a take records, the input, output and audio device settings stay locked. If playback stops
   under a take, the take ends there, is saved in time, and the status line says so.

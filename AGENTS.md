@@ -68,6 +68,12 @@ build/rtsan/tools/bench/carthage_bench_artefacts/RelWithDebInfo/carthage_bench s
     --device "Audient iD44" --rate 48000 --buffer 64 --input 1 \
     --plugin-format VST3 --plugin /Library/Audio/Plug-Ins/VST3/NeuralAmpModeler.vst3
 
+# A release build with a version, as the release workflow makes it (docs/RELEASING.md)
+cmake --preset release -DCARTHAGE_RELEASE=0.1.0 && cmake --build --preset release --target Carthage
+packaging/macos/sign.sh build/release/src/app/Carthage_artefacts/Release/Carthage.app
+packaging/macos/make-dmg.sh build/release/src/app/Carthage_artefacts/Release/Carthage.app 0.1.0 dist
+# Releasing is a tag: git tag v0.1.0 && git push origin v0.1.0 (ask the owner first)
+
 # UI snapshots of the real window content, no screen needed (tools/snapshot/SnapshotMain.cpp)
 build/release/tools/snapshot/carthage_snapshot_artefacts/Release/carthage_snapshot snapshots
 
@@ -103,7 +109,9 @@ build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench takes 
 - `design/logo/` — the mark on dark, on light, mono (`currentColor`), favicon.
 - `design/banners/` — `art.html` + `render.sh` → `docs/art/*.png`. Never edit a PNG by hand.
 - `docs/` — the documents in the table above. Full layout: `docs/ARCHITECTURE.md`.
-- Planned: `packaging/{macos,windows}`, `.github/workflows/` (phase 2).
+- `packaging/` — release packaging: `macos/` (signing, DMG), `windows/` (Inno Setup), the release-notes
+  and appcast scripts, and the update public key. `.github/workflows/` — `ci.yml`, `release.yml`
+  (docs/RELEASING.md). `cmake/` — warnings, the tag-to-version scheme, the updater pins.
 
 ## Rules
 

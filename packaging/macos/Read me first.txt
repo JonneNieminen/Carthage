@@ -1,0 +1,17 @@
+Carthage {{VERSION}} for Macs with Apple silicon (macOS 13 or later)
+
+1. Drag Carthage onto the Applications folder.
+
+2. The first time only: this build is not notarised by Apple yet, so macOS stops it the first
+   time it opens. Either
+
+   - open Carthage, choose Done in the warning, then go to System Settings > Privacy & Security,
+     scroll down to "Carthage was blocked", and choose Open Anyway; or
+
+   - run this once in Terminal:
+
+       xattr -dr com.apple.quarantine /Applications/Carthage.app
+
+3. Carthage asks for access to your audio inputs. Allow it, so it can hear your instrument.
+
+Later versions arrive inside Carthage itself and install without these steps.

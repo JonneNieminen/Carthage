@@ -1,0 +1,257 @@
+# Release: pushing a tag vX.Y.Z (stable) or vX.Y.Z-beta.N (pre-release) builds macOS arm64 and
+# Windows x64, signs the downloads with the EdDSA key, writes the appcasts and publishes the
+# GitHub Release (docs/RELEASING.md; brief, "Updates and releases").
+#
+# Feeds:
+#   stable  releases/latest/download/appcast.xml          an asset of every stable release;
+#                                                          GitHub's "latest" never points at a pre-release
+#   beta    releases/download/beta-feed/appcast-beta.xml  one fixed pre-release named "beta-feed",
+#                                                          rewritten by every release, stable or beta
+#
+# Without the SPARKLE_ED_PRIVATE_KEY secret the release is still built and published, without
+# signatures or feeds, and the run says so. Developer ID signing and notarisation run only when the
+# APPLE_* secrets exist; until then the app is ad-hoc signed.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Version
+    runs-on: ubuntu-26.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: v
+        name: Version from the tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]] \
+            || { echo "::error::Tag $GITHUB_REF_NAME is not vX.Y.Z or vX.Y.Z-beta.N (docs/RELEASING.md)."; exit 1; }
+          prerelease=false; [[ "$version" == *-* ]] && prerelease=true
+          # The notes must exist before anything is built.
+          python3 -I packaging/release_notes.py CHANGELOG.md "$version" --markdown /dev/null
+          { echo "version=$version"; echo "prerelease=$prerelease"; } >> "$GITHUB_OUTPUT"
+          echo "### Carthage $version (pre-release: $prerelease)" >> "$GITHUB_STEP_SUMMARY"
+
+  macos:
+    name: macOS arm64
+    needs: prepare
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Build
+        run: |
+          brew install ninja
+          cmake --preset release -DCARTHAGE_RELEASE="$VERSION" -DCARTHAGE_TESTS=OFF
+          cmake --build --preset release --target Carthage
+
+      - name: Developer ID certificate (off until the APPLE_* secrets exist)
+        if: env.APPLE_CERTIFICATE != ''
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(uuidgen)"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/certificate.p12"
+
+      - name: Sign
+        run: |
+          app=build/release/src/app/Carthage_artefacts/Release/Carthage.app
+          packaging/macos/sign.sh "$app" "${APPLE_SIGNING_IDENTITY:--}"
+
+      - name: Package
+        run: packaging/macos/make-dmg.sh build/release/src/app/Carthage_artefacts/Release/Carthage.app "$VERSION" dist
+
+      - name: Notarise (off until the APPLE_* secrets exist)
+        if: env.APPLE_ID != ''
+        run: |
+          set -euo pipefail
+          dmg="dist/Carthage-$VERSION-arm64.dmg"
+          codesign --force --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$dmg"
+          xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "$dmg"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos
+          path: dist/*.dmg
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64
+    needs: prepare
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Visual Studio environment
+        shell: pwsh
+        run: .github/scripts/msvc-env.ps1
+
+      - name: Build
+        shell: bash
+        run: |
+          cmake --preset release -DCARTHAGE_RELEASE="$VERSION" -DCARTHAGE_TESTS=OFF
+          cmake --build --preset release --target Carthage
+
+      - name: Installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $iscc = Get-Command iscc.exe -ErrorAction SilentlyContinue
+          if (-not $iscc) {
+            $iscc = Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup *\ISCC.exe", "$env:ProgramFiles\Inno Setup *\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $iscc) { choco install innosetup --no-progress -y; $iscc = Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup *\ISCC.exe" | Select-Object -First 1 }
+          $numeric = $env:VERSION -replace '-.*$', ''
+          $appDir = Resolve-Path 'build\release\src\app\Carthage_artefacts\Release'
+          New-Item -ItemType Directory -Force dist | Out-Null
+          & $iscc.FullName "/DVersion=$env:VERSION" "/DNumericVersion=$numeric" "/DAppDir=$appDir" "/DOutDir=$(Resolve-Path dist)" packaging\windows\Carthage.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: dist/*-setup.exe
+          if-no-files-found: error
+
+  publish:
+    name: Sign, feed and publish
+    needs: [prepare, macos, windows]
+    runs-on: macos-26   # Sparkle's sign_update is a macOS tool
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+      GH_TOKEN: ${{ github.token }}
+      SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Release notes
+        run: |
+          set -euo pipefail
+          python3 -I packaging/release_notes.py CHANGELOG.md "$VERSION" --markdown changes.md --html changes.html
+          {
+            echo "## Install"
+            echo
+            echo "**macOS** (Apple silicon, macOS 13 or later): open \`Carthage-$VERSION-arm64.dmg\` and drag Carthage to Applications."
+            echo "This build is not notarised yet, so the first time only macOS stops it. Open Carthage once, choose **Done**,"
+            echo "then go to **System Settings > Privacy & Security** and choose **Open Anyway** next to \"Carthage was blocked\"."
+            echo "Or run this once in Terminal:"
+            echo
+            echo '```bash'
+            echo 'xattr -dr com.apple.quarantine /Applications/Carthage.app'
+            echo '```'
+            echo
+            echo "**Windows** (x64, Windows 10 1607 or later): run \`Carthage-$VERSION-x64-setup.exe\`. SmartScreen may warn about an"
+            echo "unknown publisher: choose **More info**, then **Run anyway**."
+            echo
+            echo "Later versions arrive inside Carthage and install without these steps."
+            echo
+            echo "## Changes"
+            echo
+            cat changes.md
+          } > notes.md
+
+      - name: Signatures and feeds
+        id: feed
+        run: |
+          set -euo pipefail
+          if [[ -z "$SPARKLE_ED_PRIVATE_KEY" ]]; then
+            echo "::warning::SPARKLE_ED_PRIVATE_KEY is not set: publishing without update signatures or feeds. Installed apps will not see this release."
+            echo "feeds=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # The pinned Sparkle release (cmake/Updaters.cmake), checked by the same SHA-256.
+          sv="$(sed -n 's/.*CARTHAGE_SPARKLE_VERSION "\(.*\)".*/\1/p' cmake/Updaters.cmake)"
+          sh="$(sed -n 's/.*CARTHAGE_SPARKLE_SHA256 "\(.*\)".*/\1/p' cmake/Updaters.cmake)"
+          mkdir -p "$RUNNER_TEMP/sparkle"
+          curl -fsSL -o "$RUNNER_TEMP/sparkle.tar.xz" "https://github.com/sparkle-project/Sparkle/releases/download/$sv/Sparkle-$sv.tar.xz"
+          echo "$sh  $RUNNER_TEMP/sparkle.tar.xz" | shasum -a 256 -c -
+          tar -xJf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
+          bin="$RUNNER_TEMP/sparkle/bin"
+          dmg="dist/Carthage-$VERSION-arm64.dmg"
+          exe="dist/Carthage-$VERSION-x64-setup.exe"
+          # The key goes to sign_update on stdin, never into a file or the log.
+          sig() { printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | "$bin/sign_update" --ed-key-file - "$1" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p'; }
+          mac_sig="$(sig "$dmg")"; win_sig="$(sig "$exe")"
+          [[ -n "$mac_sig" && -n "$win_sig" ]] || { echo "::error::sign_update produced no signature."; exit 1; }
+
+          build="$(cmake -DCARTHAGE_RELEASE="$VERSION" -P cmake/CarthageVersion.cmake 2>&1 | sed -n 's/.*build \([0-9]*\).*/\1/p')"
+          [[ -n "$build" ]] || { echo "::error::No build number for $VERSION."; exit 1; }
+
+          common=(--version "$VERSION" --build "$build" --tag "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
+                  --notes changes.html --mac "$dmg" --mac-signature "$mac_sig" --win "$exe" --win-signature "$win_sig")
+          mkdir -p feeds
+          python3 -I packaging/make_appcast.py "${common[@]}" --title "Carthage (beta)" --output feeds/appcast-beta.xml
+          if [[ "$PRERELEASE" == "false" ]]; then
+            python3 -I packaging/make_appcast.py "${common[@]}" --output dist/appcast.xml
+          fi
+          echo "feeds=true" >> "$GITHUB_OUTPUT"
+          echo "Signed both downloads; build number $build." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the release
+        run: |
+          set -euo pipefail
+          pre=""; [[ "$PRERELEASE" == "true" ]] && pre="--prerelease"
+          files=(); while IFS= read -r f; do files+=("$f"); done < <(find dist -maxdepth 1 -type f | sort)
+          printf 'Uploading %s\n' "${files[@]}"
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "Carthage $VERSION" --notes-file notes.md $pre
+          echo "Published $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update the beta feed
+        if: steps.feed.outputs.feeds == 'true'
+        run: |
+          set -euo pipefail
+          # A fixed pre-release that only carries the beta appcast; a pre-release never becomes
+          # "latest", so it can not hide a stable release.
+          if ! gh release view beta-feed --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create beta-feed --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
+              --title "Beta update feed" --notes "The feed Carthage reads when \"Receive beta updates\" is on. Not a download."
+          fi
+          gh release upload beta-feed feeds/appcast-beta.xml --clobber --repo "$GITHUB_REPOSITORY"

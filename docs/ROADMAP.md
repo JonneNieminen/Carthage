@@ -12,7 +12,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | --- | --- |
 | 0. Brand, theme and docs | Done (2026-11-16) |
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
-| 2. CI, releases and in-app updates | Not started |
+| 2. CI, releases and in-app updates | In progress: CI, release workflow and updater built; waiting for the update key |
 | 3. Plugin manager and scanning | Not started |
 | 4. Timeline, grid, snapping, tools, shortcuts | Not started |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |

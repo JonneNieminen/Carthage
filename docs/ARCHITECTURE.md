@@ -42,9 +42,12 @@ src/
     LatencyProbe     loopback round-trip measurement (chirp + cross-correlation)
     PluginScan       carthage-scan protocol, the known-plugin list and the blocklist
     RealtimeCheck.h  RealTimeSanitizer scope and CARTHAGE_NONBLOCKING
-  app/               Carthage.app: application, window, menu bar, command table, path provider
-    platform/        the only place for OS-specific APIs (MicrophoneAccess_mac.mm, ..._other.cpp)
+  app/               Carthage.app: application, window, menu bar, command table, path provider,
+                     Updater (in-app updates behind one interface)
+    platform/        the only place for OS-specific APIs (MicrophoneAccess_*, Updater_mac.mm
+                     on Sparkle, Updater_win.cpp on WinSparkle, Updater_other.cpp)
   ui/                carthage_ui: MainComponent (transport, signal row, take lane), SettingsPanel,
+                     UpdateBanner,
     theme/           Theme.h (mirror of design/tokens.css) and the LookAndFeel
   scan/              carthage-scan
 tools/bench/         carthage-bench: latency, soak, align, takes, wgprobe, devices, plugins;
@@ -52,8 +55,12 @@ tools/bench/         carthage-bench: latency, soak, align, takes, wgprobe, devic
 tools/snapshot/      carthage-snapshot: the window content rendered to PNG in fixed states
 tests/               carthage-tests (juce::UnitTest), no-shared-mutex, rtsan/baseline.txt
 scripts/             rtsan_check.py
-.github/workflows/   ci.yml, release.yml (phase 2)
-packaging/           macos/, windows/ (phase 2)
+.github/workflows/   ci.yml (build and test on every push), release.yml (on a v* tag)
+.github/scripts/     msvc-env.ps1: the Visual Studio environment for Windows jobs
+cmake/               CarthageOptions (warnings, sanitizers), CarthageVersion (tag -> versions),
+                     Updaters (Sparkle / WinSparkle archives pinned by SHA-256)
+packaging/           macos/ (sign.sh, make-dmg.sh, read-me), windows/ (Carthage.iss),
+                     release_notes.py, make_appcast.py, update-public-key.txt
 ```
 
 ## The model
