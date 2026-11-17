@@ -65,6 +65,7 @@ namespace carthage::ui
         void takeFinished (const engine::TakeRecorder::Result&);
         void togglePlay();
         void updateTransportButtons();
+        void updateFigures();
         void choosePlugin();
         void scanAndInsert (const engine::PluginCandidate&);
         void openPluginWindow();

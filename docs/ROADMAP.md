@@ -11,7 +11,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | Phase | Status |
 | --- | --- |
 | 0. Brand, theme and docs | Done (2026-11-16) |
-| 1. Skeleton, audio settings, monitored guitar, record a clip | In progress: exit checks met; settings panel deliverable open |
+| 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Not started |
 | 3. Plugin manager and scanning | Not started |
 | 4. Timeline, grid, snapping, tools, shortcuts | Not started |
@@ -32,7 +32,7 @@ Deliver:
 - [x] CMake + Ninja project with JUCE and Tracktion Engine as pinned submodules; presets for debug and release; Apple Silicon native build
 - [x] Open questions O1, O2, O7, O8 in [DECISIONS.md](DECISIONS.md) answered and recorded
 - [x] App window in the Carthage theme (dark), with the theme header mirroring `design/tokens.css`
-- [ ] Audio settings: device, buffer size, sample rate (44.1–192 kHz), recording bit depth; round-trip latency shown in ms; CPU / audio-thread load meter — built; the settings panel has not yet been seen on screen (see report)
+- [x] Audio settings: device, buffer size, sample rate (44.1–192 kHz), recording bit depth; round-trip latency shown in ms; CPU / audio-thread load meter
 - [x] One input monitored through one AU or VST3 plugin, in-process
 - [x] Record that input to a clip on disk through a lock-free FIFO
 - [x] Audio threads in the device's audio workgroup on macOS — shown on the iD44: 7 render threads joined, 0 failed (W24)
@@ -48,7 +48,7 @@ Exit checks:
 
 Report:
 
-### Report — phase 1 (2026-11-17, interim: exit checks met, one deliverable open)
+### Report — phase 1 (2026-11-17, verified)
 Works:        Carthage builds and runs natively on Apple Silicon. Its window, in the Carthage theme,
               shows the signal path on one line (input with a meter and a "Hear the input" switch,
               the plugin, the output, joined by a cable that lights when the input is audible), a
@@ -134,18 +134,19 @@ Measured:     Built-in audio (MacBook mic in, silent virtual output, so nothing 
               threads at real-time priority 47; an Instruments Audio System Trace read a concurrent
               thread count of 1 (its meaning was not established; tracing also caused 5 late
               blocks, so that run is not a soak result).
-Not done:     The settings panel has been seen only through carthage-snapshot on the iD44, which showed
-              three faults to fix in the UI pass: the loopback pickers default to the last channels
-              ("24 ADAT-16" / "20 ADAT-16"), and the round-trip figure and load values are blank
-              right after opening. Windows: nothing built or tested (CI arrives in phase 2). Thread
+Not done:     The settings panel was checked through carthage-snapshot on the iD44; three faults it
+              showed are fixed (loopback pickers now default to the first output not used for
+              listening and the first input not used for the guitar, and remember the cable per
+              interface; the round trip and load figures fill in at once). Its Measure button has
+              not been pressed through the cable in the app itself (the same probe was, through
+              carthage-bench). Windows: nothing built or tested (CI arrives in phase 2). Thread
               and Address Sanitizer presets: not yet (phase 2, with CI).
 Decisions:    F16 (AGPLv3), F17 (JUCE 9.0.5 + Tracktion develop), F18 (how F8 is checked);
               W7–W21: pins, minimum OS, ASIO, C++26/23 split, real-time check mechanics, Carthage's own
               recorder and device callback, plugin load gate, two dropout counts, folders, developer
               tools, carthage-bench, microphone access, carthage-snapshot; W22 (take placement),
               W23 (first MIDI scan at startup), W24 (workgroup membership counted).
-Needs owner:  1. Decide when to fix the settings panel faults (now, or in the UI pass). Outputs
-                 3+4 can go back to "main mix" in the iD app.
+Needs owner:  1. The go-ahead for phase 2. Outputs 3+4 can go back to "main mix" in the iD app.
               2. Approve macOS's microphone prompt for Carthage when it appears.
               3. Approve or edit the upstream drafts in docs/upstream/ before anything is posted.
 

@@ -88,6 +88,14 @@ namespace carthage::ui
         rate.onChange = [this] { applyDevice ([this] (auto& setup) { setup.sampleRate = rate.getSelectedId(); }); };
         buffer.onChange = [this] { applyDevice ([this] (auto& setup) { setup.bufferSize = buffer.getSelectedId(); }); };
 
+        const auto rememberLoopback = [this]
+        {
+            if (loopOut.getSelectedId() > 0 && loopIn.getSelectedId() > 0)
+                session.setLoopbackChannels ({ loopOut.getSelectedId() - 1, loopIn.getSelectedId() - 1 });
+        };
+        loopOut.onChange = rememberLoopback;
+        loopIn.onChange = rememberLoopback;
+
         measureButton.onClick = [this] { startMeasurement(); };
         useMeasured.onClick = [this]
         {
@@ -167,10 +175,11 @@ namespace carthage::ui
             for (int i = 0; i < outs.size(); ++i) loopOut.addItem (label (outs, i, "Output"), i + 1);
             for (int i = 0; i < ins.size(); ++i)  loopIn.addItem (label (ins, i, "Input"), i + 1);
 
-            // A sensible default for a loopback cable: the last output pair into the last input,
-            // away from the monitors and the guitar.
-            loopOut.setSelectedId (std::max (1, outs.size()), dontSendNotification);
-            loopIn.setSelectedId (std::max (1, ins.size()), dontSendNotification);
+            // The cable this interface was last measured with, or the first output you do not
+            // listen on into the first input that is not the guitar (Session::getLoopbackChannels).
+            const auto loopback = session.getLoopbackChannels();
+            loopOut.setSelectedId (loopback.output + 1, dontSendNotification);
+            loopIn.setSelectedId (loopback.input + 1, dontSendNotification);
         }
 
         const auto f = session.getRecordFormat();

@@ -116,6 +116,16 @@ namespace carthage::engine
         std::optional<int> getMeasuredRoundTrip() const noexcept           { return measuredRoundTrip; }
         int getAlignmentSamples() const;
 
+        /** The loopback cable's channels (device channel indices, from 0) for the current interface,
+            remembered across launches. Until one is saved: the first output not used for
+            listening, and the first input not used for the guitar. */
+        struct LoopbackChannels
+        {
+            int output = 0, input = 0;
+        };
+        LoopbackChannels getLoopbackChannels() const;
+        void setLoopbackChannels (LoopbackChannels);
+
         /** Called after the device changed (rate, buffer, channels). */
         std::function<void()> onDeviceChanged;
 

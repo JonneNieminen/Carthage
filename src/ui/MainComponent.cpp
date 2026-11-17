@@ -96,10 +96,15 @@ namespace carthage::ui
 
             if (auto* device = session.getDeviceManager().getCurrentAudioDevice())
             {
-                // The interface's own channel names when it has them ("Analogue 1"), numbers otherwise.
+                // The interface's own channel names when it has them ("Analogue 1"). A bare number, or
+                // nothing (the built-in microphone calls its channel "1"), reads as "Input 1".
                 const auto names = device->getInputChannelNames();
                 const auto ins = names.size();
-                const auto nameOf = [&] (int i) { return names[i].trim().isNotEmpty() ? names[i].trim() : "Input " + String (i + 1); };
+                const auto nameOf = [&] (int i)
+                {
+                    const auto n = names[i].trim();
+                    return n.isEmpty() || n.containsOnly ("0123456789") ? "Input " + String (i + 1) : n;
+                };
 
                 // Ids: channel + 1 for mono, 1000 + channel + 1 for a stereo pair.
                 for (int i = 0; i < ins; ++i)
@@ -337,6 +342,7 @@ namespace carthage::ui
         {
             signalRow->refreshDevices();
             settings.refresh();
+            updateFigures();
         };
 
         session.onTakeEnded = [this] (const engine::TakeRecorder::Result& result)
@@ -349,6 +355,7 @@ namespace carthage::ui
         setWantsKeyboardFocus (true);
         vblank = std::make_unique<VBlankAttachment> (this, [this] (double t) { frame (t); });
         updateTransportButtons();
+        updateFigures();   // the round trip and load show from the first paint, not the first tick
         setStatus ("Ready");
     }
 
@@ -592,7 +599,10 @@ namespace carthage::ui
         settingsOpen = ! settingsOpen;
 
         if (settingsOpen)
+        {
             settings.refresh();
+            updateFigures();   // fill the load figures now, not on the next tick
+        }
 
         layoutSettings (true);
         commands.commandStatusChanged();
@@ -657,6 +667,13 @@ namespace carthage::ui
 
         // Slower figures: about eight times a second.
         if (frameCount % 15 == 0)
+            updateFigures();
+    }
+
+    void MainComponent::updateFigures()
+    {
+        auto& callback = session.getCallback();
+
         {
             const auto load = callback.takeLoad();
             loadMeter.setLoad (load.average, load.peak);
@@ -702,6 +719,7 @@ namespace carthage::ui
         settingsButton.setBounds (top.removeFromRight (36));
         top.removeFromRight (theme::space4);
         latencyWords.setBounds (top.removeFromRight (64));
+        top.removeFromRight (theme::space1);   // the figure and its words read as "6.3 ms round trip"
         latencyLabel.setBounds (top.removeFromRight (72));
         top.removeFromRight (theme::space6);
         loadMeter.setBounds (top.removeFromRight (140).withSizeKeepingCentre (140, 20));

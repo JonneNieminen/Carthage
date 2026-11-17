@@ -2,6 +2,7 @@
 
 #include <tracktion_graph/tracktion_graph.h>
 
+#include <algorithm>
 #include <cmath>
 
 namespace carthage::engine
@@ -432,6 +433,47 @@ namespace carthage::engine
         }
 
         return l;
+    }
+
+    Session::LoopbackChannels Session::getLoopbackChannels() const
+    {
+        LoopbackChannels result;
+        auto* device = engine->getDeviceManager().deviceManager.getCurrentAudioDevice();
+
+        if (device == nullptr)
+            return result;
+
+        const auto outs = device->getOutputChannelNames().size();
+        const auto ins = device->getInputChannelNames().size();
+        auto& props = engine->getPropertyStorage().getPropertiesFile();
+        const auto saved = juce::StringArray::fromTokens (props.getValue ("loopback " + device->getName()), ",", {});
+
+        if (saved.size() == 2)
+        {
+            result = { saved[0].getIntValue(), saved[1].getIntValue() };
+        }
+        else
+        {
+            auto* listening = engine->getDeviceManager().getDefaultWaveOutDevice();
+            result.output = 0;
+            while (listening != nullptr && result.output < outs - 1 && listening->getChannels().containsDeviceChannel (result.output))
+                ++result.output;
+
+            result.input = 0;
+            while (result.input < ins - 1 && (result.input == inputChannel || (inputStereo && result.input == inputChannel + 1)))
+                ++result.input;
+        }
+
+        result.output = std::clamp (result.output, 0, std::max (0, outs - 1));
+        result.input = std::clamp (result.input, 0, std::max (0, ins - 1));
+        return result;
+    }
+
+    void Session::setLoopbackChannels (LoopbackChannels c)
+    {
+        if (auto* device = engine->getDeviceManager().deviceManager.getCurrentAudioDevice())
+            engine->getPropertyStorage().getPropertiesFile().setValue ("loopback " + device->getName(),
+                                                                     juce::String (c.output) + "," + juce::String (c.input));
     }
 
     int Session::getAlignmentSamples() const
