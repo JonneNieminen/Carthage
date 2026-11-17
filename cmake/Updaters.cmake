@@ -36,8 +36,14 @@ elseif(WIN32)
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         SOURCE_SUBDIR "no-cmake-project")
     FetchContent_MakeAvailable(winsparkle)
-    set(CARTHAGE_WINSPARKLE_DIR "${winsparkle_SOURCE_DIR}" CACHE INTERNAL "Unpacked WinSparkle release")
 
-    target_include_directories(carthage_updater_framework SYSTEM INTERFACE "${winsparkle_SOURCE_DIR}/include")
-    target_link_libraries(carthage_updater_framework INTERFACE "${winsparkle_SOURCE_DIR}/x64/Release/WinSparkle.lib")
+    # The zip also holds a __MACOSX folder, so its WinSparkle-X.Y.Z folder is not unwrapped.
+    set(_ws "${winsparkle_SOURCE_DIR}/WinSparkle-${CARTHAGE_WINSPARKLE_VERSION}")
+    if(NOT EXISTS "${_ws}/include/winsparkle.h")
+        set(_ws "${winsparkle_SOURCE_DIR}")
+    endif()
+    set(CARTHAGE_WINSPARKLE_DIR "${_ws}" CACHE INTERNAL "Unpacked WinSparkle release")
+
+    target_include_directories(carthage_updater_framework SYSTEM INTERFACE "${_ws}/include")
+    target_link_libraries(carthage_updater_framework INTERFACE "${_ws}/x64/Release/WinSparkle.lib")
 endif()
