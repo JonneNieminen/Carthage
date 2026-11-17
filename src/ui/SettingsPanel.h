@@ -28,6 +28,9 @@ namespace carthage::ui
         std::function<void (bool)> onBetaUpdatesChanged;
         void setBetaUpdates (bool on, bool available, const juce::String& note);
 
+        /** Scrolls the body so the Updates section is in view. */
+        void showUpdatesSection()    { viewport.setViewPosition (0, updatesHeading.getY() - 8); }
+
         void paint (juce::Graphics&) override;
         void resized() override;
 
@@ -40,6 +43,7 @@ namespace carthage::ui
         juce::Viewport viewport;
         juce::Component body;
         juce::ToggleButton betaUpdates { "Receive beta updates" };
+        juce::Label versionLabel, versionValue;
         IconButton closeButton { IconButton::Glyph::close };
 
         juce::Label inputDeviceLabel, outputDeviceLabel, rateLabel, bufferLabel, formatLabel;

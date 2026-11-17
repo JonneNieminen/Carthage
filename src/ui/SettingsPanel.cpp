@@ -34,14 +34,19 @@ namespace carthage::ui
                                     { &formatLabel, "Bit depth" }, { &reportedLabel, "Driver reports" },
                                     { &measuredLabel, "Measured" }, { &loopOutLabel, "Send from" },
                                     { &loopInLabel, "Return to" }, { &cpuLabel, "Engine" },
-                                    { &threadLabel, "Audio thread" }, { &dropoutsLabel, "Dropouts" } })
+                                    { &threadLabel, "Audio thread" }, { &dropoutsLabel, "Dropouts" },
+                                    { &versionLabel, "Version" } })
         {
             styleLabel (*label, theme::textMd, theme::muted);
             label->setText (text, dontSendNotification);
         }
 
-        for (auto* v : { &reportedValue, &measuredValue, &cpuValue, &threadValue, &dropoutsValue })
+        for (auto* v : { &reportedValue, &measuredValue, &cpuValue, &threadValue, &dropoutsValue, &versionValue })
             styleFigure (*v);
+
+        // The version this copy is, so an update can be seen to have happened.
+        versionValue.setText (CARTHAGE_VERSION_STRING, dontSendNotification);
+        versionValue.setTooltip ("Build " + String (CARTHAGE_BUILD_NUMBER));
 
         styleLabel (loopHint, theme::textSm, theme::muted);
         loopHint.setText ("Connect a cable from an output to an input, choose them here, then measure. "
@@ -62,7 +67,7 @@ namespace carthage::ui
         for (auto* c : { &inputDevice, &outputDevice, &rate, &buffer, &format, &loopOut, &loopIn })
             body.addAndMakeVisible (*c);
 
-        for (auto* c : std::initializer_list<Component*> { &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
+        for (auto* c : std::initializer_list<Component*> { &versionLabel, &versionValue, &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
                                                            &latencyHeading, &loadHeading, &inputDeviceLabel, &outputDeviceLabel,
                                                            &rateLabel, &bufferLabel, &formatLabel, &reportedLabel, &reportedValue,
                                                            &measuredLabel, &measuredValue, &loopOutLabel, &loopInLabel, &loopHint,
@@ -376,6 +381,7 @@ namespace carthage::ui
         dropoutsValue.setBounds (drops);
 
         heading (updatesHeading);
+        row (versionLabel, versionValue);
         betaUpdates.setBounds (r.removeFromTop (rowHeight));
         const auto hintHeight = updatesHint.getText().isEmpty() ? 0 : 36;
         updatesHint.setBounds (r.removeFromTop (hintHeight));

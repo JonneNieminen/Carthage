@@ -10,6 +10,11 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 
 ## Unreleased
 
+## 0.1.1 - 2026-11-18
+
+### Added
+- Settings shows which version of Carthage you are running, under Updates.
+
 ## 0.1.0 - 2026-11-17
 
 The first version: one guitar, one amp sim, takes on a lane.
