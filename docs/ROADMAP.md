@@ -203,6 +203,7 @@ Deliver:
 - [ ] Split at playhead or cursor, duplicate, nudge, crossfades, loop range, markers, cached waveform thumbnails
 - [ ] Shortcut editor; every shortcut rebindable
 - [ ] **Proposed here, owner to confirm (O5):** undo/redo for everything so far, project save and load, autosave and crash recovery
+- [ ] **Owner's additions (F19), details in O9:** autosave only while the user is working (edit-driven, proposed); several projects open as tabs; the sample browser (proposed here, so samples drag onto lanes), with the click-or-hold play setting and its size and text-size settings
 
 Exit checks:
 - [ ] Frame time while zooming and scrolling a project with a few hundred clips, measured on a 120 Hz display and reported
@@ -224,6 +225,7 @@ Deliver:
 - [ ] Input/output picker per channel; "Guitar in → this channel, armed, monitoring" action; keyboard-driven selection
 - [ ] Plugin delay compensation across the whole graph; low-latency monitoring mode
 - [ ] **Proposed here, owner to confirm (O5):** metronome, count-in, loop recording with takes, punch in/out
+- [ ] **Owner's addition (F19), details in O9:** plugin presets, saved and loaded per plugin and (proposed) per Insert Line
 
 Exit checks:
 - [ ] A clip, an instrument and a live input each routed to an arbitrary channel, then re-routed, while playing
