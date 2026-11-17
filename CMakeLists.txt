@@ -45,6 +45,7 @@ add_compile_definitions(CARTHAGE_VERSION_STRING="${CARTHAGE_VERSION_STRING}" CAR
 # ---- Dependencies (git submodules, pinned: DECISIONS O7) -------------------------------------------
 add_subdirectory(external/JUCE EXCLUDE_FROM_ALL)
 add_subdirectory(external/tracktion_engine/modules EXCLUDE_FROM_ALL)
+include(cmake/Updaters.cmake)   # Sparkle / WinSparkle release archives, pinned by SHA-256
 
 # ---- Carthage ------------------------------------------------------------------------------------
 add_subdirectory(src)

@@ -5,7 +5,8 @@
 //   carthage-snapshot OUTPUT_FOLDER [--device NAME] [--output-device NAME]
 //                     [--plugin-format VST3 --plugin FILE_OR_ID] [--record-seconds 3]
 //
-// Writes main.png, settings.png, plugin.png (with --plugin) and take.png (after recording).
+// Writes main.png, settings.png, update*.png (the update banner with sample text), plugin.png
+// (with --plugin) and take.png (after recording).
 
 #include <app/Commands.h>
 #include <engine/Session.h>
@@ -136,6 +137,23 @@ namespace
             Thread::sleep (300);
             capture (outDir.getChildFile ("settings.png"));
             onMessageThreadVoid ([this] { content->toggleSettings(); });
+
+            // The update banner in its states, with sample text (no release is fetched).
+            ui::UpdateBanner::Model update { "0.1.1", "Takes stay in time when the buffer changes\n"
+                                                      "The settings remember your loopback cable\n"
+                                                      "Check for updates from the app menu",
+                                             ui::UpdateBanner::Stage::found, 0.0, false, true };
+            onMessageThreadVoid ([&] { content->showUpdate (update); });
+            capture (outDir.getChildFile ("update.png"));
+            update.stage = ui::UpdateBanner::Stage::downloading;
+            update.progress = 0.42;
+            update.installOnQuitChosen = true;
+            onMessageThreadVoid ([&] { content->showUpdate (update); });
+            capture (outDir.getChildFile ("update-downloading.png"));
+            update.stage = ui::UpdateBanner::Stage::ready;
+            onMessageThreadVoid ([&] { content->showUpdate (update); });
+            capture (outDir.getChildFile ("update-ready.png"));
+            onMessageThreadVoid ([&] { content->showUpdate (std::nullopt); });
 
             if (const auto id = argValue (args, "--plugin"); id.isNotEmpty())
             {

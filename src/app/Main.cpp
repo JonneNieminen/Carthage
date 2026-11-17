@@ -1,5 +1,6 @@
 #include "Commands.h"
 #include "Paths.h"
+#include "Updater.h"
 #include "platform/MicrophoneAccess.h"
 
 #include <engine/Session.h>
@@ -19,7 +20,14 @@ namespace carthage::app
             setApplicationCommandManagerToWatch (&commands);
         }
 
-        StringArray getMenuBarNames() override   { return { "Transport", "Input", "Plugin" }; }
+        StringArray getMenuBarNames() override
+        {
+           #if JUCE_MAC
+            return { "Transport", "Input", "Plugin" };
+           #else
+            return { "Transport", "Input", "Plugin", "Help" };   // macOS has the app menu for this
+           #endif
+        }
 
         PopupMenu getMenuForIndex (int index, const String&) override
         {
@@ -42,6 +50,9 @@ namespace carthage::app
                     m.addCommandItem (&commands, commands::openPluginEditor);
                     m.addCommandItem (&commands, commands::bypassPlugin);
                     break;
+                case 3:
+                    m.addCommandItem (&commands, commands::checkForUpdates);
+                    break;
                 default:
                     break;
             }
@@ -55,6 +66,8 @@ namespace carthage::app
         PopupMenu appleMenu()
         {
             PopupMenu m;
+            m.addCommandItem (&commands, commands::checkForUpdates);
+            m.addSeparator();
             m.addCommandItem (&commands, commands::audioSettings);
             return m;
         }
@@ -142,6 +155,7 @@ namespace carthage::app
 
             menuBar = std::make_unique<MenuBar> (commands);
             auto& content = window->showSession (*session, commands);
+            commands.registerAllCommandsForTarget (this);   // check for updates, quit
 
            #if JUCE_MAC
             auto apple = menuBar->appleMenu();
@@ -153,6 +167,84 @@ namespace carthage::app
             if (! inputAllowed)
                 content.showProblem ("Carthage can not hear your inputs. Allow it in System Settings, "
                                           "Privacy & Security, Microphone, then restart Carthage.");
+
+            startUpdater (content);
+        }
+
+        /** Updates (docs/RELEASING.md): the banner, the beta toggle, a quiet check on launch. */
+        void startUpdater (ui::MainComponent& content)
+        {
+            Updater::Hooks hooks;
+            hooks.isBusy = [this] { return session != nullptr && (session->isPlaying() || session->isRecording()); };
+
+            // Nothing in Carthage is unsaved yet (projects arrive in phase 4); a take in progress
+            // is the only work to protect, and isBusy already refuses a restart during one.
+            hooks.prepareToRestart = [this] { return session == nullptr || ! session->isRecording(); };
+
+            hooks.showOffer = [&content] (std::optional<Updater::Offer> offer)
+            {
+                std::optional<ui::UpdateBanner::Model> model;
+
+                if (offer)
+                    model = ui::UpdateBanner::Model { offer->version, offer->notes,
+                                                      static_cast<ui::UpdateBanner::Stage> (offer->stage),
+                                                      offer->progress, offer->installOnQuitChosen, offer->canInstallOnQuit };
+
+                content.showUpdate (std::move (model));
+            };
+
+            hooks.showMessage = [&content] (const String& text, bool warning) { content.showMessage (text, warning); };
+
+            updater = Updater::create (std::move (hooks));
+
+            auto& banner = content.getUpdateBanner();
+            banner.onInstallOnQuit = [this] { updater->installOnQuit(); };
+            banner.onRestartNow = [this] { updater->restartNow(); };
+            banner.onDismiss = [this] { updater->dismiss(); };
+
+            auto& settings = content.getSettings();
+            settings.setBetaUpdates (updater->getReceivesBetaUpdates(), updater->isAvailable(),
+                                     updater->isAvailable() ? String() : updater->whyUnavailable());
+            settings.onBetaUpdatesChanged = [this] (bool beta)
+            {
+                updater->setReceivesBetaUpdates (beta);
+                updater->checkInBackground();   // the other feed may have something
+            };
+
+            updater->checkInBackground();
+        }
+
+        //==========================================================================================
+        // Application-level commands (the window passes on what it does not handle).
+        void getAllCommands (Array<CommandID>& ids) override
+        {
+            JUCEApplication::getAllCommands (ids);
+            ids.addArray (commands::application());
+        }
+
+        void getCommandInfo (CommandID id, ApplicationCommandInfo& info) override
+        {
+            if (commands::application().contains (id))
+            {
+                commands::describe (id, info);
+                info.setActive (updater != nullptr);
+                return;
+            }
+
+            JUCEApplication::getCommandInfo (id, info);
+        }
+
+        bool perform (const InvocationInfo& info) override
+        {
+            if (info.commandID == commands::checkForUpdates)
+            {
+                if (updater != nullptr)
+                    updater->checkNow();
+
+                return true;
+            }
+
+            return JUCEApplication::perform (info);
         }
 
         void shutdown() override
@@ -160,6 +252,7 @@ namespace carthage::app
            #if JUCE_MAC
             MenuBarModel::setMacMainMenu (nullptr);
            #endif
+            updater.reset();     // its hooks point at the window and the engine
             window.reset();      // components go before the engine they show
             tooltips.reset();
             menuBar.reset();
@@ -183,6 +276,7 @@ namespace carthage::app
         std::unique_ptr<MenuBar> menuBar;
         std::unique_ptr<MainWindow> window;
         std::unique_ptr<TooltipWindow> tooltips;
+        std::unique_ptr<Updater> updater;
     };
 }
 

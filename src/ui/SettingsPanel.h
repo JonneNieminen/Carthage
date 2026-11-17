@@ -6,7 +6,7 @@
 
 namespace carthage::ui
 {
-    /** Audio settings (brief, feature 8, phase 1 part): interface, sample rate, buffer size,
+    /** Settings: audio (brief, feature 8, phase 1 part) and updates (feature 12): interface, sample rate, buffer size,
         recording bit depth, the round trip as the driver reports it and as a loopback measures it,
         and the engine's load and dropouts. Slides in from the right; it never covers the transport. */
     class SettingsPanel final : public juce::Component
@@ -23,6 +23,11 @@ namespace carthage::ui
         std::function<void()> onClose;
         std::function<void()> onMeasure;
 
+        /** "Receive beta updates": the app's updater owns the setting; the panel shows it. `note`
+            explains when the toggle is off (a development build). */
+        std::function<void (bool)> onBetaUpdatesChanged;
+        void setBetaUpdates (bool on, bool available, const juce::String& note);
+
         void paint (juce::Graphics&) override;
         void resized() override;
 
@@ -31,7 +36,10 @@ namespace carthage::ui
     private:
         engine::Session& session;
 
-        juce::Label title, interfaceHeading, recordingHeading, latencyHeading, loadHeading;
+        juce::Label title, interfaceHeading, recordingHeading, latencyHeading, loadHeading, updatesHeading, updatesHint;
+        juce::Viewport viewport;
+        juce::Component body;
+        juce::ToggleButton betaUpdates { "Receive beta updates" };
         IconButton closeButton { IconButton::Glyph::close };
 
         juce::Label inputDeviceLabel, outputDeviceLabel, rateLabel, bufferLabel, formatLabel;

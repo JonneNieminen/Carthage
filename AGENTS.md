@@ -141,7 +141,7 @@ build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench takes 
 
 ### Code
 - C++26 for Carthage's code; JUCE and Tracktion compile as C++23 (DECISIONS W11). Warnings are errors. Format with the repo's `.clang-format`.
-- Dependencies are git submodules pinned to commits. Changing a pin is its own commit with the reason and a DECISIONS entry. Do not patch code inside a submodule.
+- Dependencies are git submodules pinned to commits; the exception is Sparkle and WinSparkle, pinned as release archives by SHA-256 in `cmake/Updaters.cmake` (DECISIONS W25). Changing a pin is its own commit with the reason and a DECISIONS entry. Do not patch code inside a submodule.
 - Do not add a dependency the brief does not name without asking.
 - Paths to user folders come from one place in `app/`; the help page lists them from there.
 - Windows is a real target: no macOS-only API outside a platform file, and CI builds both.

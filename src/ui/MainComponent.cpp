@@ -336,6 +336,7 @@ namespace carthage::ui
             addAndMakeVisible (comp);
 
         addChildComponent (settings);
+        addChildComponent (updateBanner);   // shown by the app's updater
         settings.onClose = [this] { toggleSettings(); };
 
         session.onDeviceChanged = [this]
@@ -605,6 +606,7 @@ namespace carthage::ui
         }
 
         layoutSettings (true);
+        layoutUpdateBanner();
         commands.commandStatusChanged();
     }
 
@@ -694,6 +696,8 @@ namespace carthage::ui
 
             if (playButton.isMouseOverOrDragging() == false)
                 updateTransportButtons();
+
+            updateBanner.setBusy (session.isPlaying() || session.isRecording());
         }
     }
 
@@ -730,5 +734,23 @@ namespace carthage::ui
         takeLane.setBounds (r.reduced (theme::space4, theme::space3));
 
         layoutSettings (false);
+        layoutUpdateBanner();
+    }
+
+    void MainComponent::showUpdate (std::optional<UpdateBanner::Model> model)
+    {
+        updateBanner.show (std::move (model));
+        layoutUpdateBanner();
+    }
+
+    void MainComponent::layoutUpdateBanner()
+    {
+        // Floats over the bottom right of the lane, above the status line and left of the settings
+        // when they are open; it never moves the rest of the window.
+        const auto right = settingsOpen ? getWidth() - SettingsPanel::preferredWidth : getWidth();
+        const auto w = UpdateBanner::preferredWidth;
+        const auto h = updateBanner.getPreferredHeight (w);
+        updateBanner.setBounds (right - w - theme::space2, getHeight() - 28 - h, w, h);
+        updateBanner.toFront (false);
     }
 }

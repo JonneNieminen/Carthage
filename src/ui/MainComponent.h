@@ -3,6 +3,7 @@
 #include "Controls.h"
 #include "SettingsPanel.h"
 #include "TakeLane.h"
+#include "UpdateBanner.h"
 
 #include <app/Commands.h>
 #include <engine/Session.h>
@@ -36,6 +37,14 @@ namespace carthage::ui
         /** Shows a problem the user has to fix outside Carthage, in the status line. */
         void showProblem (const juce::String& text)    { setStatus (text, theme::warn); }
 
+        /** A short message in the status line (update checks the user asked for). */
+        void showMessage (const juce::String& text, bool warning)  { setStatus (text, warning ? theme::warn : theme::muted); }
+
+        /** The update banner and the settings' update toggle, for the app's updater. */
+        void showUpdate (std::optional<UpdateBanner::Model>);
+        UpdateBanner& getUpdateBanner() noexcept    { return updateBanner; }
+        SettingsPanel& getSettings() noexcept       { return settings; }
+
     private:
         class SignalRow;
 
@@ -53,6 +62,7 @@ namespace carthage::ui
         TakeLane takeLane;
         SettingsPanel settings;
         bool settingsOpen = false;
+        UpdateBanner updateBanner;
 
         std::unique_ptr<PluginWindow> pluginWindow;
         std::optional<double> recordingFrom;
@@ -72,5 +82,6 @@ namespace carthage::ui
         void closePluginWindow();
         void setStatus (const juce::String&, juce::Colour = theme::muted);
         void layoutSettings (bool animate);
+        void layoutUpdateBanner();
     };
 }

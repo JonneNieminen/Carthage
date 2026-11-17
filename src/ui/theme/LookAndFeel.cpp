@@ -69,9 +69,12 @@ namespace carthage::ui
         auto r = b.getLocalBounds().toFloat().reduced (0.5f);
         auto fill = background;
 
+        // A light (primary) button brightens on hover; the usual dark ones step to the hover tone.
+        const auto light = background.getPerceivedBrightness() > 0.5f;
+
         if (! b.isEnabled())       fill = fill.withMultipliedAlpha (0.5f);
-        else if (down)             fill = theme::hover.darker (0.15f);
-        else if (highlighted)      fill = theme::hover;
+        else if (down)             fill = light ? theme::mist.darker (0.1f) : theme::hover.darker (0.15f);
+        else if (highlighted)      fill = light ? theme::ice : theme::hover;
 
         g.setColour (fill);
         g.fillRoundedRectangle (r, theme::radiusSm);

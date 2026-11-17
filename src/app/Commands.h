@@ -23,12 +23,19 @@ namespace carthage::app
             bypassPlugin,
             audioSettings,
             measureLatency,
+            checkForUpdates,   // handled by the application, not the window (app menu)
         };
 
         inline juce::Array<juce::CommandID> all()
         {
             return { record, playStop, returnToStart, toggleMonitoring, choosePlugin,
                      openPluginEditor, bypassPlugin, audioSettings, measureLatency };
+        }
+
+        /** Commands the application itself performs, whatever window is in front. */
+        inline juce::Array<juce::CommandID> application()
+        {
+            return { checkForUpdates };
         }
 
         /** Name, description, category and default keys. Flags (enabled, ticked) are added by the
@@ -69,8 +76,11 @@ namespace carthage::app
                     info.addDefaultKeypress ('b', primary | juce::ModifierKeys::shiftModifier);
                     break;
                 case audioSettings:
-                    info.setInfo ("Audio settings", "Choose the interface, sample rate and buffer size", "Settings", 0);
+                    info.setInfo ("Settings", "Audio interface, latency and updates", "Settings", 0);
                     info.addDefaultKeypress (',', primary);
+                    break;
+                case checkForUpdates:
+                    info.setInfo (juce::String::fromUTF8 ("Check for updates\xe2\x80\xa6"), "See whether a newer Carthage is out", "Carthage", 0);
                     break;
                 case measureLatency:
                     info.setInfo ("Measure latency", "Measure the round trip through a cable from an output to an input", "Settings", 0);

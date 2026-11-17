@@ -4,6 +4,7 @@ add_library(carthage_ui STATIC
     MainComponent.cpp MainComponent.h
     SettingsPanel.cpp SettingsPanel.h
     TakeLane.cpp TakeLane.h
+    UpdateBanner.cpp UpdateBanner.h
     theme/LookAndFeel.cpp theme/LookAndFeel.h
     theme/Theme.h)
 

@@ -20,10 +20,10 @@ namespace carthage::ui
     SettingsPanel::SettingsPanel (engine::Session& s) : session (s)
     {
         styleLabel (title, theme::textLg, theme::text, true);
-        title.setText ("Audio settings", dontSendNotification);
+        title.setText ("Settings", dontSendNotification);
 
         for (auto [label, text] : { std::pair { &interfaceHeading, "Interface" }, { &recordingHeading, "Recording" },
-                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" } })
+                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &updatesHeading, "Updates" } })
         {
             styleLabel (*label, theme::textSm, theme::muted, true);
             label->setText (text, dontSendNotification);
@@ -51,16 +51,29 @@ namespace carthage::ui
         closeButton.setTooltip ("Close audio settings");
         closeButton.onClick = [this] { if (onClose) onClose(); };
 
-        for (auto* c : { &inputDevice, &outputDevice, &rate, &buffer, &format, &loopOut, &loopIn })
-            addAndMakeVisible (*c);
+        // The title stays put; everything below it scrolls when the window is short.
+        addAndMakeVisible (title);
+        addAndMakeVisible (closeButton);
+        addAndMakeVisible (viewport);
+        viewport.setViewedComponent (&body, false);
+        viewport.setScrollBarsShown (true, false);
+        viewport.setScrollBarThickness (theme::space2);
 
-        for (auto* c : std::initializer_list<Component*> { &title, &closeButton, &interfaceHeading, &recordingHeading,
+        for (auto* c : { &inputDevice, &outputDevice, &rate, &buffer, &format, &loopOut, &loopIn })
+            body.addAndMakeVisible (*c);
+
+        for (auto* c : std::initializer_list<Component*> { &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
                                                            &latencyHeading, &loadHeading, &inputDeviceLabel, &outputDeviceLabel,
                                                            &rateLabel, &bufferLabel, &formatLabel, &reportedLabel, &reportedValue,
                                                            &measuredLabel, &measuredValue, &loopOutLabel, &loopInLabel, &loopHint,
                                                            &measureButton, &useMeasured, &cpuLabel, &cpuValue, &threadLabel,
                                                            &threadValue, &dropoutsLabel, &dropoutsValue, &resetDropouts })
-            addAndMakeVisible (c);
+            body.addAndMakeVisible (c);
+
+        styleLabel (updatesHint, theme::textSm, theme::muted);
+        updatesHint.setJustificationType (Justification::topLeft);
+        betaUpdates.setTooltip ("Also get test versions before they are released. You can switch back at any time.");
+        betaUpdates.onClick = [this] { if (onBetaUpdatesChanged) onBetaUpdatesChanged (betaUpdates.getToggleState()); };
 
         format.addItem ("16-bit", 1);
         format.addItem ("24-bit", 2);
@@ -296,13 +309,28 @@ namespace carthage::ui
         g.fillRect (0, 0, 1, getHeight());
     }
 
+    void SettingsPanel::setBetaUpdates (bool on, bool available, const String& note)
+    {
+        betaUpdates.setToggleState (on, dontSendNotification);
+        betaUpdates.setEnabled (available);
+        updatesHint.setText (note, dontSendNotification);
+        resized();
+    }
+
     void SettingsPanel::resized()
     {
-        auto r = getLocalBounds().reduced (theme::space4, theme::space4).withTrimmedLeft (1);
-
-        auto top = r.removeFromTop (rowHeight);
+        auto outer = getLocalBounds().reduced (theme::space4, 0).withTrimmedLeft (1);
+        outer.removeFromTop (theme::space4);
+        auto top = outer.removeFromTop (rowHeight);
         closeButton.setBounds (top.removeFromRight (rowHeight));
         title.setBounds (top);
+        outer.removeFromTop (theme::space1);
+
+        // The body is as tall as its rows; the viewport scrolls it when the window is shorter.
+        viewport.setBounds (outer.withX (1).withRight (getWidth()));
+        const auto bodyWidth = viewport.getWidth() - theme::space4 - viewport.getScrollBarThickness();
+        auto r = Rectangle<int> (theme::space4 - 1, 0, bodyWidth - theme::space4 + 1, 10000);
+        const auto startY = r.getY();
 
         const auto heading = [&] (Label& l)
         {
@@ -346,5 +374,12 @@ namespace carthage::ui
         dropoutsLabel.setBounds (drops.removeFromLeft (labelWidth));
         resetDropouts.setBounds (drops.removeFromRight (64));
         dropoutsValue.setBounds (drops);
+
+        heading (updatesHeading);
+        betaUpdates.setBounds (r.removeFromTop (rowHeight));
+        const auto hintHeight = updatesHint.getText().isEmpty() ? 0 : 36;
+        updatesHint.setBounds (r.removeFromTop (hintHeight));
+
+        body.setSize (bodyWidth, r.getY() - startY + theme::space4);
     }
 }
