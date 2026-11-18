@@ -81,6 +81,13 @@ Numbers go in the phase report. An impression ("feels smooth", "low latency") is
 - **Plugin scan.** `carthage-bench scanall` checks every AU and VST3 plugin out of process, as
   the app's first scan does, in a fresh cache, and reports how many were checked, loaded and
   blocked (with why) and how long it took. Report the count, the time and the scanner count.
+- **Crashing and hanging plugins.** The tests build two broken VST3 bundles (macOS:
+  `build/<preset>/test-plugins/Carthage Test Crash.vst3` and `… Hang.vst3`): the unit test checks the
+  scanner reports one as crashed and the other as hung; `carthage-bench scanall --folder
+  build/<preset>/test-plugins` runs the real background scan with them among the real plugins.
+- **Frame time.** Run the app with `CARTHAGE_FRAME_LOG=1` (on macOS: `open --env CARTHAGE_FRAME_LOG=1
+  --stderr frames.log Carthage.app --args --rescan-plugins` to rescan everything at launch); once a
+  second it writes the frame intervals (median, p99, worst, late frames) and the scan's state.
 - **Back-to-back takes.** `carthage-bench takes` records takes the way a player does (record, stop,
   record again, every other one from the start, optionally `--while-playing` and with a plugin) and
   reports any that ended early. Run it at the smallest and the largest buffer you support.

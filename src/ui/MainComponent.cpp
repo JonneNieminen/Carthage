@@ -390,6 +390,7 @@ namespace carthage::ui
         };
 
         setWantsKeyboardFocus (true);
+        frameLog = SystemStats::getEnvironmentVariable ("CARTHAGE_FRAME_LOG", {}).isNotEmpty();
         vblank = std::make_unique<VBlankAttachment> (this, [this] (double t) { frame (t); });
         updateTransportButtons();
         updateFigures();   // the round trip and load show from the first paint, not the first tick
@@ -626,6 +627,9 @@ namespace carthage::ui
     //==============================================================================================
     void MainComponent::frame (double t)
     {
+        if (frameLog)
+            logFrame (t);
+
         const auto dt = lastFrameTime > 0.0 ? std::clamp (t - lastFrameTime, 0.0, 0.1) : 1.0 / 60.0;
         lastFrameTime = t;
         ++frameCount;
@@ -682,6 +686,38 @@ namespace carthage::ui
 
             updateBanner.setBusy (session.isPlaying() || session.isRecording());
             browser.frame();
+        }
+    }
+
+    void MainComponent::logFrame (double t)
+    {
+        // CARTHAGE_FRAME_LOG=1: once a second on stderr, the display's frame intervals as this
+        // window saw them, and whether a plugin scan was running (docs/TESTING.md, "Frame time").
+        if (lastFrameTime > 0.0)
+        {
+            const auto ms = (t - lastFrameTime) * 1000.0;
+            frameStats.worst = std::max (frameStats.worst, ms);
+            frameStats.sum += ms;
+            ++frameStats.count;
+            frameStats.longest.push_back (ms);
+        }
+
+        if (t - frameStats.since >= 1.0 && frameStats.count > 0)
+        {
+            std::sort (frameStats.longest.begin(), frameStats.longest.end());
+            const auto p99 = frameStats.longest[std::min (frameStats.longest.size() - 1, frameStats.longest.size() * 99 / 100)];
+            const auto nominal = frameStats.longest[frameStats.longest.size() / 2];
+            int late = 0;
+
+            for (auto v : frameStats.longest)
+                late += v > nominal * 1.5 ? 1 : 0;
+
+            const auto scan = session.getPluginScanner().getProgress();
+            std::fprintf (stderr, "FRAMES %d frames, median %.2f ms, p99 %.2f ms, worst %.2f ms, late %d; scan %s %d/%d\n",
+                          frameStats.count, nominal, p99, frameStats.worst, late,
+                          scan.running ? "running" : "idle", scan.done, scan.total);
+            frameStats = {};
+            frameStats.since = t;
         }
     }
 

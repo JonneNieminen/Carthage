@@ -131,42 +131,71 @@ namespace carthage::engine
                 return outcome;
             }
 
-            // Read while waiting, so a chatty plugin can not fill the pipe and stall the scanner.
+            // A reader thread drains the scanner's output (a chatty plugin can not fill the pipe),
+            // while this loop watches the clock: JUCE's read blocks until the pipe closes, so reading
+            // here could wait forever on a plugin that hangs without printing anything.
             juce::MemoryOutputStream output;
-            const auto deadline = juce::Time::getMillisecondCounter() + static_cast<juce::uint32> (timeoutMs);
-            char buffer[4096];
+            std::mutex outputLock;
+            std::atomic<bool> pipeClosed { false };
 
-            for (;;)
+            std::thread reader ([&]
             {
-                const auto n = process.readProcessOutput (buffer, sizeof (buffer));
+                char buffer[4096];
 
-                if (n > 0)
+                for (;;)
+                {
+                    const auto n = process.readProcessOutput (buffer, sizeof (buffer));
+
+                    if (n <= 0)
+                        break;
+
+                    const std::lock_guard l (outputLock);
                     output.write (buffer, static_cast<size_t> (n));
-                else if (! process.isRunning())
-                    break;
-                else if (cancel != nullptr && cancel->load())
-                {
-                    process.kill();
-                    outcome.detail = "cancelled";
-                    return outcome;
                 }
-                else if (juce::Time::getMillisecondCounter() > deadline)
-                {
-                    process.kill();
-                    outcome.kind = Outcome::Kind::timedOut;
-                    outcome.detail = "The plugin did not finish loading within " + juce::String (timeoutMs / 1000) + " s";
-                    return outcome;
-                }
-                else
-                {
-                    juce::Thread::sleep (5);
-                }
+
+                pipeClosed = true;
+            });
+
+            const auto deadline = juce::Time::getMillisecondCounter() + static_cast<juce::uint32> (timeoutMs);
+            const auto stopEarly = [&] (Outcome::Kind kind, const juce::String& detail)
+            {
+                process.kill();
+                reader.join();
+                outcome.kind = kind;
+                outcome.detail = detail;
+                return outcome;
+            };
+
+            while (! pipeClosed)
+            {
+                if (cancel != nullptr && cancel->load())
+                    return stopEarly (Outcome::Kind::couldNotStart, "cancelled");
+
+                if (juce::Time::getMillisecondCounter() > deadline)
+                    return stopEarly (Outcome::Kind::timedOut, "The plugin did not finish loading within " + juce::String (timeoutMs / 1000) + " s");
+
+                juce::Thread::sleep (5);
             }
+
+            reader.join();
+
+            // The pipe closes when the scanner exits; give it the rest of the time to finish.
+            const auto left = static_cast<int> (deadline - std::min (deadline, juce::Time::getMillisecondCounter()));
+
+            if (! process.waitForProcessToFinish (std::max (left, 100)))
+                return stopEarly (Outcome::Kind::timedOut, "The plugin did not finish loading within " + juce::String (timeoutMs / 1000) + " s");
 
             const auto exitCode = static_cast<int> (process.getExitCode());
             const auto text = output.toString();
 
-            if (exitCode == exitFound)
+            // JUCE reports 0 for a scanner killed by a signal (a crash), so "0" alone is not success:
+            // a scan that worked always prints its <PLUGINS> element.
+            if (exitCode == exitFound && ! text.contains ("<PLUGINS"))
+            {
+                outcome.kind = Outcome::Kind::crashed;
+                outcome.detail = "The plugin crashed the scanner";
+            }
+            else if (exitCode == exitFound)
             {
                 outcome.descriptions = fromXml (text);
                 outcome.kind = outcome.descriptions.isEmpty() ? Outcome::Kind::nothingFound : Outcome::Kind::found;
@@ -212,7 +241,13 @@ namespace carthage::engine
             if (name != "AudioUnit" && name != "VST3")
                 continue;
 
-            for (const auto& id : format->searchPathsForPlugins (format->getDefaultLocationsToSearch(), true, false))
+            auto paths = format->getDefaultLocationsToSearch();
+
+            if (name == "VST3")
+                for (const auto& f : extraFolders)
+                    paths.add (f);
+
+            for (const auto& id : format->searchPathsForPlugins (paths, true, false))
             {
                 // VST3 identifiers are paths: name them by the bundle, as the plugin's maker does.
                 const auto display = name == "VST3" ? juce::File (id).getFileNameWithoutExtension()

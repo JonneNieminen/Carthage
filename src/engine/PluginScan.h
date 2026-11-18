@@ -75,8 +75,12 @@ namespace carthage::engine
     public:
         PluginCatalogue (juce::KnownPluginList&, juce::AudioPluginFormatManager&, juce::File cacheFolder);
 
-        /** Lists AU and VST3 plugins in the standard locations without loading any of them. */
+        /** Lists AU and VST3 plugins in the standard locations, and VST3s in the extra folders,
+            without loading any of them. */
         std::vector<PluginCandidate> findCandidates() const;
+
+        /** Folders searched for VST3 plugins besides the system ones (a setting later; tests now). */
+        void setExtraFolders (const juce::Array<juce::File>& folders)     { extraFolders = folders; }
 
         bool isBlocked (const juce::String& fileOrIdentifier) const;
         void block (const juce::String& fileOrIdentifier, const juce::String& reason, const juce::String& kind = "crashed");
@@ -110,6 +114,7 @@ namespace carthage::engine
         juce::File folder;
         juce::StringPairArray blocked;       // fileOrIdentifier -> reason
         juce::StringPairArray blockedKind;   // fileOrIdentifier -> kind (Outcome::blockKind)
+        juce::Array<juce::File> extraFolders;
 
         void load();
         void save() const;

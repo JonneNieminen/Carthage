@@ -85,6 +85,23 @@ public:
             expect (own.contains (carthage::engine::scan::hostArchitecture()), own.joinIntoString (","));
            #endif
         }
+
+       #if JUCE_MAC
+        beginTest ("A plugin that crashes or hangs on load is reported, and only its scanner dies");
+        {
+            const juce::File scanner (CARTHAGE_SCANNER_PATH);
+            const juce::File folder (CARTHAGE_TEST_PLUGIN_DIR);
+
+            const auto crash = carthage::engine::scan::runScanner (scanner, "VST3", folder.getChildFile ("Carthage Test Crash.vst3").getFullPathName(), 20000);
+            expect (crash.kind == carthage::engine::scan::Outcome::Kind::crashed, crash.detail);
+            expect (crash.shouldBlock());
+            expectEquals (crash.blockKind(), juce::String ("crashed"));
+
+            const auto hang = carthage::engine::scan::runScanner (scanner, "VST3", folder.getChildFile ("Carthage Test Hang.vst3").getFullPathName(), 2000);
+            expect (hang.kind == carthage::engine::scan::Outcome::Kind::timedOut, hang.detail);
+            expectEquals (hang.blockKind(), juce::String ("hung"));
+        }
+       #endif
     }
 };
 

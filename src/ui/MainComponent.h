@@ -76,6 +76,11 @@ namespace carthage::ui
         std::unique_ptr<juce::VBlankAttachment> vblank;
 
         void frame (double timestampSeconds);
+        void logFrame (double timestampSeconds);
+
+        struct FrameStats { double since = 0.0, worst = 0.0, sum = 0.0; int count = 0; std::vector<double> longest; };
+        FrameStats frameStats;
+        bool frameLog = false;
         void toggleRecord();
         void takeFinished (const engine::TakeRecorder::Result&);
         void togglePlay();

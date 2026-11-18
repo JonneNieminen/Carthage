@@ -10,7 +10,7 @@
 //   carthage-bench latency --device NAME --rate HZ --buffers 32,64,128 --out N --in N [--repeat 5]
 //   carthage-bench soak    --device NAME --rate HZ --buffer N --input N [--stereo]
 //                          [--plugin-format VST3|AudioUnit --plugin FILE_OR_ID] [--seconds 600] [--keep]
-//   carthage-bench scanall [--parallel 4] [--timeout-s 60]
+//   carthage-bench scanall [--parallel 4] [--timeout-s 60] [--folder DIR]
 //                          (checks every AU and VST3 plugin out of process, as the app's first scan
 //                          does, in a fresh cache; reports counts, time and what was blocked)
 //   carthage-bench wgprobe --device NAME --rate HZ --buffer N
@@ -458,6 +458,9 @@ namespace
         int scanall()
         {
             const auto exe = File::getSpecialLocation (File::currentExecutableFile).getSiblingFile ("carthage-scan");
+
+            if (args.has ("folder"))
+                onMessageThreadVoid ([this] { session->getPlugins().setExtraFolders ({ File (args.get ("folder")) }); });
             auto scanner = onMessageThread ([&] { return std::make_shared<engine::PluginScanner> (session->getPlugins(), exe); });
             scanner->maxParallel = args.getInt ("parallel", 4);
             scanner->timeoutMs = args.getInt ("timeout-s", 60) * 1000;

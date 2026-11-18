@@ -170,8 +170,9 @@ namespace carthage::app
 
             startUpdater (content);
 
-            // Plugins installed or updated since the last run are checked in the background.
-            session->getPluginScanner().start (false);
+            // Plugins installed or updated since the last run are checked in the background;
+            // --rescan-plugins checks them all (for measuring the UI during a full scan).
+            session->getPluginScanner().start (getCommandLineParameterArray().contains ("--rescan-plugins"));
         }
 
         /** Updates (docs/RELEASING.md): the banner, the beta toggle, a quiet check on launch. */
