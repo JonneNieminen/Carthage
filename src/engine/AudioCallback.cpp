@@ -32,8 +32,8 @@ namespace carthage::engine
         }
     }
 
-    AudioCallback::AudioCallback (tracktion::Engine& e, TakeRecorder& r, LatencyProbe& p)
-        : engine (e), engineCallback (engineCallbackOf (e.getDeviceManager())), recorder (r), probe (p)
+    AudioCallback::AudioCallback (tracktion::Engine& e, TakeRecorder& r, LatencyProbe& p, SamplePreview& s)
+        : engine (e), engineCallback (engineCallbackOf (e.getDeviceManager())), recorder (r), probe (p), preview (s)
     {
     }
 
@@ -72,6 +72,40 @@ namespace carthage::engine
         updateInputIndices();
     }
 
+    void AudioCallback::setPreviewOutput (int firstDeviceChannel)
+    {
+        previewDeviceOutput = std::max (0, firstDeviceChannel);
+        updateOutputIndices();
+    }
+
+    void AudioCallback::updateOutputIndices()
+    {
+        // As with inputs: the callback's output array holds the active channels only.
+        int left = -1, right = -1;
+
+        if (auto* device = engine.getDeviceManager().deviceManager.getCurrentAudioDevice())
+        {
+            const auto active = device->getActiveOutputChannels();
+            const auto indexOf = [&active] (int channel)
+            {
+                if (! active[channel])
+                    return -1;
+
+                int index = 0;
+                for (int i = 0; i < channel; ++i)
+                    if (active[i])
+                        ++index;
+                return index;
+            };
+
+            left = indexOf (previewDeviceOutput);
+            right = indexOf (previewDeviceOutput + 1);
+        }
+
+        previewLeft.store (left, std::memory_order_relaxed);
+        previewRight.store (right, std::memory_order_relaxed);
+    }
+
     void AudioCallback::updateInputIndices()
     {
         // The callback receives only the device's active input channels, packed in order, so a
@@ -104,6 +138,7 @@ namespace carthage::engine
         engineCallback.audioDeviceAboutToStart (device);
         sampleRate.store (device->getCurrentSampleRate(), std::memory_order_relaxed);
         updateInputIndices();
+        updateOutputIndices();
     }
 
     void AudioCallback::audioDeviceStopped()
@@ -145,10 +180,16 @@ namespace carthage::engine
 
         recorder.pushBlock (recorded.data(), numRecorded, numSamples, blockStart);
 
-        // 3. The latency probe silences everything else while it runs.
+        // 3. The sample browser's preview, on the main outputs.
+        const auto left = previewLeft.load (std::memory_order_relaxed);
+        const auto right = previewRight.load (std::memory_order_relaxed);
+        preview.render (left >= 0 && left < numOutputChannels ? outputChannelData[left] : nullptr,
+                        right >= 0 && right < numOutputChannels ? outputChannelData[right] : nullptr, numSamples);
+
+        // 4. The latency probe silences everything else while it runs.
         probe.process (inputChannelData, numInputChannels, outputChannelData, numOutputChannels, numSamples);
 
-        // 4. Meters and load, for the UI to poll.
+        // 5. Meters and load, for the UI to poll.
         for (int i = 0; i < numRecorded; ++i)
             storeMax (inputPeak[static_cast<size_t> (i)], peakOf (recorded[static_cast<size_t> (i)], numSamples));
 

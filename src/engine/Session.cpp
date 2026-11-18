@@ -88,6 +88,8 @@ namespace carthage::engine
                 onPluginsChanged();
         };
 
+        sampleLibrary = std::make_unique<SampleLibrary> (folders.settings);
+
         // Engine render threads join the device's audio workgroup (F8). Must be set before the
         // playback context is created.
         tracktion::EditPlaybackContext::enableAudioWorkgroup (true);
@@ -100,7 +102,7 @@ namespace carthage::engine
         // short. Run it now, while nothing plays. Later scans only rebuild on a hardware change.
         dm.rescanMidiDeviceList();
 
-        callback = std::make_unique<AudioCallback> (*engine, recorder, probe);
+        callback = std::make_unique<AudioCallback> (*engine, recorder, probe, preview);
         callback->attach();
 
         dm.addChangeListener (this);
@@ -154,6 +156,12 @@ namespace carthage::engine
 
         const auto rate = device->getCurrentSampleRate();
         const auto inputs = device->getActiveInputChannels().countNumberOfSetBits();
+
+        // The browser's preview plays where the project does: the main output pair.
+        preview.prepare (rate);
+
+        if (auto* main = engine->getDeviceManager().getDefaultWaveOutDevice(); main != nullptr && main->getChannels().size() > 0)
+            callback->setPreviewOutput (main->getChannels()[0].indexInDevice);
 
         if (rate == preparedRate && inputs == preparedInputs)
             return;

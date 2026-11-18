@@ -2,6 +2,7 @@
 
 #include "LatencyProbe.h"
 #include "RealtimeCheck.h"
+#include "SamplePreview.h"
 #include "TakeRecorder.h"
 
 #include <tracktion_engine/tracktion_engine.h>
@@ -18,7 +19,8 @@ namespace carthage::engine
         order and under one real-time check:
           1. the engine renders (inputs, monitored plugin chain, playback);
           2. the recorder takes the raw input for the armed channel(s), with the block's stream time;
-          3. the latency probe, if running, owns the outputs;
+          3. the sample browser's preview is added to the main outputs;
+          4. the latency probe, if running, owns the outputs;
           4. input meters and audio-thread load are published through atomics for the UI to poll.
 
         Everything here runs on the device's own I/O thread, which is already in the device's audio
@@ -27,7 +29,7 @@ namespace carthage::engine
     class AudioCallback final : public juce::AudioIODeviceCallback
     {
     public:
-        AudioCallback (tracktion::Engine&, TakeRecorder&, LatencyProbe&);
+        AudioCallback (tracktion::Engine&, TakeRecorder&, LatencyProbe&, SamplePreview&);
         ~AudioCallback() override;
 
         /** Message thread. Puts this callback in place of the engine's own. */
@@ -36,6 +38,10 @@ namespace carthage::engine
 
         /** Message thread. Which device input channels are recorded and metered (1 or 2). */
         void setRecordChannels (int firstDeviceChannel, int numChannels);
+
+        /** Message thread. The device output channel the preview's left side goes to; the right
+            side goes to the next one. */
+        void setPreviewOutput (int firstDeviceChannel);
 
         struct Load
         {
@@ -73,7 +79,10 @@ namespace carthage::engine
         juce::AudioIODeviceCallback& engineCallback;
         TakeRecorder& recorder;
         LatencyProbe& probe;
+        SamplePreview& preview;
         bool attached = false;
+        int previewDeviceOutput = 0;
+        std::atomic<int> previewLeft { -1 }, previewRight { -1 };   // indices into the active outputs
 
         // The recorded channels as device channel numbers (message thread), and as indices into the
         // callback's input array, which only holds the device's active channels (audio thread).
@@ -90,5 +99,6 @@ namespace carthage::engine
         std::array<std::atomic<float>, 2> inputPeak {};
 
         void updateInputIndices();
+        void updateOutputIndices();
     };
 }

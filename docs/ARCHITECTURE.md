@@ -150,6 +150,16 @@ packaging/           macos/ (sign.sh, make-dmg.sh, read-me), windows/ (Carthage.
   `project::collectTarget`) on the writer thread, then points the clips at the copies as one undo
   step. The "Copy samples into the project" setting runs it after every paste (and, with the sample
   browser, every drop). Save as copies `Samples/` along with `Recordings/` (`project::copyMedia`).
+- **Samples** (`engine/SampleLibrary.h`). The folders the user adds, every WAV, AIFF, FLAC, MP3
+  and OGG file under them (MP3 and Ogg through JUCE's own decoders), favourites and each file's
+  key and tempo, in `<settings>/Samples.xml`. An indexer thread reads the folders and hands the
+  finished index to the message thread in one piece; search reuses the plugin browser's fuzzy
+  match over names and folders.
+- **Preview** (`engine/SamplePreview.h`). A reader thread decodes the chosen file, converts it to the
+  device rate and fills a fixed lock-free FIFO; `AudioCallback` adds it, at the preview's own
+  volume, into the main output pair after the engine renders and before the latency probe. A new
+  sound flushes the FIFO through the audio thread (a flush number it answers), so the audio thread
+  never waits and never sees the FIFO change size.
 - **The timeline across tabs.** Waveform thumbnails belong to audio files, not projects, so they are
   kept when the front project changes; resolved clip paths are keyed by project file.
 

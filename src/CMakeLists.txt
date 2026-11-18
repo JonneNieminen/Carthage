@@ -34,6 +34,9 @@ target_compile_definitions(carthage_juce
         JUCE_MODAL_LOOPS_PERMITTED=0
         JUCE_STRICT_REFCOUNTEDPOINTER=1
         JUCE_USE_FLAC=1
+        # The sample browser reads MP3 and Ogg too (W30): JUCE's own decoders, no new dependency.
+        JUCE_USE_MP3AUDIOFORMAT=1
+        JUCE_USE_OGGVORBIS=1
         # The ASIO SDK ships inside JUCE under GPLv3 (JUCE 8.0.11+), compatible with AGPLv3 (DECISIONS W9)
         $<$<PLATFORM_ID:Windows>:JUCE_ASIO=1>
         $<$<PLATFORM_ID:Windows>:JUCE_WASAPI=1>

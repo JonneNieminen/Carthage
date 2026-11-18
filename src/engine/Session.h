@@ -6,6 +6,8 @@
 #include "PluginLibrary.h"
 #include "PluginScan.h"
 #include "Project.h"
+#include "SampleLibrary.h"
+#include "SamplePreview.h"
 #include "TakePlacement.h"
 #include "TakeRecorder.h"
 
@@ -58,6 +60,8 @@ namespace carthage::engine
         AudioCallback& getCallback() noexcept                   { return *callback; }
         TakeRecorder& getRecorder() noexcept                    { return recorder; }
         LatencyProbe& getProbe() noexcept                       { return probe; }
+        SamplePreview& getPreview() noexcept                    { return preview; }
+        SampleLibrary& getSampleLibrary() noexcept              { return *sampleLibrary; }
         PluginCatalogue& getPlugins() noexcept                  { return *plugins; }
         PluginScanner& getPluginScanner() noexcept              { return *pluginScanner; }
         PluginLibrary& getPluginLibrary() noexcept              { return *library; }
@@ -243,9 +247,11 @@ namespace carthage::engine
         std::unique_ptr<PluginCatalogue> plugins;
         std::unique_ptr<PluginLibrary> library;
         std::unique_ptr<PluginScanner> pluginScanner;   // after the catalogue: destroyed first
+        std::unique_ptr<SampleLibrary> sampleLibrary;
         std::unique_ptr<tracktion::Engine> engine;
         TakeRecorder recorder;
         LatencyProbe probe;
+        SamplePreview preview;
         std::unique_ptr<AudioCallback> callback;
 
         /** One open project: its edit and everything that follows it around. */

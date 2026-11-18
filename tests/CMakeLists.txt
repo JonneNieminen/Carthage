@@ -9,6 +9,7 @@ target_sources(carthage_tests PRIVATE
     PluginLibraryTests.cpp
     PluginScanTests.cpp
     ProjectTests.cpp
+    SampleTests.cpp
     TakePlacementTests.cpp
     TakeRecorderTests.cpp
     ThemeTests.cpp)
