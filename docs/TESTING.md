@@ -84,7 +84,15 @@ Numbers go in the phase report. An impression ("feels smooth", "low latency") is
 - **Projects.** `ProjectTests` (headless) saves and reopens a project, checks clip paths after
   Save as, a file from a newer Carthage, a damaged file, the autosave timing and the last-10 rule.
   `carthage-bench projects` does it through the app's `Session` on the real engine: Save as, reopen,
-  an edit autosaved after a pause, the marker a crash leaves, recovery, and a clean close.
+  an edit autosaved after a pause, the marker a crash leaves, recovery, and a clean close; then
+  tabs (ten switches timed, nothing unsaved after switching, only the front project has a graph),
+  copy in one tab and paste in another, and collecting the pasted clip's sample.
+- **Samples.** `SampleTests` (headless): the index of a folder tree, search, favourites, the
+  analysis cache, the preview's level, flush and end, and key and tempo on sounds of known key and
+  tempo (A minor, C major, E minor at 90 bpm, clicks at 120 and 174, a noise burst, a tuned hit).
+  `carthage-bench samples --folder F` indexes a real library, times the slowest of eight searches,
+  analyses 60 files and starts the preview. `carthage-bench soak … --preview FILE` keeps the preview
+  playing during the real-time check.
 - **Crashing and hanging plugins.** The tests build two broken VST3 bundles (macOS:
   `build/<preset>/test-plugins/Carthage Test Crash.vst3` and `… Hang.vst3`): the unit test checks the
   scanner reports one as crashed and the other as hung; `carthage-bench scanall --folder

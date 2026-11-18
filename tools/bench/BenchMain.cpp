@@ -132,6 +132,7 @@ namespace
             else if (args.command == "scanall") result = scanall();
             else if (args.command == "projects") result = projects();
             else if (args.command == "demo")     result = demo();
+            else if (args.command == "samples")  result = samples();
             else say ("unknown command: " + args.command);
 
             onMessageThreadVoid ([this] { session.reset(); });
@@ -178,6 +179,68 @@ namespace
                     n += t->getClips().size();
                 return n;
             });
+        }
+
+        /** samples --folder FOLDER: indexes a sample library, searches it, analyses some of it and
+            starts the preview, timing each (phase 4b's exit check). */
+        int samples()
+        {
+            const File libraryFolder (File::getCurrentWorkingDirectory().getChildFile (args.get ("folder", "samples")));
+
+            if (! libraryFolder.isDirectory())
+            {
+                say ("no folder " + libraryFolder.getFullPathName());
+                return 1;
+            }
+
+            auto& library = session->getSampleLibrary();
+            auto t0 = Time::getMillisecondCounterHiRes();
+            onMessageThreadVoid ([&] { library.addRoot (libraryFolder); library.indexNow(); });
+            const auto count = onMessageThread ([&] { return static_cast<int> (library.getSamples().size()); });
+            say ("indexed " + String (count) + " sounds in " + String (Time::getMillisecondCounterHiRes() - t0, 1) + " ms");
+            check (count > 0, "sounds found");
+
+            double slowest = 0.0;
+            for (auto q : { "kick", "snare 12", "loop 128", "pck", "pack 7 bass", "zzz", "fx", "lead loop" })
+            {
+                const auto ms = onMessageThread ([&]
+                {
+                    const auto s = Time::getMillisecondCounterHiRes();
+                    [[maybe_unused]] auto found = library.find (q, false);
+                    return Time::getMillisecondCounterHiRes() - s;
+                });
+                slowest = std::max (slowest, ms);
+            }
+            say ("slowest search: " + String (slowest, 2) + " ms");
+            check (slowest < 16.0, "every search within a frame (16 ms)");
+
+            // Analysis, as the background analyser does it, on a spread of files.
+            const auto all = onMessageThread ([&] { std::vector<File> f; for (auto& s : library.getSamples()) f.push_back (s.file); return f; });
+            const auto n = std::min<size_t> (all.size(), 60);
+            t0 = Time::getMillisecondCounterHiRes();
+            int withTempo = 0, withKey = 0;
+            for (size_t i = 0; i < n; ++i)
+                if (auto a = carthage::engine::analysis::analyseFile (all[i * all.size() / n]))
+                {
+                    withTempo += a->bpm ? 1 : 0;
+                    withKey += a->key.isNotEmpty() ? 1 : 0;
+                }
+            const auto perFile = (Time::getMillisecondCounterHiRes() - t0) / static_cast<double> (n);
+            say ("analysis: " + String (perFile, 1) + " ms a file (" + String (static_cast<int> (n)) + " files, " + String (withTempo)
+                 + " with a tempo, " + String (withKey) + " with a key or note); all " + String (count) + " in about "
+                 + String (roundToInt (perFile * count / 1000.0)) + " s in the background");
+
+            // The preview: from play() until the reader has the sound queued.
+            t0 = Time::getMillisecondCounterHiRes();
+            onMessageThreadVoid ([&] { session->getPreview().play (all.front()); });
+            while (! onMessageThread ([this] { return session->getPreview().isPlaying(); }) && Time::getMillisecondCounterHiRes() - t0 < 2000.0)
+                Thread::sleep (1);
+            say ("preview ready in " + String (Time::getMillisecondCounterHiRes() - t0, 1) + " ms");
+            check (onMessageThread ([this] { return session->getPreview().isPlaying(); }), "the preview plays");
+            onMessageThreadVoid ([this] { session->getPreview().stop(); });
+
+            say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
+            return checksFailed == 0 ? 0 : 1;
         }
 
         int demo()
@@ -677,8 +740,15 @@ namespace
 
             onMessageThreadVoid ([this] { session->getCallback().takeLoad(); });
 
+            // --preview FILE: the sample browser's preview plays (and restarts) all the while, so
+            // the real-time check covers it too.
+            const File preview (args.get ("preview"));
+
             while (Time::getMillisecondCounterHiRes() - start < seconds * 1000.0)
             {
+                if (preview.existsAsFile())
+                    onMessageThreadVoid ([this, preview] { session->getPreview().play (preview); });
+
                 waitMs (1000);
                 const auto load = onMessageThread ([this] { return session->getCallback().takeLoad(); });
                 const auto peaks = onMessageThread ([this] { return session->getCallback().takeInputPeaks(); });

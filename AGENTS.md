@@ -85,7 +85,8 @@ build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench latenc
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench align --device "Audient iD44" \
     --rate 48000 --buffer 64 --in 4 --click-out 3 --measured-out 3
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench scanall --parallel 4
-build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench projects   # save, reopen, autosave, recovery
+build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench projects   # save, reopen, autosave, recovery, tabs
+build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench samples --folder ~/Music/Samples   # index, search, analyse, preview
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench demo --out build/demo/Demo --clips 300
 open --env CARTHAGE_FRAME_LOG=1 --stderr build/demo/frames.log build/release/src/app/Carthage_artefacts/Release/Carthage.app \
     --args "$PWD/build/demo/Demo/Demo.carthage"   # a project on the command line opens at launch
