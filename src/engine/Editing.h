@@ -44,6 +44,10 @@ namespace carthage::editing
     /** A copy of `source` on `lane`, starting at `beat` (the draw and paint tools). */
     tracktion::Clip* placeCopy (const tracktion::Clip& source, tracktion::AudioTrack& lane, double beat);
 
+    /** A sound file as a new clip on `lane` starting at `beat`, as long as the file (a dropped
+        sample, W30). Null if the file can not be read. */
+    tracktion::Clip* insertFile (tracktion::AudioTrack& lane, const juce::File&, double beat);
+
     void remove (const Clips&);
 
     /** Mutes every clip if any is playing, otherwise unmutes them all (the T tool, and its key). */

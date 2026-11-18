@@ -77,7 +77,7 @@ namespace carthage::ui
         list.setColour (ListBox::backgroundColourId, theme::bg2);
         list.setOutlineThickness (0);
 
-        for (auto* c : std::initializer_list<Component*> { &title, &status, &rescan, &search, &format, &vendor, &list })
+        for (auto* c : std::initializer_list<Component*> { &status, &rescan, &search, &format, &vendor, &list })
             addAndMakeVisible (c);
 
         setKind (Kind::any);
@@ -382,13 +382,14 @@ namespace carthage::ui
     void PluginBrowser::resized()
     {
         auto r = getLocalBounds().reduced (pad, 0).withTrimmedRight (1);
-        r.removeFromTop (theme::space3);
+        r.removeFromTop (theme::space2);
 
-        auto top = r.removeFromTop (24);
-        rescan.setBounds (top.removeFromRight (rescan.getBestWidthForHeight (24) + theme::space4));
-        title.setBounds (top);
-        status.setBounds (r.removeFromTop (20));
-        r.removeFromTop (theme::space3);
+        // The left panel's switch names the panel; the status and Rescan share the top line.
+        auto top = r.removeFromTop (26);
+        const auto w = rescan.getBestWidthForHeight (24) + theme::space4;
+        rescan.setBounds (top.removeFromRight (w).withSizeKeepingCentre (w, 24));
+        status.setBounds (top);
+        r.removeFromTop (theme::space2);
 
         search.setBounds (r.removeFromTop (30));
         r.removeFromTop (theme::space2);

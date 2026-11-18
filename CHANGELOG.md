@@ -20,6 +20,12 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 - File > Collect samples into project copies the samples a project uses from other folders into
   its own Samples folder. Settings > Projects can do it whenever samples arrive; Save as takes the
   Samples folder along.
+- A sample browser on the left, beside the plugins (switch at the top, or F7 and F8). Add the
+  folders you keep your samples in: every WAV, AIFF, FLAC, MP3 and OGG file is listed, folders and
+  all. A click plays a sound through the main output at its own preview volume; the arrow keys move
+  and play. Search across every folder, star favourites, and drag a sound onto a lane (sounds
+  dragged in from the Finder land there too). Settings > Browser sets the panel's width, the text
+  size, and whether sounds play only while held.
 
 ## 0.1.2-beta.4 - 2026-11-18
 

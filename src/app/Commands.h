@@ -42,6 +42,7 @@ namespace carthage::app
             nextProject, previousProject,
             copyClips, cutClips, pasteClips,
             collectSamples,
+            sampleBrowser,
         };
 
         /** The tool commands, in Timeline::Tool order. */
@@ -57,7 +58,7 @@ namespace carthage::app
                      toolSelect, toolDraw, toolPaint, toolSlice, toolDelete, toolMute, toolZoom, toolStretch,
                      undo, redo, toggleGrid, splitAtPlayhead, duplicateClips, deleteClips,
                      nudgeLeft, nudgeRight, addMarker, loopSelection, keyboardShortcuts,
-                     copyClips, cutClips, pasteClips };
+                     copyClips, cutClips, pasteClips, sampleBrowser };
         }
 
         /** Commands the application itself performs, whatever window is in front. */
@@ -138,6 +139,10 @@ namespace carthage::app
                 case saveProject:     info.setInfo ("Save", "Save the project", "File", 0); info.addDefaultKeypress ('s', primary); break;
                 case saveProjectAs:   info.setInfo (juce::String::fromUTF8 ("Save as\xe2\x80\xa6"), "Save the project in a new folder, with its recordings", "File", 0); info.addDefaultKeypress ('s', primary | juce::ModifierKeys::shiftModifier); break;
 
+                case sampleBrowser:
+                    info.setInfo ("Show samples", "Show or hide the sample browser", "Window", 0);
+                    info.addDefaultKeypress (KP::F7Key, 0);
+                    break;
                 case pluginBrowser:
                     info.setInfo ("Show plugins", "Show or hide the plugin browser", "Plugin", 0);
                     info.addDefaultKeypress (KP::F8Key, 0);

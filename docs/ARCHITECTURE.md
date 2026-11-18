@@ -160,6 +160,13 @@ packaging/           macos/ (sign.sh, make-dmg.sh, read-me), windows/ (Carthage.
   volume, into the main output pair after the engine renders and before the latency probe. A new
   sound flushes the FIFO through the audio thread (a flush number it answers), so the audio thread
   never waits and never sees the FIFO change size.
+- **The sample browser** (`ui/SampleBrowser.h`) shares the left panel with the plugin browser; a
+  switch at the panel's top chooses one, remembered with the panel's width. Rows are folders (a
+  tree, opened by click) and sounds (name, key and tempo, star); a press plays (or, in "play while
+  held" mode, plays until the release). Sounds drag onto the timeline's lanes as
+  `carthage-sample:<path>`; the lanes also take audio files from the Finder/Explorer. A drop shows
+  a ghost of where and how long the sound lands, snapped like any edit, and is one undo step
+  (`editing::insertFile`).
 - **The timeline across tabs.** Waveform thumbnails belong to audio files, not projects, so they are
   kept when the front project changes; resolved clip paths are keyed by project file.
 

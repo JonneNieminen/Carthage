@@ -332,6 +332,25 @@ namespace carthage::editing
         return copy.get();
     }
 
+    Clip* insertFile (AudioTrack& lane, const juce::File& file, double beat)
+    {
+        const AudioFile audio (lane.edit.engine, file);
+        const auto seconds = audio.getLength();
+
+        if (! audio.isValid() || seconds <= 0.0)
+            return nullptr;
+
+        const auto start = lane.edit.tempoSequence.toTime (BeatPosition::fromBeats (std::max (0.0, beat)));
+        auto clip = insertWaveClip (lane, file.getFileNameWithoutExtension(), file,
+                                    { { start, TimeDuration::fromSeconds (seconds) } }, DeleteExistingClips::no);
+
+        if (clip == nullptr)
+            return nullptr;
+
+        crossfade (*clip);
+        return clip.get();
+    }
+
     void remove (const Clips& clips)
     {
         for (auto* c : clips)

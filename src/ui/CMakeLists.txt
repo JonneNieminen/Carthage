@@ -6,6 +6,7 @@ add_library(carthage_ui STATIC
     SettingsPanel.cpp SettingsPanel.h
     ShortcutEditor.cpp ShortcutEditor.h
     ProjectTabs.cpp ProjectTabs.h
+    SampleBrowser.cpp SampleBrowser.h
     Timeline.cpp Timeline.h
     UpdateBanner.cpp UpdateBanner.h
     theme/LookAndFeel.cpp theme/LookAndFeel.h

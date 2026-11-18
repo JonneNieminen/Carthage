@@ -28,6 +28,11 @@ namespace carthage::ui
             explains when the toggle is off (a development build). */
         std::function<void (bool)> onBetaUpdatesChanged;
 
+        /** The browser's settings (F19); the window applies them. */
+        std::function<void (int)> onPanelWidthChanged;
+        std::function<void (float)> onBrowserTextSizeChanged;
+        std::function<void (bool)> onPlayWhileHeldChanged;
+
         /** "Check now", beside the version: the same as "Check for updates…" in the menu. */
         std::function<void()> onCheckForUpdates;
         void setBetaUpdates (bool on, bool available, const juce::String& note);
@@ -49,6 +54,10 @@ namespace carthage::ui
         juce::Label title, interfaceHeading, recordingHeading, latencyHeading, loadHeading, updatesHeading, updatesHint, shortcutsHeading,
                     projectsHeading, copySamplesHint;
         juce::ToggleButton copySamples { "Copy samples into the project" };
+        juce::Label browserHeading, panelWidthLabel, textSizeLabel;
+        juce::Slider panelWidth;
+        juce::ComboBox textSize;
+        juce::ToggleButton playWhileHeld { "Play sounds only while held" };
         ShortcutEditor shortcuts;
         juce::Viewport viewport;
         juce::Component body;

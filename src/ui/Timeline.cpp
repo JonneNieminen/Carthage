@@ -1,4 +1,5 @@
 #include "Timeline.h"
+#include "SampleBrowser.h"
 
 namespace carthage::ui
 {
@@ -123,7 +124,8 @@ namespace carthage::ui
 
     //==============================================================================================
     /** The lanes: grid lines, then each visible clip with its waveform. */
-    class Timeline::Lanes final : public Component, private ChangeListener
+    class Timeline::Lanes final : public Component, public DragAndDropTarget, public FileDragAndDropTarget,
+                                  private ChangeListener
     {
     public:
         explicit Lanes (Timeline& t) : timeline (t) { setOpaque (true); }
@@ -627,6 +629,128 @@ namespace carthage::ui
             repaint();
         }
 
+        //==========================================================================================
+        // Dropping sounds: from the sample browser, or audio files from the Finder/Explorer (W30).
+        // A ghost shows where the sound lands, snapped like any edit; the drop is one undo step.
+        static std::optional<File> sampleIn (const var& description)
+        {
+            const auto text = description.toString();
+
+            if (! text.startsWith (SampleBrowser::dragPrefix))
+                return std::nullopt;
+
+            return File (text.fromFirstOccurrenceOf (SampleBrowser::dragPrefix, false, false));
+        }
+
+        static bool isSound (const String& path)
+        {
+            return engine::SamplePreview::extensions().contains (File (path).getFileExtension().toLowerCase());
+        }
+
+        bool isInterestedInDragSource (const SourceDetails& d) override   { return sampleIn (d.description).has_value(); }
+        void itemDragEnter (const SourceDetails& d) override              { startGhost ({ *sampleIn (d.description) }); itemDragMove (d); }
+        void itemDragMove (const SourceDetails& d) override               { moveGhost (d.localPosition); }
+        void itemDragExit (const SourceDetails&) override                 { endGhost(); }
+        void itemDropped (const SourceDetails& d) override                { moveGhost (d.localPosition); drop(); }
+
+        bool isInterestedInFileDrag (const StringArray& files) override
+        {
+            return std::any_of (files.begin(), files.end(), [] (const String& f) { return isSound (f); });
+        }
+
+        void fileDragEnter (const StringArray& files, int x, int y) override
+        {
+            Array<File> sounds;
+
+            for (const auto& f : files)
+                if (isSound (f))
+                    sounds.add (File (f));
+
+            startGhost (sounds);
+            moveGhost ({ x, y });
+        }
+
+        void fileDragMove (const StringArray&, int x, int y) override     { moveGhost ({ x, y }); }
+        void fileDragExit (const StringArray&) override                   { endGhost(); }
+        void filesDropped (const StringArray&, int x, int y) override     { moveGhost ({ x, y }); drop(); }
+
+        Array<File> dropping;
+        std::vector<double> droppingSeconds;
+        double dropBeat = 0.0;
+        int dropLane = -1;
+
+        void startGhost (const Array<File>& files)
+        {
+            dropping = files;
+            droppingSeconds.clear();
+
+            for (const auto& f : files)
+            {
+                // The analysed length if there is one, else the file's header, read once per drag.
+                double seconds = 0.0;
+
+                if (const auto a = timeline.session.getSampleLibrary().getAnalysis (f); a && a->seconds > 0.0)
+                    seconds = a->seconds;
+                else if (std::unique_ptr<AudioFormatReader> r (timeline.formats.createReaderFor (f)); r != nullptr && r->sampleRate > 0)
+                    seconds = static_cast<double> (r->lengthInSamples) / r->sampleRate;
+
+                droppingSeconds.push_back (seconds);
+            }
+        }
+
+        void moveGhost (Point<int> p)
+        {
+            const auto tracks = timeline.laneTracks();
+            const auto lane = std::clamp (laneAt (p.y), 0, std::max (0, tracks.size() - 1));
+            const auto beat = std::max (0.0, snapped (beatAt (p.x), ModifierKeys::currentModifiers.isCommandDown(), {}));
+
+            if (lane != dropLane || beat != dropBeat)
+            {
+                dropLane = lane;
+                dropBeat = beat;
+                repaint();
+            }
+        }
+
+        void endGhost()
+        {
+            dropping.clear();
+            dropLane = -1;
+            repaint();
+        }
+
+        /** The sounds one after another on the lane, from the drop point. */
+        void drop()
+        {
+            const auto tracks = timeline.laneTracks();
+
+            if (dropping.isEmpty() || dropLane < 0 || dropLane >= tracks.size())
+            {
+                endGhost();
+                return;
+            }
+
+            auto& edit = timeline.session.getEdit();
+            editing::begin (edit, dropping.size() == 1 ? String ("Add sample") : "Add " + String (dropping.size()) + " samples");
+            editing::Clips added;
+            auto beat = dropBeat;
+
+            for (const auto& f : dropping)
+                if (auto* c = editing::insertFile (*tracks[dropLane], f, beat))
+                {
+                    added.add (c);
+                    beat = editing::endBeat (*c);
+                }
+
+            endGhost();
+            timeline.selectOnly (added);
+
+            if (added.isEmpty() && timeline.onStatus)
+                timeline.onStatus ("Carthage could not read that file");
+            else if (timeline.session.getAlwaysCopySamples())
+                timeline.session.collectSamples();   // W30: the project keeps its own copy
+        }
+
         void paintOverChildren (Graphics& g) override
         {
             if (! marquee.isEmpty())
@@ -635,6 +759,32 @@ namespace carthage::ui
                 g.fillRect (marquee);
                 g.setColour (theme::accent.withAlpha (0.6f));
                 g.drawRect (marquee, 1);
+            }
+
+            // The sound being dragged in: where it lands and how long it is.
+            if (! dropping.isEmpty() && dropLane >= 0)
+            {
+                auto start = dropBeat;
+                const auto y = static_cast<float> (dropLane * laneHeight - timeline.scrollY + 3);
+
+                for (size_t i = 0; i < static_cast<size_t> (dropping.size()); ++i)
+                {
+                    const auto seconds = std::max (0.25, droppingSeconds[i]);
+                    const auto startSeconds = timeline.session.getEdit().tempoSequence.toTime (tracktion::BeatPosition::fromBeats (start)).inSeconds();
+                    const auto end = timeline.secondsToBeats (startSeconds + seconds);
+                    const auto x0 = timeline.xAtBeat (start) - static_cast<float> (getX());
+                    const auto x1 = timeline.xAtBeat (end) - static_cast<float> (getX());
+                    const Rectangle<float> ghost (x0, y, std::max (4.0f, x1 - x0), static_cast<float> (laneHeight - 7));
+
+                    g.setColour (theme::accent.withAlpha (0.10f));
+                    g.fillRoundedRectangle (ghost, theme::radiusXs);
+                    g.setColour (theme::accent);
+                    g.drawRoundedRectangle (ghost.reduced (0.5f), theme::radiusXs, 1.5f);
+                    g.setFont (theme::uiFont (theme::textXs, true));
+                    g.drawText (dropping[static_cast<int> (i)].getFileNameWithoutExtension(), ghost.reduced (6.0f, 2.0f).withHeight (14.0f),
+                                Justification::centredLeft, true);
+                    start = end;
+                }
             }
         }
     };

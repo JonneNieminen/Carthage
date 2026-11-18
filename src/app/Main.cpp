@@ -89,6 +89,9 @@ namespace carthage::app
                    #endif
                     m.addCommandItem (&commands, commands::toggleFullScreen);
                     m.addSeparator();
+                    m.addCommandItem (&commands, commands::sampleBrowser);
+                    m.addCommandItem (&commands, commands::pluginBrowser);
+                    m.addSeparator();
                     m.addCommandItem (&commands, commands::nextProject);
                     m.addCommandItem (&commands, commands::previousProject);
                     break;

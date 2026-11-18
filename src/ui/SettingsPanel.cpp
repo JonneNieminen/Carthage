@@ -24,7 +24,7 @@ namespace carthage::ui
         title.setText ("Settings", dontSendNotification);
 
         for (auto [label, text] : { std::pair { &interfaceHeading, "Interface" }, { &recordingHeading, "Recording" },
-                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" },
+                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" },
                                     { &updatesHeading, "Updates" },
                                     { &shortcutsHeading, "Keyboard shortcuts" } })
         {
@@ -78,6 +78,41 @@ namespace carthage::ui
         copySamples.setToggleState (session.getAlwaysCopySamples(), dontSendNotification);
         copySamples.setTooltip ("File > Collect samples into project does the same for a project now");
         copySamples.onClick = [this] { session.setAlwaysCopySamples (copySamples.getToggleState()); };
+
+        // Browser (F19): panel width, text size, and how a click plays a sound.
+        auto& props = session.getEngine().getPropertyStorage().getPropertiesFile();
+        styleLabel (panelWidthLabel, theme::textMd, theme::muted);
+        panelWidthLabel.setText ("Panel width", dontSendNotification);
+        panelWidth.setSliderStyle (Slider::LinearHorizontal);
+        panelWidth.setTextBoxStyle (Slider::NoTextBox, true, 0, 0);
+        panelWidth.setRange (240.0, 520.0, 10.0);
+        panelWidth.setValue (props.getIntValue ("panelWidth", 300), dontSendNotification);
+        panelWidth.setTooltip ("How wide the samples and plugins panel is");
+        panelWidth.onValueChange = [this] { if (onPanelWidthChanged) onPanelWidthChanged (static_cast<int> (panelWidth.getValue())); };
+
+        styleLabel (textSizeLabel, theme::textMd, theme::muted);
+        textSizeLabel.setText ("Text size", dontSendNotification);
+        textSize.addItem ("Small", 12);
+        textSize.addItem ("Medium", 13);
+        textSize.addItem ("Large", 15);
+        textSize.setSelectedId (roundToInt (props.getDoubleValue ("browserTextSize", 13.0)), dontSendNotification);
+        textSize.setTooltip ("The size of the names in the sample browser");
+        textSize.onChange = [this]
+        {
+            session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("browserTextSize", textSize.getSelectedId());
+            if (onBrowserTextSizeChanged) onBrowserTextSizeChanged (static_cast<float> (textSize.getSelectedId()));
+        };
+
+        playWhileHeld.setToggleState (props.getBoolValue ("playWhileHeld", false), dontSendNotification);
+        playWhileHeld.setTooltip ("Off: a click plays the whole sound. On: a sound plays while the mouse button, Enter or Space is held.");
+        playWhileHeld.onClick = [this]
+        {
+            session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("playWhileHeld", playWhileHeld.getToggleState());
+            if (onPlayWhileHeldChanged) onPlayWhileHeldChanged (playWhileHeld.getToggleState());
+        };
+
+        for (auto* c : std::initializer_list<Component*> { &browserHeading, &panelWidthLabel, &panelWidth, &textSizeLabel, &textSize, &playWhileHeld })
+            body.addAndMakeVisible (c);
 
         for (auto* c : std::initializer_list<Component*> { &projectsHeading, &copySamples, &copySamplesHint, &versionLabel, &versionValue, &checkNow, &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
                                                            &latencyHeading, &loadHeading, &inputDeviceLabel, &outputDeviceLabel,
@@ -418,6 +453,11 @@ namespace carthage::ui
         heading (projectsHeading);
         copySamples.setBounds (r.removeFromTop (rowHeight));
         copySamplesHint.setBounds (r.removeFromTop (50));
+
+        heading (browserHeading);
+        row (panelWidthLabel, panelWidth);
+        row (textSizeLabel, textSize);
+        playWhileHeld.setBounds (r.removeFromTop (rowHeight));
 
         heading (updatesHeading);
         {

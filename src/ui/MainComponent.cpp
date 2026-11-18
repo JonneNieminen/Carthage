@@ -338,7 +338,7 @@ namespace carthage::ui
 
     //==============================================================================================
     MainComponent::MainComponent (engine::Session& s, ApplicationCommandManager& c)
-        : session (s), commands (c), timeline (s), settings (s, c, cmd::inMenuOrder()), browser (s)
+        : session (s), commands (c), timeline (s), settings (s, c, cmd::inMenuOrder()), browser (s), samples (s)
     {
         signalRow = std::make_unique<SignalRow> (session, commands);
         signalRow->onRemove = [this] { closePluginWindow(); session.removePlugin(); signalRow->setMessage ({}, false); };
@@ -367,6 +367,28 @@ namespace carthage::ui
 
         addChildComponent (settings);
         addAndMakeVisible (browser);
+        addChildComponent (samples);
+
+        // The left panel: samples or plugins, chosen at its top (F19). The choice and the
+        // width are remembered.
+        auto& props = session.getEngine().getPropertyStorage().getPropertiesFile();
+        panelShowsSamples = props.getBoolValue ("panelShowsSamples", false);
+        panelWidth = jlimit (240, 520, props.getIntValue ("panelWidth", PluginBrowser::preferredWidth));
+
+        for (auto [tab, isSamples] : { std::pair { &samplesTab, true }, { &pluginsTab, false } })
+        {
+            tab->setClickingTogglesState (false);
+            tab->onClick = [this, v = isSamples] { showPanel (v, false); };
+            addAndMakeVisible (*tab);
+        }
+
+        samplesTab.setTooltip ("Your samples");
+        pluginsTab.setTooltip ("Your plugins");
+        session.getSampleLibrary().onChange = [this] { samples.refresh(); };
+        settings.onPanelWidthChanged = [this] (int w) { setPanelWidth (w); };
+        settings.onBrowserTextSizeChanged = [this] (float px) { samples.setTextSize (px); };
+        settings.onPlayWhileHeldChanged = [this] (bool held) { samples.setPlayWhileHeld (held); };
+        showPanel (panelShowsSamples, false);
 
         // Tabs: a click brings a project forward; closing asks to save, as Cmd/Ctrl+W does.
         addAndMakeVisible (tabs);
@@ -506,7 +528,8 @@ namespace carthage::ui
                                          info.setTicked (hasPlugin && ! session.getInsertedPlugin()->isEnabled()); break;
             case cmd::record:            info.setTicked (session.isRecording()); break;
             case cmd::audioSettings:     info.setTicked (settingsOpen); break;
-            case cmd::pluginBrowser:     info.setTicked (browserOpen); break;
+            case cmd::pluginBrowser:     info.setTicked (browserOpen && ! panelShowsSamples); break;
+            case cmd::sampleBrowser:     info.setTicked (browserOpen && panelShowsSamples); break;
             case cmd::toggleGrid:        info.setTicked (timeline.getGrid().enabled); break;
             case cmd::undo:              info.setActive (session.getEdit().getUndoManager().canUndo());
                                          info.shortName = "Undo " + session.getEdit().getUndoManager().getUndoDescription(); break;
@@ -536,7 +559,8 @@ namespace carthage::ui
             case cmd::returnToStart:    if (! session.isRecording()) session.returnToStart(); return true;
             case cmd::toggleMonitoring: session.setMonitoring (! session.isMonitoring()); return true;
             case cmd::choosePlugin:     choosePlugin(); return true;
-            case cmd::pluginBrowser:    toggleBrowser(); return true;
+            case cmd::pluginBrowser:    showPanel (false, true); return true;
+            case cmd::sampleBrowser:    showPanel (true, true); return true;
             case cmd::toolSelect: case cmd::toolDraw: case cmd::toolPaint: case cmd::toolSlice:
             case cmd::toolDelete: case cmd::toolMute: case cmd::toolZoom: case cmd::toolStretch:
                 toolCommand (info); return true;
@@ -733,18 +757,42 @@ namespace carthage::ui
     void MainComponent::choosePlugin()
     {
         // The browser is where plugins are chosen; this opens it with the search ready.
-        if (! browserOpen)
-            toggleBrowser();
-
+        showPanel (false, false);
         browser.focusSearch();
     }
 
     void MainComponent::toggleBrowser()
     {
-        browserOpen = ! browserOpen;
-        browser.setVisible (browserOpen);
+        showPanel (panelShowsSamples, true);
+    }
+
+    void MainComponent::showPanel (bool samplesView, bool toggle)
+    {
+        browserOpen = toggle && browserOpen && panelShowsSamples == samplesView ? false : true;
+        panelShowsSamples = samplesView;
+        session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("panelShowsSamples", samplesView);
+
+        browser.setVisible (browserOpen && ! samplesView);
+        samples.setVisible (browserOpen && samplesView);
+        samplesTab.setVisible (browserOpen);
+        pluginsTab.setVisible (browserOpen);
+
+        // The switch: the chosen side stands out as the plugin filters' chosen kind does.
+        for (auto [tab, isSamples] : { std::pair { &samplesTab, true }, { &pluginsTab, false } })
+        {
+            tab->setColour (TextButton::buttonColourId, isSamples == samplesView ? theme::hover : theme::bg2);
+            tab->setColour (TextButton::textColourOffId, isSamples == samplesView ? theme::text : theme::muted);
+        }
+
         resized();
         commands.commandStatusChanged();
+    }
+
+    void MainComponent::setPanelWidth (int w)
+    {
+        panelWidth = jlimit (240, 520, w);
+        session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("panelWidth", panelWidth);
+        resized();
     }
 
     void MainComponent::insertPlugin (const PluginDescription& d)
@@ -837,6 +885,9 @@ namespace carthage::ui
         auto& callback = session.getCallback();
         signalRow->frame (callback.takeInputPeaks(), dt);
 
+        if (samples.isVisible())
+            samples.frame();   // the playing sound's progress
+
         const auto position = session.getPositionSeconds();
         timeline.setPlayhead (position, recordingFrom);
 
@@ -925,6 +976,16 @@ namespace carthage::ui
     void MainComponent::paint (Graphics& g)
     {
         g.fillAll (theme::bg);
+
+        if (! panelArea.isEmpty())
+        {
+            // The panel's switch sits on the panel's surface, with its edge line.
+            const auto top = panelArea.withHeight (40);
+            g.setColour (theme::bg2);
+            g.fillRect (top);
+            g.setColour (theme::line);
+            g.fillRect (top.getRight() - 1, top.getY(), 1, top.getHeight());
+        }
     }
 
     void MainComponent::resized()
@@ -961,8 +1022,23 @@ namespace carthage::ui
         top.removeFromRight (theme::space6);
         loadMeter.setBounds (top.removeFromRight (140).withSizeKeepingCentre (140, 20));
 
-        // The browser docks on the left, under the transport; the rest of the window shifts over.
-        browser.setBounds (r.removeFromLeft (browserOpen ? PluginBrowser::preferredWidth : 0));
+        // The panel docks on the left, under the transport; the rest of the window shifts over.
+        // Its switch sits on the panel's own surface at the top.
+        if (browserOpen)
+        {
+            auto panel = r.removeFromLeft (panelWidth);
+            panelArea = panel;
+            auto switchRow = panel.removeFromTop (40).reduced (theme::space3, 0).withTrimmedTop (theme::space2).withTrimmedRight (1);
+            samplesTab.setBounds (switchRow.removeFromLeft (switchRow.getWidth() / 2 - 2).withHeight (28));
+            switchRow.removeFromLeft (4);
+            pluginsTab.setBounds (switchRow.withHeight (28));
+            browser.setBounds (panel);
+            samples.setBounds (panel);
+        }
+        else
+        {
+            panelArea = {};
+        }
 
         signalRow->setBounds (r.removeFromTop (132));
 

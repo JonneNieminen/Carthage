@@ -207,6 +207,16 @@ public:
                           "a paste undoes in one step");
         }
 
+        beginTest ("A dropped sound lands at the beat, as long as the file (W30)");
+        {
+            auto* dropped = editing::insertFile (*lanes[1], audio, 6.0);
+            expect (dropped != nullptr);
+            near (editing::startBeat (*dropped), 6.0, "at the drop beat");
+            near (dropped->getPosition().getLength().inSeconds(), 4.0, "the whole 4-second file");
+            expectEquals (editing::laneOf (*dropped), 1);
+            expect (editing::insertFile (*lanes[1], folder.getChildFile ("missing.wav"), 0.0) == nullptr, "a missing file adds nothing");
+        }
+
         expectEquals (editing::named ("Move", 1), juce::String ("Move clip"));
         expectEquals (editing::named ("Move", 3), juce::String ("Move 3 clips"));
     }

@@ -2,6 +2,7 @@
 
 #include "Controls.h"
 #include "PluginBrowser.h"
+#include "SampleBrowser.h"
 #include "ProjectTabs.h"
 #include "SettingsPanel.h"
 #include "Timeline.h"
@@ -51,6 +52,13 @@ namespace carthage::ui
         UpdateBanner& getUpdateBanner() noexcept    { return updateBanner; }
         SettingsPanel& getSettings() noexcept       { return settings; }
         PluginBrowser& getPluginBrowser() noexcept  { return browser; }
+        SampleBrowser& getSampleBrowser() noexcept  { return samples; }
+
+        /** Shows the left panel on samples or plugins; with `toggle`, the same view again hides it. */
+        void showPanel (bool samplesView, bool toggle);
+
+        /** Settings: the left panel's width and the sample browser's text size (F19). */
+        void setPanelWidth (int);
 
     private:
         class SignalRow;
@@ -72,7 +80,13 @@ namespace carthage::ui
         bool settingsOpen = false;
         UpdateBanner updateBanner;
         PluginBrowser browser;
-        bool browserOpen = true;
+        SampleBrowser samples;
+        bool browserOpen = true, panelShowsSamples = false;
+        juce::TextButton samplesTab { "Samples" }, pluginsTab { "Plugins" };
+        int panelWidth = PluginBrowser::preferredWidth;
+        juce::Rectangle<int> panelArea;
+
+
 
         // Toolbar: the tools (labelled by their keys), the grid menu and the snap toggle.
         juce::OwnedArray<juce::TextButton> toolButtons;

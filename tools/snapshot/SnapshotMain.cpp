@@ -5,7 +5,7 @@
 //   carthage-snapshot OUTPUT_FOLDER [--device NAME] [--output-device NAME]
 //                     [--plugin-format VST3 --plugin FILE_OR_ID] [--record-seconds 3] [--scan]
 //
-// Writes main.png, settings.png, settings-updates.png, settings-shortcuts.png, update*.png (the update banner with sample text), plugin.png
+// Writes main.png, samples*.png (with --samples FOLDER), tabs.png, settings.png, settings-updates.png, settings-shortcuts.png, update*.png (the update banner with sample text), plugin.png
 // (with --plugin) and take.png (after recording).
 
 #include <app/Commands.h>
@@ -151,6 +151,48 @@ namespace
                                           content->getPluginBrowser().setShowUnavailable (true); });
             capture (outDir.getChildFile ("browser-unavailable.png"));
             onMessageThreadVoid ([this] { content->getPluginBrowser().setShowUnavailable (false); });
+
+            // The sample browser (phase 4b): empty, then with a folder of sounds (--samples FOLDER).
+            onMessageThreadVoid ([this] { content->showPanel (true, false); });
+            capture (outDir.getChildFile ("samples-empty.png"));
+
+            if (const auto folder = argValue (args, "--samples"); folder.isNotEmpty())
+            {
+                onMessageThreadVoid ([this, folder]
+                {
+                    auto& library = session->getSampleLibrary();
+                    library.addRoot (File::getCurrentWorkingDirectory().getChildFile (folder));
+                    library.indexNow();
+                    content->getSampleBrowser().openAllFolders();
+                });
+                capture (outDir.getChildFile ("samples.png"));
+
+                onMessageThreadVoid ([this]
+                {
+                    // The longest sound, so it is still playing when the picture is taken.
+                    const auto& all = session->getSampleLibrary().getSamples();
+                    const auto longest = std::max_element (all.begin(), all.end(), [] (const auto& x, const auto& y)
+                    {
+                        return x.file.getSize() < y.file.getSize();
+                    });
+                    if (longest != all.end())
+                        session->getPreview().play (longest->file);
+                });
+                Thread::sleep (1500);
+                // Offscreen there is no display frame to drive the progress; drive it once here.
+                onMessageThreadVoid ([this] { content->getSampleBrowser().frame(); });
+                capture (outDir.getChildFile ("samples-playing.png"));
+                onMessageThreadVoid ([this] { session->getPreview().stop();
+                                              content->getSampleBrowser().setSearch ("loop"); });
+                capture (outDir.getChildFile ("samples-search.png"));
+                onMessageThreadVoid ([this] { content->getSampleBrowser().setSearch ({}); });
+            }
+
+            onMessageThreadVoid ([this] { content->showPanel (false, false); });
+
+            // Two projects as tabs.
+            onMessageThreadVoid ([this, temp] { session->newProject (temp.getChildFile ("Second song")); });
+            capture (outDir.getChildFile ("tabs.png"));
 
             onMessageThreadVoid ([this] { content->toggleSettings(); });
             Thread::sleep (300);
