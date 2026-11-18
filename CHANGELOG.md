@@ -10,6 +10,8 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 
 ## Unreleased
 
+## 0.1.2-beta.3 - 2026-11-18
+
 ### Added
 - The usual Mac keys: Cmd+W closes the project (asking to save first), Cmd+M minimises, Ctrl+Cmd+F
   goes full screen (F11 on Windows), in File and a new Window menu. Return also goes back to the
