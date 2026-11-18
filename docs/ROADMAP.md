@@ -14,7 +14,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
 | 3. Plugin manager and scanning | Verified (2026-11-18) |
-| 4. Timeline, grid, snapping, tools, shortcuts | 4a verified (2026-11-18); 4b built and measured, the owner's hands-on checks next |
+| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b 2026-11-19) |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
 | 7. Help page, icon and polish | Not started |
@@ -357,22 +357,53 @@ Deliver (F19, F20, W30):
 - [x] A start screen with recent projects and templates, on by default, switchable in Settings
 
 Exit checks:
-- [ ] Two projects open as tabs; switching is instant and only the front one plays; a clip copied from one pastes into the other
-- [ ] A sample folder of a few thousand files browses, searches and previews without stalling (frame time reported); a dragged sample lands on a lane in time
-- [ ] Key and tempo detection checked on samples with known key and tempo; results reported
-- [ ] The start screen opens recent projects and templates; switching it off works
+- [x] Two projects open as tabs; switching is instant and only the front one plays; a clip copied from one pastes into the other
+- [x] A sample folder of a few thousand files browses, searches and previews without stalling (frame time reported); a dragged sample lands on a lane in time
+- [x] Key and tempo detection checked on samples with known key and tempo; results reported
+- [x] The start screen opens recent projects and templates; switching it off works
 
-Report: _after the owner's hands-on checks_. Measured so far (2026-11-18): ten tab switches between
-the 300-clip demo and an empty project, slowest 18-21 ms; nothing unsaved after switching; only the
-front project has a playback graph; a clip copied in one tab pastes into another on the same lane
-and finds its audio (carthage-bench projects). A library of 2,976 generated sounds in 12 packs:
-indexed in 166 ms, slowest of eight searches 4.0 ms, analysis 4.3 ms a file (about 13 s for all, in
-the background), preview ready 2.6 ms after the click (carthage-bench samples); the app held 120 Hz
-while indexing and analysing it (0-1 late frames a second over 20 s, after one 250 ms frame at
-launch). Key and tempo on generated sounds: A minor, C major, E minor and 90, 120 and 174 bpm all
-right; held chords no tempo; a noise burst nothing; a tuned hit its note (SampleTests). RTSan, 60 s
-with NeuralAmpModeler and the preview playing: 0 failures, no report in Carthage's code, 0 dropouts.
+Report:
 
+### Report — phase 4b (2026-11-19, c30dc66)
+Works:        Several projects as tabs: only the front one plays, the others keep their plugins
+              loaded; Ctrl+Tab switches, Cmd/Ctrl+W closes after asking, tabs drag to reorder.
+              Cut, Copy and Paste of clips, also between tabs. File > Collect samples into project,
+              and a setting to collect always. The sample browser beside the plugins (F7/F8): your
+              folders as a tree, WAV, AIFF, FLAC, MP3, OGG; a click plays the sound from the top at
+              the preview's own volume (or while held); search, favourites, key and tempo found in
+              the background; drag onto a lane (a snapped ghost shows where), Finder files too.
+              Signalsmith time-stretching (W36): stretched clips keep pitch; loops can fit the
+              project tempo. A start screen with recent projects and templates in miniature, File >
+              Save as template. Settings > Browser and > Projects. Sliders reset on double-click and
+              follow the wheel (W37).
+Tested:       - Owner, in the running app (2026-11-19): tabs and switching, only the front project
+                playing, copy in one tab and paste in another, the sample browser (play, arrows,
+                stars, search, drag from the browser and from Finder, the Browser settings), their
+                own sample folder, the start screen, templates and switching it off: "All fine and
+                works". Asked for, and got: a click on a playing sound starts it again.
+              - carthage-bench projects: ten tab switches, nothing unsaved after switching, only the
+                front project has a playback graph, cross-tab paste finds its audio, collecting the
+                pasted clip's sample. carthage-bench samples on 2,976 generated sounds.
+              - Headless: SampleTests (index, search, favourites, analysis cache, preview level,
+                flush and end, key and tempo), EditingTests (copy and paste across folders and
+                tempos, insertFile, stretch keeps pitch, fit to tempo), ProjectTests (collect target
+                names, copyMedia, miniature).
+              - Snapshots: samples, samples-playing, samples-search, start, tabs (carthage-snapshot).
+Measured:     Tab switch 18-21 ms at worst. Library of 2,976 sounds: index 166 ms, slowest search
+              4.0 ms, analysis 4.3 ms a file (about 13 s for all, in the background), preview ready
+              2.6 ms after a click; the app held 120 Hz while indexing and analysing (0-1 late
+              frames a second over 20 s, after one 250 ms frame at launch). Key and tempo on sounds
+              of known key and tempo: A minor, C major, E minor, 90, 120 and 174 bpm all right;
+              held chords no tempo; a noise burst nothing; a tuned hit its note. RTSan 60 s with
+              NeuralAmpModeler and the preview playing: 0 failures, no report in Carthage's code, 0
+              dropouts.
+Not done:     - The preview plays loops as recorded; only a dropped loop is fitted to the tempo.
+              - Key and tempo were checked on generated sounds and the owner's own folder by ear,
+                not against a labelled real library; relative major and minor can swap.
+              - Only one sample can be dragged at a time from the browser (Finder: several).
+              - Tabs reopen as one project after a quit; the open tabs are not restored.
+Decisions:    W34 (Cmd/Ctrl+W), W35 (self-signed releases), W36 (Signalsmith), W37 (value controls).
+Needs owner:  The go-ahead for phase 5 (mixer, insert Lines, per-channel I/O).
 ## Phase 5 — Mixer, insert Lines, per-channel I/O
 
 Brief features: 3, 4, 5.

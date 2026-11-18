@@ -6,7 +6,7 @@ through amp sims, arranging on a timeline, writing in a piano roll, mixing and m
 to be faster, smoother and more reliable than FL Studio on an ARM Mac: efficiency and minimalism
 first, no gimmicks.
 
-**State of the repo:** phases 1–3 and 4a verified (2026-11-18); phase 4b (tabs, sample browser, start screen) built, its hands-on checks next. The build system, the engine layer, the phase 1 app (audio
+**State of the repo:** phases 1–4 verified (2026-11-19); phase 5 (mixer) next, after the owner's go-ahead. Read `docs/JOURNAL.md` first: where work stands and what is in hand. The build system, the engine layer, the phase 1 app (audio
 settings, one input monitored through one plugin, takes recorded to clips), the plugin scanner, the
 timeline with its tools, projects with autosave, the shortcut editor, tests and the measuring tool
 exist. See `docs/ROADMAP.md` for what is verified.
@@ -15,6 +15,7 @@ exist. See `docs/ROADMAP.md` for what is verified.
 
 | File | Read it for |
 | --- | --- |
+| `docs/JOURNAL.md` | Where work stands, what is in hand, this machine's quirks. Read it first; add an entry each session. |
 | `docs/BRIEF.md` | What to build. The owner's brief, word for word. It wins over every other file. |
 | `docs/DECISIONS.md` | What is fixed (F1–F15), what was decided while building, what is still open. |
 | `docs/ROADMAP.md` | The seven phases, their exit checks, current status, phase reports. |
@@ -188,6 +189,7 @@ build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench takes 
 | Source layout, threading or a module boundary | `docs/ARCHITECTURE.md` |
 | A decision, a dependency pin, an answered open question | `docs/DECISIONS.md` |
 | Progress on a phase | `docs/ROADMAP.md` checkboxes, status and report |
+| The end of a working session | A dated entry in `docs/JOURNAL.md`, and its "Now" section |
 | The release pipeline, feed or signing | `docs/RELEASING.md` |
 | A folder Carthage reads or writes | The path provider in `app/`, the help page, `docs/ARCHITECTURE.md` |
 | Anything a user would notice | `CHANGELOG.md`, and `README.md` if it is described there |
