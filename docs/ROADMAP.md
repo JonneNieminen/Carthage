@@ -231,7 +231,7 @@ Deliver:
 - [ ] Out-of-process scanner; a crashing or hanging plugin cannot take the app down; automatic blocklist; rescan; progress shown
 - [ ] Plugin list with fast fuzzy search, favourites, filters by vendor, format and type, last-used
 - [ ] Drag a plugin onto a channel or the timeline
-- [ ] O3 (CLAP) answered and recorded
+- [x] O3 (CLAP) answered and recorded (W29: no native CLAP hosting in the pins; AU and VST3 only)
 
 Exit checks:
 - [ ] Full scan of the owner's real AU and VST3 folders completes; counts and time reported

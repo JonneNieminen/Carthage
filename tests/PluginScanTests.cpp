@@ -56,6 +56,35 @@ public:
             expect (juce::parseXML (reopened.getBlocklistFile())->getIntAttribute ("version") == PluginCatalogue::cacheFormatVersion);
             folder.deleteRecursively();
         }
+
+        beginTest ("Mach-O headers: thin, universal, and not Mach-O");
+        {
+            juce::TemporaryFile thin, fat, text;
+            {
+                juce::FileOutputStream o (thin.getFile());
+                o.writeInt (static_cast<int> (0xfeedfacf));      // little-endian thin 64-bit
+                o.writeInt (0x01000007);                         // x86_64
+            }
+            {
+                juce::FileOutputStream o (fat.getFile());
+                o.writeIntBigEndian (static_cast<int> (0xcafebabe));
+                o.writeIntBigEndian (2);
+                o.writeIntBigEndian (0x01000007); for (int i = 0; i < 4; ++i) o.writeIntBigEndian (0);
+                o.writeIntBigEndian (0x0100000c); for (int i = 0; i < 4; ++i) o.writeIntBigEndian (0);
+            }
+            text.getFile().replaceWithText ("not a binary");
+
+            expectEquals (carthage::engine::scan::machOArchitectures (thin.getFile()).joinIntoString (","), juce::String ("x86_64"));
+            expectEquals (carthage::engine::scan::machOArchitectures (fat.getFile()).joinIntoString (","), juce::String ("x86_64,arm64"));
+            expect (carthage::engine::scan::machOArchitectures (text.getFile()).isEmpty());
+            expect (carthage::engine::scan::machOArchitectures (juce::File ("/nonexistent")).isEmpty());
+
+           #if JUCE_MAC
+            // This test program itself is built for the host.
+            const auto own = carthage::engine::scan::machOArchitectures (juce::File::getSpecialLocation (juce::File::currentExecutableFile));
+            expect (own.contains (carthage::engine::scan::hostArchitecture()), own.joinIntoString (","));
+           #endif
+        }
     }
 };
 

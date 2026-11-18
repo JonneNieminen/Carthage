@@ -553,7 +553,7 @@ namespace carthage::ui
 
                 if (outcome.shouldBlock())
                 {
-                    self.session.getPlugins().block (candidate.fileOrIdentifier, outcome.detail);
+                    self.session.getPlugins().block (candidate.fileOrIdentifier, outcome.detail, outcome.blockKind());
                     self.signalRow->setMessage (candidate.name + " was blocked: " + outcome.detail.toLowerCase(), true);
                     self.setStatus (candidate.name + " was blocked", theme::warn);
                     return;

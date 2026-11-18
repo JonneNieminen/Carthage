@@ -10,6 +10,9 @@
 //   carthage-bench latency --device NAME --rate HZ --buffers 32,64,128 --out N --in N [--repeat 5]
 //   carthage-bench soak    --device NAME --rate HZ --buffer N --input N [--stereo]
 //                          [--plugin-format VST3|AudioUnit --plugin FILE_OR_ID] [--seconds 600] [--keep]
+//   carthage-bench scanall [--parallel 4] [--timeout-s 60]
+//                          (checks every AU and VST3 plugin out of process, as the app's first scan
+//                          does, in a fresh cache; reports counts, time and what was blocked)
 //   carthage-bench wgprobe --device NAME --rate HZ --buffer N
 //                          (is the device's workgroup valid and joinable, before and after a restart)
 //   carthage-bench takes   --device NAME --rate HZ --buffer N [--count 6] [--seconds 2] [--gap-ms 500]
@@ -118,6 +121,7 @@ namespace
             else if (args.command == "align")   result = align();
             else if (args.command == "takes")   result = takes();
             else if (args.command == "wgprobe") result = wgprobe();
+            else if (args.command == "scanall") result = scanall();
             else say ("unknown command: " + args.command);
 
             onMessageThreadVoid ([this] { session.reset(); });
@@ -449,6 +453,64 @@ namespace
             if (j.counted)
                 say ("workgroup joins (os_workgroup_join): " + String (j.joined) + " joined, " + String (j.failed)
                      + " failed, " + String (j.left) + " left; threads in a workgroup now: " + String (j.inWorkgroupNow()));
+        }
+
+        int scanall()
+        {
+            const auto exe = File::getSpecialLocation (File::currentExecutableFile).getSiblingFile ("carthage-scan");
+            auto scanner = onMessageThread ([&] { return std::make_shared<engine::PluginScanner> (session->getPlugins(), exe); });
+            scanner->maxParallel = args.getInt ("parallel", 4);
+            scanner->timeoutMs = args.getInt ("timeout-s", 60) * 1000;
+
+            onMessageThreadVoid ([&] { scanner->start (true); });
+            int lastDone = -1;
+
+            for (;;)
+            {
+                waitMs (1000);
+                const auto p = onMessageThread ([&] { return scanner->getProgress(); });
+
+                if (p.done != lastDone)
+                {
+                    say ("  " + String (p.seconds, 0) + " s: " + String (p.done) + " of " + String (p.total)
+                         + " (" + String (p.found) + " found, " + String (p.blocked) + " blocked)"
+                         + (p.current.isEmpty() ? String() : "; now " + p.current.joinIntoString (", ")));
+                    lastDone = p.done;
+                }
+
+                if (! p.running)
+                {
+                    const auto scanned = onMessageThread ([this] { return session->getPlugins().getScanned(); });
+                    int au = 0, vst3 = 0, instruments = 0;
+
+                    for (const auto& d : scanned)
+                    {
+                        (d.pluginFormatName == "AudioUnit" ? au : vst3)++;
+                        instruments += d.isInstrument ? 1 : 0;
+                    }
+
+                    for (const auto& name : p.newlyBlocked)
+                        say ("blocked: " + name);
+
+                    const auto blocked = onMessageThread ([this]
+                    {
+                        StringArray out;
+                        for (const auto& id : session->getPlugins().getBlocked())
+                            out.add (id + ": " + session->getPlugins().getBlockReason (id));
+                        return out;
+                    });
+
+                    for (const auto& b : blocked)
+                        say ("  reason: " + b);
+
+                    say ("RESULT scanall: " + String (p.total) + " plugin files checked in " + String (p.seconds, 1) + " s with "
+                         + String (scanner->maxParallel) + " scanners; " + String (p.found) + " loaded, " + String (p.blocked)
+                         + " blocked; " + String (scanned.size()) + " plugin types (" + String (au) + " AU, " + String (vst3)
+                         + " VST3, " + String (instruments) + " instruments)");
+                    onMessageThreadVoid ([&] { scanner.reset(); });
+                    return 0;
+                }
+            }
         }
 
         int wgprobe()

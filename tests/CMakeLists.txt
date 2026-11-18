@@ -3,6 +3,7 @@ juce_add_console_app(carthage_tests PRODUCT_NAME "carthage-tests")
 target_sources(carthage_tests PRIVATE
     TestMain.cpp
     LatencyProbeTests.cpp
+    PluginLibraryTests.cpp
     PluginScanTests.cpp
     TakePlacementTests.cpp
     TakeRecorderTests.cpp

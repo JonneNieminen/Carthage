@@ -78,6 +78,9 @@ Numbers go in the phase report. An impression ("feels smooth", "low latency") is
   workgroup and how many threads have joined one, counted at `os_workgroup_join` (DECISIONS W24).
   Report "joined / failed / in a workgroup now" from a monitored soak; `wgprobe` checks that the
   workgroup is valid and joinable before and after a device restart.
+- **Plugin scan.** `carthage-bench scanall` checks every AU and VST3 plugin out of process, as
+  the app's first scan does, in a fresh cache, and reports how many were checked, loaded and
+  blocked (with why) and how long it took. Report the count, the time and the scanner count.
 - **Back-to-back takes.** `carthage-bench takes` records takes the way a player does (record, stop,
   record again, every other one from the start, optionally `--while-playing` and with a plugin) and
   reports any that ended early. Run it at the smallest and the largest buffer you support.

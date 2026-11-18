@@ -3,7 +3,9 @@
 //   carthage-scan --format <AudioUnit|VST3> --plugin <file or AU identifier>
 //
 // Loads the plugin the way the app would, prints the descriptions it found as one <PLUGINS> XML
-// element on stdout and exits 0. Exits 2 if the plugin loaded nothing usable, 3 on bad arguments.
+// element on stdout and exits 0. Exits 2 if the plugin loaded nothing usable, 3 on bad arguments,
+// 4 if a VST3 has no build for this computer's processor (checked before loading; the reason is
+// printed on stdout).
 // If the plugin crashes or hangs, this process dies or is killed and the app blocks the plugin.
 
 #include <engine/PluginScan.h>
@@ -46,6 +48,21 @@ int main (int argc, char* argv[])
     {
         std::cerr << "unknown plugin format: " << formatName << "\n";
         return scan::exitBadArguments;
+    }
+
+    // An Intel-only VST3 can not load in an Apple silicon app: say so instead of "nothing usable".
+    if (formatName == "VST3")
+    {
+        const auto archs = scan::vst3Architectures (juce::File (plugin));
+
+        if (! archs.isEmpty() && ! archs.contains (scan::hostArchitecture()))
+        {
+            std::cout << (archs.contains ("x86_64") || archs.contains ("i386")
+                              ? "Built for Intel Macs only; check for a version for Apple silicon"
+                              : ("Built for " + archs.joinIntoString (", ") + ", not for this computer").toStdString())
+                      << std::flush;
+            return scan::exitIncompatible;
+        }
     }
 
     juce::OwnedArray<juce::PluginDescription> found;

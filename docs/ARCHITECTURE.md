@@ -40,7 +40,9 @@ src/
     TakeRecorder     audio thread -> lock-free FIFO -> writer thread -> WAV
     TakePlacement.h  where a take lands in edit time; TakeWatch ends a take whose playback stopped
     LatencyProbe     loopback round-trip measurement (chirp + cross-correlation)
-    PluginScan       carthage-scan protocol, the known-plugin list and the blocklist
+    PluginScan       carthage-scan protocol, the known-plugin list, the blocklist (with why: incompatible,
+                     crashed, hung, unusable), PluginScanner (background scan, several processes)
+    PluginLibrary    the plugin browser's data: fuzzy search, filters, favourites, last used
     RealtimeCheck.h  RealTimeSanitizer scope and CARTHAGE_NONBLOCKING
   app/               Carthage.app: application, window, menu bar, command table, path provider,
                      Updater (in-app updates behind one interface)
