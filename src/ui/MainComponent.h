@@ -19,7 +19,7 @@ namespace carthage::ui
         Animates only from the display's frame callback (VBlankAttachment): meters, the playhead,
         the load figure. Nothing else moves. */
     class MainComponent final : public juce::Component, public juce::ApplicationCommandTarget,
-                                public juce::DragAndDropContainer
+                                public juce::DragAndDropContainer, private juce::ChangeListener
     {
     public:
         MainComponent (engine::Session&, juce::ApplicationCommandManager&);
@@ -74,6 +74,8 @@ namespace carthage::ui
         juce::ComboBox gridMenu;
         juce::TextButton snapButton { "Snap" };
         void refreshToolbar();
+        void refreshShortcutText();
+        void changeListenerCallback (juce::ChangeBroadcaster*) override   { refreshShortcutText(); }
         void showGridMenu();
 
         // Hold-to-switch (F7): the tool before a held key, and whether the tool was used meanwhile.

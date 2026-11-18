@@ -50,10 +50,7 @@ namespace carthage::ui
 
             input.setTooltip ("The input your guitar is plugged into");
             output.setTooltip ("Where you hear Carthage");
-            monitor.setTooltip (cmd::tooltip (commands, cmd::toggleMonitoring));
-            choose.setTooltip (cmd::tooltip (commands, cmd::choosePlugin));
-            open.setTooltip (cmd::tooltip (commands, cmd::openPluginEditor));
-            bypass.setTooltip (cmd::tooltip (commands, cmd::bypassPlugin));
+            refreshTooltips();
             remove.setTooltip ("Take the plugin out of the path");
 
             monitor.setToggleState (session.isMonitoring(), dontSendNotification);
@@ -187,6 +184,15 @@ namespace carthage::ui
             output.setEnabled (! recording);
             input.setTooltip (recording ? "Stop recording to change the input" : "The input your guitar is plugged into");
             output.setTooltip (recording ? "Stop recording to change the output" : "Where you hear Carthage");
+        }
+
+        /** Tooltips name the current shortcuts. */
+        void refreshTooltips()
+        {
+            monitor.setTooltip (cmd::tooltip (commands, cmd::toggleMonitoring));
+            choose.setTooltip (cmd::tooltip (commands, cmd::choosePlugin));
+            open.setTooltip (cmd::tooltip (commands, cmd::openPluginEditor));
+            bypass.setTooltip (cmd::tooltip (commands, cmd::bypassPlugin));
         }
 
         void setMessage (const String& m, bool warning)   { message = m; messageIsWarning = warning; refreshPlugin(); }
@@ -332,15 +338,11 @@ namespace carthage::ui
 
     //==============================================================================================
     MainComponent::MainComponent (engine::Session& s, ApplicationCommandManager& c)
-        : session (s), commands (c), timeline (s), settings (s), browser (s)
+        : session (s), commands (c), timeline (s), settings (s, c, cmd::inMenuOrder()), browser (s)
     {
         signalRow = std::make_unique<SignalRow> (session, commands);
         signalRow->onRemove = [this] { closePluginWindow(); session.removePlugin(); signalRow->setMessage ({}, false); };
 
-        recordButton.setTooltip (cmd::tooltip (commands, cmd::record));
-        playButton.setTooltip (cmd::tooltip (commands, cmd::playStop));
-        toStartButton.setTooltip (cmd::tooltip (commands, cmd::returnToStart));
-        settingsButton.setTooltip (cmd::tooltip (commands, cmd::audioSettings));
 
         recordButton.onClick = [this] { commands.invokeDirectly (cmd::record, false); };
         playButton.onClick = [this] { commands.invokeDirectly (cmd::playStop, false); };
@@ -373,19 +375,14 @@ namespace carthage::ui
         };
         session.onPluginsChanged = [this] { browser.refresh(); };
 
-        // The toolbar: a button per tool, with its key as its label, and the grid.
-        static constexpr const char* toolKeys[] = { "E", "P", "B", "C", "D", "T", "Z", "S" };
-
+        // The toolbar: a button per tool, labelled with its current key, and the grid.
         for (int i = 0; i < 8; ++i)
         {
-            auto* b = toolButtons.add (new TextButton (toolKeys[i]));
-            const auto id = cmd::tools()[i];
-            b->setTooltip (cmd::tooltip (commands, id));
+            auto* b = toolButtons.add (new TextButton());
             b->onClick = [this, i] { timeline.setTool (static_cast<Timeline::Tool> (i)); refreshToolbar(); };
             addAndMakeVisible (b);
         }
 
-        snapButton.setTooltip (cmd::tooltip (commands, cmd::toggleGrid));
         snapButton.onClick = [this] { commands.invokeDirectly (cmd::toggleGrid, false); };
         addAndMakeVisible (snapButton);
 
@@ -427,6 +424,10 @@ namespace carthage::ui
             commands.commandStatusChanged();
         };
 
+        // Shortcuts can change at any time (the shortcut editor): labels and tooltips follow.
+        commands.getKeyMappings()->addChangeListener (this);
+        refreshShortcutText();
+
         setWantsKeyboardFocus (true);
         frameLog = SystemStats::getEnvironmentVariable ("CARTHAGE_FRAME_LOG", {}).isNotEmpty();
         vblank = std::make_unique<VBlankAttachment> (this, [this] (double t) { frame (t); });
@@ -437,6 +438,7 @@ namespace carthage::ui
 
     MainComponent::~MainComponent()
     {
+        commands.getKeyMappings()->removeChangeListener (this);
         vblank.reset();
         session.onDeviceChanged = nullptr;
         session.onTakeEnded = nullptr;
@@ -445,6 +447,29 @@ namespace carthage::ui
         session.onProjectClosing = nullptr;
         session.onProjectChanged = nullptr;
         closePluginWindow();
+    }
+
+    void MainComponent::refreshShortcutText()
+    {
+        recordButton.setTooltip (cmd::tooltip (commands, cmd::record));
+        playButton.setTooltip (cmd::tooltip (commands, cmd::playStop));
+        toStartButton.setTooltip (cmd::tooltip (commands, cmd::returnToStart));
+        settingsButton.setTooltip (cmd::tooltip (commands, cmd::audioSettings));
+        snapButton.setTooltip (cmd::tooltip (commands, cmd::toggleGrid));
+        signalRow->refreshTooltips();
+
+        for (int i = 0; i < toolButtons.size(); ++i)
+        {
+            const auto id = cmd::tools()[i];
+            const auto keys = commands.getKeyMappings()->getKeyPressesAssignedToCommand (id);
+            auto* b = toolButtons[i];
+
+            // The label is the tool's key, so a rebound tool shows its new key; one with no key
+            // shows the first letter of its name.
+            b->setButtonText (keys.isEmpty() ? commands.getNameOfCommand (id).substring (0, 1)
+                                             : keys.getFirst().getTextDescriptionWithIcons().toUpperCase());
+            b->setTooltip (cmd::tooltip (commands, id));
+        }
     }
 
     //==============================================================================================
@@ -516,6 +541,10 @@ namespace carthage::ui
                 }
                 return true;
             case cmd::audioSettings:    toggleSettings(); return true;
+            case cmd::keyboardShortcuts:
+                if (! settingsOpen) toggleSettings();
+                settings.showShortcutsSection();
+                return true;
             case cmd::measureLatency:
                 if (! settingsOpen) toggleSettings();
                 return true;

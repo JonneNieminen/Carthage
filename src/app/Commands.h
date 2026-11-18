@@ -32,6 +32,7 @@ namespace carthage::app
             // Timeline edits
             undo, redo, toggleGrid, splitAtPlayhead, duplicateClips, deleteClips,
             nudgeLeft, nudgeRight, addMarker, loopSelection,
+            keyboardShortcuts,
 
             // Projects (handled by the application: they can replace the window's edit)
             newProject, openProject, saveProject, saveProjectAs,
@@ -49,7 +50,7 @@ namespace carthage::app
                      openPluginEditor, bypassPlugin, audioSettings, measureLatency, pluginBrowser,
                      toolSelect, toolDraw, toolPaint, toolSlice, toolDelete, toolMute, toolZoom, toolStretch,
                      undo, redo, toggleGrid, splitAtPlayhead, duplicateClips, deleteClips,
-                     nudgeLeft, nudgeRight, addMarker, loopSelection };
+                     nudgeLeft, nudgeRight, addMarker, loopSelection, keyboardShortcuts };
         }
 
         /** Commands the application itself performs, whatever window is in front. */
@@ -132,12 +133,34 @@ namespace carthage::app
                 case checkForUpdates:
                     info.setInfo (juce::String::fromUTF8 ("Check for updates\xe2\x80\xa6"), "See whether a newer Carthage is out", "Carthage", 0);
                     break;
+                case keyboardShortcuts:
+                    info.setInfo (juce::String::fromUTF8 ("Keyboard shortcuts\xe2\x80\xa6"), "See and change every shortcut", "Settings", 0);
+                    break;
                 case measureLatency:
                     info.setInfo ("Measure latency", "Measure the round trip through a cable from an output to an input", "Settings", 0);
                     break;
                 default:
                     break;
             }
+        }
+
+        /** Every command, grouped as the menus are (the shortcut editor lists them this way). */
+        inline juce::Array<juce::CommandID> inMenuOrder()
+        {
+            auto ids = all();
+            ids.addArray (application());
+
+            const juce::StringArray order { "File", "Transport", "Input", "Plugin", "Edit", "Tools", "Settings", "Carthage" };
+            const auto rank = [&] (juce::CommandID id)
+            {
+                juce::ApplicationCommandInfo info (id);
+                describe (id, info);
+                const auto i = order.indexOf (info.categoryName);
+                return i < 0 ? order.size() : i;
+            };
+
+            std::stable_sort (ids.begin(), ids.end(), [&] (auto a, auto b) { return rank (a) < rank (b); });
+            return ids;
         }
 
         /** "Record (R)": the tooltip for a control, with its current shortcut from the key mappings. */

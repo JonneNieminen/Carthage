@@ -5,7 +5,7 @@
 //   carthage-snapshot OUTPUT_FOLDER [--device NAME] [--output-device NAME]
 //                     [--plugin-format VST3 --plugin FILE_OR_ID] [--record-seconds 3] [--scan]
 //
-// Writes main.png, settings.png, settings-updates.png, update*.png (the update banner with sample text), plugin.png
+// Writes main.png, settings.png, settings-updates.png, settings-shortcuts.png, update*.png (the update banner with sample text), plugin.png
 // (with --plugin) and take.png (after recording).
 
 #include <app/Commands.h>
@@ -158,6 +158,8 @@ namespace
             onMessageThreadVoid ([this] { content->getSettings().setBetaUpdates (true, true, {});
                                           content->getSettings().showUpdatesSection(); });
             capture (outDir.getChildFile ("settings-updates.png"));
+            onMessageThreadVoid ([this] { content->getSettings().showShortcutsSection(); });
+            capture (outDir.getChildFile ("settings-shortcuts.png"));
             onMessageThreadVoid ([this] { content->toggleSettings(); });
 
             // The update banner in its states, with sample text (no release is fetched).

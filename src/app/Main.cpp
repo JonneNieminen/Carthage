@@ -41,6 +41,11 @@ namespace carthage::app
                     m.addSeparator();
                     m.addCommandItem (&commands, commands::saveProject);
                     m.addCommandItem (&commands, commands::saveProjectAs);
+                   #if ! JUCE_MAC
+                    m.addSeparator();   // macOS has these in the app menu
+                    m.addCommandItem (&commands, commands::audioSettings);
+                    m.addCommandItem (&commands, commands::keyboardShortcuts);
+                   #endif
                     break;
                 case 1:
                     m.addCommandItem (&commands, commands::playStop);
@@ -91,6 +96,7 @@ namespace carthage::app
             m.addCommandItem (&commands, commands::checkForUpdates);
             m.addSeparator();
             m.addCommandItem (&commands, commands::audioSettings);
+            m.addCommandItem (&commands, commands::keyboardShortcuts);
             return m;
         }
 
@@ -182,6 +188,7 @@ namespace carthage::app
             menuBar = std::make_unique<MenuBar> (commands);
             auto& content = window->showSession (*session, commands);
             commands.registerAllCommandsForTarget (this);   // check for updates, quit
+            restoreShortcuts();
 
            #if JUCE_MAC
             auto apple = menuBar->appleMenu();
@@ -294,6 +301,33 @@ namespace carthage::app
                 case commands::saveProjectAs:   saveAs ({}); return true;
                 default:                        return JUCEApplication::perform (info);
             }
+        }
+
+        //==========================================================================================
+        // Shortcuts: only the user's changes are kept, so new defaults in an update still arrive.
+        struct ShortcutSaver final : ChangeListener
+        {
+            explicit ShortcutSaver (KeyPressMappingSet& m) : mappings (m)   { mappings.addChangeListener (this); }
+            ~ShortcutSaver() override                                       { mappings.removeChangeListener (this); }
+
+            void changeListenerCallback (ChangeBroadcaster*) override
+            {
+                if (auto xml = mappings.createXml (true))
+                    if (Paths::shortcuts().getParentDirectory().createDirectory())
+                        xml->writeTo (Paths::shortcuts());
+            }
+
+            KeyPressMappingSet& mappings;
+        };
+
+        void restoreShortcuts()
+        {
+            auto* mappings = commands.getKeyMappings();
+
+            if (auto xml = parseXML (Paths::shortcuts()))
+                mappings->restoreFromXml (*xml);
+
+            shortcutSaver = std::make_unique<ShortcutSaver> (*mappings);
         }
 
         //==========================================================================================
@@ -476,6 +510,7 @@ namespace carthage::app
            #if JUCE_MAC
             MenuBarModel::setMacMainMenu (nullptr);
            #endif
+            shortcutSaver.reset();
             updater.reset();     // its hooks point at the window and the engine
             window.reset();      // components go before the engine they show
             tooltips.reset();
@@ -508,6 +543,7 @@ namespace carthage::app
         std::unique_ptr<TooltipWindow> tooltips;
         std::unique_ptr<Updater> updater;
         std::unique_ptr<FileChooser> chooser;
+        std::unique_ptr<ShortcutSaver> shortcutSaver;
     };
 }
 

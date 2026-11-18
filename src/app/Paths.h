@@ -25,6 +25,9 @@ namespace carthage::app
             It is created when something is recorded into it. */
         static juce::File newUntitledProject();
 
+        /** Shortcuts the user changed (only the changes). <settings>/Shortcuts.xml */
+        static juce::File shortcuts();
+
         /** Autosaves and the crash marker (phase 4). <settings>/Autosave */
         static juce::File autosave();
 

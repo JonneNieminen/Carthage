@@ -17,13 +17,15 @@ namespace carthage::ui
         constexpr int rowHeight = 28, labelWidth = 116;
     }
 
-    SettingsPanel::SettingsPanel (engine::Session& s) : session (s)
+    SettingsPanel::SettingsPanel (engine::Session& s, ApplicationCommandManager& commands, Array<CommandID> shortcutCommands)
+        : session (s), shortcuts (commands, std::move (shortcutCommands))
     {
         styleLabel (title, theme::textLg, theme::text, true);
         title.setText ("Settings", dontSendNotification);
 
         for (auto [label, text] : { std::pair { &interfaceHeading, "Interface" }, { &recordingHeading, "Recording" },
-                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &updatesHeading, "Updates" } })
+                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &updatesHeading, "Updates" },
+                                    { &shortcutsHeading, "Keyboard shortcuts" } })
         {
             styleLabel (*label, theme::textSm, theme::muted, true);
             label->setText (text, dontSendNotification);
@@ -53,7 +55,7 @@ namespace carthage::ui
                           "Everything else goes quiet while the probe plays.", dontSendNotification);
         loopHint.setJustificationType (Justification::topLeft);
 
-        closeButton.setTooltip ("Close audio settings");
+        closeButton.setTooltip ("Close settings");
         closeButton.onClick = [this] { if (onClose) onClose(); };
 
         // The title stays put; everything below it scrolls when the window is short.
@@ -72,8 +74,11 @@ namespace carthage::ui
                                                            &rateLabel, &bufferLabel, &formatLabel, &reportedLabel, &reportedValue,
                                                            &measuredLabel, &measuredValue, &loopOutLabel, &loopInLabel, &loopHint,
                                                            &measureButton, &useMeasured, &cpuLabel, &cpuValue, &threadLabel,
-                                                           &threadValue, &dropoutsLabel, &dropoutsValue, &resetDropouts })
+                                                           &threadValue, &dropoutsLabel, &dropoutsValue, &resetDropouts,
+                                                           &shortcutsHeading, &shortcuts })
             body.addAndMakeVisible (c);
+
+        shortcuts.onHeightChanged = [this] { resized(); };
 
         styleLabel (updatesHint, theme::textSm, theme::muted);
         updatesHint.setJustificationType (Justification::topLeft);
@@ -410,6 +415,10 @@ namespace carthage::ui
         betaUpdates.setBounds (r.removeFromTop (rowHeight));
         const auto hintHeight = updatesHint.getText().isEmpty() ? 0 : 36;
         updatesHint.setBounds (r.removeFromTop (hintHeight));
+
+        heading (shortcutsHeading);
+        shortcuts.setBounds (r.withHeight (shortcuts.getIdealHeight()));   // it reports a new height if it needs one
+        r.removeFromTop (shortcuts.getIdealHeight());
 
         body.setSize (bodyWidth, r.getY() - startY + theme::space4);
     }

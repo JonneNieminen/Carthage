@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Controls.h"
+#include "ShortcutEditor.h"
 
 #include <engine/Session.h>
 
@@ -12,7 +13,7 @@ namespace carthage::ui
     class SettingsPanel final : public juce::Component
     {
     public:
-        explicit SettingsPanel (engine::Session&);
+        SettingsPanel (engine::Session&, juce::ApplicationCommandManager&, juce::Array<juce::CommandID> shortcutCommands);
 
         /** Re-reads the device after it changed. */
         void refresh();
@@ -34,6 +35,9 @@ namespace carthage::ui
         /** Scrolls the body so the Updates section is in view. */
         void showUpdatesSection()    { viewport.setViewPosition (0, updatesHeading.getY() - 8); }
 
+        /** Scrolls the body so the keyboard shortcuts are in view. */
+        void showShortcutsSection()  { viewport.setViewPosition (0, shortcutsHeading.getY() - 8); }
+
         void paint (juce::Graphics&) override;
         void resized() override;
 
@@ -42,7 +46,8 @@ namespace carthage::ui
     private:
         engine::Session& session;
 
-        juce::Label title, interfaceHeading, recordingHeading, latencyHeading, loadHeading, updatesHeading, updatesHint;
+        juce::Label title, interfaceHeading, recordingHeading, latencyHeading, loadHeading, updatesHeading, updatesHint, shortcutsHeading;
+        ShortcutEditor shortcuts;
         juce::Viewport viewport;
         juce::Component body;
         juce::ToggleButton betaUpdates { "Receive beta updates" };

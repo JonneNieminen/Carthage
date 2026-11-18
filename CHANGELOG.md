@@ -14,6 +14,10 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 - Projects: File > New, Open, Save and Save as (Cmd/Ctrl+N, O, S, Shift+S). A project is a folder
   holding its file and its recordings; Save as copies the recordings along. Zoom, scroll and the
   grid are saved with it. Carthage asks before closing a project with unsaved changes.
+- Keyboard shortcuts in Settings (and in the app menu on macOS, the File menu on Windows): every
+  command with its keys. Click a key to change or remove it, or + to add one; a key another command
+  had moves over and Carthage says which. Search, and Reset all. The toolbar's tool letters and
+  every tooltip show the keys you chose.
 - Autosave: after you pause editing for 2 seconds, at most every 2 minutes, keeping the last 10.
   If Carthage does not close properly, it offers the newest autosave the next time it opens.
 - A timeline with eight lanes, a bar and beat ruler, and a grid (1/4 beat by default; bar to 1/64

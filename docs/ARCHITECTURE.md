@@ -237,6 +237,7 @@ to a user folder (DECISIONS W17).
 | Projects | `~/Music/Carthage` | `Music\Carthage` |
 | A new untitled project | `<projects>/Untitled` (then `Untitled 2`, …), created when something is recorded | same |
 | Recordings | `<project>/Recordings` | same |
+| Shortcuts the user changed (only the changes) | `<settings>/Shortcuts.xml` | same |
 | Autosaves and crash recovery | `<settings>/Autosave/<project id>/` (the last 10, and the `running` marker) | same |
 | AU and VST3 system folders (read only) | `/Library/Audio/Plug-Ins/{Components,VST3}`, and under `~` | `C:\Program Files\Common Files\VST3` |
 
