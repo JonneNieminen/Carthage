@@ -137,6 +137,13 @@ packaging/           macos/ (sign.sh, make-dmg.sh, read-me), windows/ (Carthage.
   place instead. Closing a tab asks to save (the app), then `closeProject` drops it; the last tab is
   never closed this way: closing it closes the window (W34). Quitting brings each unsaved tab
   forward in turn and asks. Every open project has its own autosave folder and `running` marker.
+- **Copy and paste** (`editing::copy` / `paste`). Copy fills Tracktion's `Clipboard::Clips` with the
+  selected clips' state (every property Tracktion keeps), each audio file written as an absolute
+  path, positions in seconds from the first clip and lanes from the topmost one; the timeline holds
+  it, so it outlives a tab switch. Paste puts it at the playhead of the front project on the same
+  lanes; Tracktion makes new ids and writes the paths relative to the new project where it can. A
+  clip pasted from another project keeps pointing at that project's file until its samples are
+  collected.
 - **The timeline across tabs.** Waveform thumbnails belong to audio files, not projects, so they are
   kept when the front project changes; resolved clip paths are keyed by project file.
 

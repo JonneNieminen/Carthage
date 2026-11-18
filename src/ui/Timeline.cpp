@@ -913,16 +913,39 @@ namespace carthage::ui
         selectOnly (editing::duplicate (clips));
     }
 
-    void Timeline::deleteSelection()
+    void Timeline::deleteSelection (bool cut)
     {
         const auto clips = getSelectedClips();
 
         if (clips.isEmpty())
             return;
 
-        editing::begin (session.getEdit(), editing::named ("Delete", clips.size()));
+        editing::begin (session.getEdit(), editing::named (cut ? "Cut" : "Delete", clips.size()));
         selected.clearQuick();
         editing::remove (clips);
+    }
+
+    void Timeline::copySelection()
+    {
+        const auto clips = getSelectedClips();
+
+        if (clips.isEmpty())
+            return;
+
+        copied = editing::copy (clips);
+
+        if (onStatus)
+            onStatus (clips.size() == 1 ? String ("Copied a clip") : "Copied " + String (clips.size()) + " clips");
+    }
+
+    void Timeline::paste()
+    {
+        if (! canPaste())
+            return;
+
+        auto& edit = session.getEdit();
+        editing::begin (edit, editing::named ("Paste", copied->count()));
+        selectOnly (editing::paste (edit, *copied, secondsToBeats (session.getPositionSeconds())));
     }
 
     void Timeline::nudgeSelection (int steps)

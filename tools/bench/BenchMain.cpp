@@ -325,6 +325,32 @@ namespace
                                && front.getTransport().getCurrentPlaybackContext() != nullptr;
                    }),
                    "nothing unsaved or undoable after switching; the front one has a graph");
+
+            say ("Copy in one tab, paste in another");
+            const auto copied = onMessageThread ([this]
+            {
+                session->showProject (0);   // Song
+                editing::Clips all;
+                for (auto* lane : editing::lanes (session->getEdit()))
+                    for (auto* c : lane->getClips())
+                        all.add (c);
+                return editing::copy (all);
+            });
+            check (copied->count() == 1, "Song's clip copied");
+            const auto pasted = onMessageThread ([this, copied]
+            {
+                session->showProject (1);   // Other
+                auto& edit = session->getEdit();
+                editing::begin (edit, "Paste clip");
+                const auto added = editing::paste (edit, *copied, 4.0);
+                edit.getUndoManager().dispatchPendingMessages();
+                return added.size() == 1 && dynamic_cast<tracktion::AudioClipBase*> (added[0])->getAudioFile().getFile().existsAsFile()
+                        && editing::laneOf (*added[0]) == 2;
+            });
+            check (pasted, "it lands in Other on the same lane and finds its audio in Song's folder");
+            check (onMessageThread ([this] { return session->describeProject (1).unsaved && ! session->describeProject (0).unsaved; }),
+                   "Other is unsaved, Song untouched");
+            onMessageThreadVoid ([this] { session->getEdit().getUndoManager().undo(); });
             onMessageThreadVoid ([this] { session->showProject (1); session->closeProject(); });   // Other
             onMessageThreadVoid ([this] { session->newProject (folder.getChildFile ("Projects/Untitled 2")); });
             onMessageThreadVoid ([this] { session->showProject (0); session->closeProject(); });   // Song

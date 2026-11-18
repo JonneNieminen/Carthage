@@ -67,6 +67,9 @@ namespace carthage::app
                     for (auto id : { commands::undo, commands::redo })
                         m.addCommandItem (&commands, id);
                     m.addSeparator();
+                    for (auto id : { commands::cutClips, commands::copyClips, commands::pasteClips })
+                        m.addCommandItem (&commands, id);
+                    m.addSeparator();
                     for (auto id : { commands::splitAtPlayhead, commands::duplicateClips, commands::deleteClips,
                                      commands::nudgeLeft, commands::nudgeRight })
                         m.addCommandItem (&commands, id);

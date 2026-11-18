@@ -511,6 +511,9 @@ namespace carthage::ui
             case cmd::undo:              info.setActive (session.getEdit().getUndoManager().canUndo());
                                          info.shortName = "Undo " + session.getEdit().getUndoManager().getUndoDescription(); break;
             case cmd::redo:              info.setActive (session.getEdit().getUndoManager().canRedo()); break;
+            case cmd::pasteClips:        info.setActive (timeline.canPaste() && ! session.isRecording()); break;
+            case cmd::copyClips:
+            case cmd::cutClips:
             case cmd::duplicateClips:
             case cmd::deleteClips:
             case cmd::nudgeLeft:
@@ -542,6 +545,9 @@ namespace carthage::ui
             case cmd::toggleGrid:       timeline.getGrid().enabled = ! timeline.getGrid().enabled; timeline.gridChanged(); refreshToolbar(); return true;
             case cmd::splitAtPlayhead:  timeline.splitAtPlayhead(); return true;
             case cmd::duplicateClips:   timeline.duplicateSelection(); return true;
+            case cmd::copyClips:        timeline.copySelection(); commands.commandStatusChanged(); return true;
+            case cmd::cutClips:         timeline.copySelection(); timeline.deleteSelection(true); commands.commandStatusChanged(); return true;
+            case cmd::pasteClips:       timeline.paste(); return true;
             case cmd::deleteClips:      timeline.deleteSelection(); return true;
             case cmd::nudgeLeft:        timeline.nudgeSelection (-1); return true;
             case cmd::nudgeRight:       timeline.nudgeSelection (1); return true;

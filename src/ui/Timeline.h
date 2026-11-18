@@ -49,7 +49,13 @@ namespace carthage::ui
         /** The edit operations the keyboard drives, each one named undo step. */
         void splitAtPlayhead();
         void duplicateSelection();
-        void deleteSelection();
+        void deleteSelection (bool cut = false);
+
+        /** Copy and paste, also between projects: what was copied outlives a tab switch, because
+            the window has one timeline whichever project is in front. */
+        void copySelection();
+        void paste();
+        bool canPaste() const noexcept      { return copied != nullptr && copied->count() > 0; }
         void nudgeSelection (int steps);
         void addMarkerAtPlayhead();
         void loopSelection();
@@ -101,6 +107,8 @@ namespace carthage::ui
         double pixelsPerBeat = 24.0;
         double scrollBeat = 0.0;
         int scrollY = 0;
+
+        std::shared_ptr<const editing::Copied> copied;
 
         juce::AudioFormatManager formats;
         juce::AudioThumbnailCache thumbnailCache { 64 };

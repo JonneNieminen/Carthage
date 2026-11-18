@@ -40,6 +40,7 @@ namespace carthage::app
             // Added later, so they go last: the saved shortcuts file names commands by id.
             closeProject, minimiseWindow, toggleFullScreen,
             nextProject, previousProject,
+            copyClips, cutClips, pasteClips,
         };
 
         /** The tool commands, in Timeline::Tool order. */
@@ -54,7 +55,8 @@ namespace carthage::app
                      openPluginEditor, bypassPlugin, audioSettings, measureLatency, pluginBrowser,
                      toolSelect, toolDraw, toolPaint, toolSlice, toolDelete, toolMute, toolZoom, toolStretch,
                      undo, redo, toggleGrid, splitAtPlayhead, duplicateClips, deleteClips,
-                     nudgeLeft, nudgeRight, addMarker, loopSelection, keyboardShortcuts };
+                     nudgeLeft, nudgeRight, addMarker, loopSelection, keyboardShortcuts,
+                     copyClips, cutClips, pasteClips };
         }
 
         /** Commands the application itself performs, whatever window is in front. */
@@ -120,6 +122,9 @@ namespace carthage::app
                 case redo:            info.setInfo ("Redo", "Redo the edit you undid", "Edit", 0); info.addDefaultKeypress ('z', primary | juce::ModifierKeys::shiftModifier); break;
                 case toggleGrid:      info.setInfo ("Snap to grid", "Turn the grid on or off", "Edit", 0); info.addDefaultKeypress ('g', 0); break;
                 case splitAtPlayhead: info.setInfo ("Split at playhead", "Cut the selected clips (or every clip under the playhead) in two at the playhead", "Edit", 0); info.addDefaultKeypress ('e', primary); break;
+                case copyClips:       info.setInfo ("Copy", "Copy the selected clips, to paste here or in another project", "Edit", 0); info.addDefaultKeypress ('c', primary); break;
+                case cutClips:        info.setInfo ("Cut", "Copy the selected clips and remove them", "Edit", 0); info.addDefaultKeypress ('x', primary); break;
+                case pasteClips:      info.setInfo ("Paste", "Paste the copied clips at the playhead, on the lanes they came from", "Edit", 0); info.addDefaultKeypress ('v', primary); break;
                 case duplicateClips:  info.setInfo ("Duplicate", "Copy the selected clips right after themselves", "Edit", 0); info.addDefaultKeypress ('d', primary); break;
                 case deleteClips:     info.setInfo ("Delete clips", "Delete the selected clips", "Edit", 0); info.addDefaultKeypress (KP::deleteKey, 0); info.addDefaultKeypress (KP::backspaceKey, 0); break;
                 case nudgeLeft:       info.setInfo ("Nudge left", "Move the selected clips one grid step earlier", "Edit", 0); info.addDefaultKeypress (KP::leftKey, 0); break;

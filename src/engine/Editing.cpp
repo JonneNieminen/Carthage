@@ -1,5 +1,8 @@
 #include "Editing.h"
 
+#include <limits>
+#include <set>
+
 #include <map>
 
 namespace carthage::editing
@@ -73,6 +76,89 @@ namespace carthage::editing
     void useConsistentFilePaths (Edit& edit)
     {
         edit.filePathResolver = consistentFilePaths ([&edit] { return edit.editFileRetriever ? edit.editFileRetriever() : juce::File(); });
+    }
+
+    std::shared_ptr<const Copied> copy (const Clips& clips)
+    {
+        auto out = std::make_shared<Copied>();
+
+        if (clips.isEmpty())
+            return out;
+
+        auto first = std::numeric_limits<double>::max();
+        out->firstLane = std::numeric_limits<int>::max();
+
+        for (auto* c : clips)
+        {
+            first = std::min (first, c->getPosition().getStart().inSeconds());
+            out->firstLane = std::min (out->firstLane, laneOf (*c));
+        }
+
+        for (auto* c : clips)
+        {
+            auto state = c->state.createCopy();
+
+            // The file as it resolves now, absolute: the clip can land in another project.
+            if (auto* audio = dynamic_cast<AudioClipBase*> (c))
+                if (const auto file = audio->getOriginalFile(); file != juce::File())
+                    state.setProperty (IDs::source, file.getFullPathName(), nullptr);
+
+            state.setProperty (IDs::start, c->getPosition().getStart().inSeconds() - first, nullptr);
+
+            Clipboard::Clips::ClipInfo info;
+            info.state = state;
+            info.trackOffset = laneOf (*c) - out->firstLane;
+            out->clips.clips.push_back (std::move (info));
+        }
+
+        return out;
+    }
+
+    Clips paste (Edit& edit, const Copied& copied, double atBeat)
+    {
+        const auto all = lanes (edit);
+
+        if (copied.count() == 0 || all.isEmpty())
+            return {};
+
+        // Lanes the edit lacks: the clips go onto its last lanes instead (getSiblingTrack would
+        // find nothing).
+        auto content = copied.clips;
+        auto firstLane = copied.firstLane;
+        int deepest = 0;
+
+        for (auto& c : content.clips)
+            deepest = std::max (deepest, c.trackOffset);
+
+        firstLane = std::clamp (firstLane, 0, std::max (0, all.size() - 1 - deepest));
+
+        for (auto& c : content.clips)
+            c.trackOffset = std::min (c.trackOffset, all.size() - 1 - firstLane);
+
+        std::set<EditItemID> before;
+
+        for (auto* lane : all)
+            for (auto* c : lane->getClips())
+                before.insert (c->itemID);
+
+        EditInsertPoint insertPoint (edit);
+        Clipboard::ContentType::EditPastingOptions options (edit, insertPoint);
+        options.startTrack = all[firstLane];
+        options.startTime = edit.tempoSequence.toTime (tracktion::BeatPosition::fromBeats (std::max (0.0, atBeat)));
+        options.silent = true;
+        content.pasteIntoEdit (options);
+
+        Clips added;
+
+        for (auto* lane : lanes (edit))
+            for (auto* c : lane->getClips())
+                if (! before.contains (c->itemID))
+                {
+                    crossfade (*c);
+                    added.add (c);
+                }
+
+        return added;
     }
 
     void begin (Edit& edit, const juce::String& name)

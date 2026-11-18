@@ -15,6 +15,8 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   Ctrl+Shift+Tab, to switch; only the front project plays, the others wait with their plugins
   loaded. File > New and Open add a tab; Cmd/Ctrl+W, the tab's cross or a middle click closes one,
   asking to save first. Drag tabs to reorder them.
+- Cut, Copy and Paste for clips (Cmd/Ctrl+X, C, V), also from one project tab to another. Paste
+  puts the clips at the playhead, on the lanes they came from.
 
 ## 0.1.2-beta.4 - 2026-11-18
 

@@ -49,6 +49,24 @@ namespace carthage::editing
     /** Mutes every clip if any is playing, otherwise unmutes them all (the T tool, and its key). */
     void toggleMute (const Clips&);
 
+    /** What Copy holds (W30: copy and paste between tabs from the start). Each clip keeps
+        everything Tracktion stores about it, its audio file written as an absolute path so it
+        pastes into any project. Positions are seconds from the first clip, since an audio clip's
+        content is fixed in time whatever the tempo; lanes count from the topmost clip's lane. */
+    struct Copied
+    {
+        tracktion::Clipboard::Clips clips;
+        int firstLane = 0;
+
+        int count() const noexcept     { return static_cast<int> (clips.clips.size()); }
+    };
+
+    std::shared_ptr<const Copied> copy (const Clips&);
+
+    /** Pastes into `edit` with the first clip at `atBeat`, on the lanes the clips were copied
+        from (clamped to the lanes the edit has); returns the new clips. */
+    Clips paste (tracktion::Edit&, const Copied&, double atBeat);
+
     void setLoopRange (tracktion::Edit&, double startBeat, double endBeat);
     tracktion::MarkerClip* addMarker (tracktion::Edit&, double beat);
 

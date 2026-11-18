@@ -162,6 +162,51 @@ public:
             near (edit->getTransport().getLoopRange().getEnd().inSeconds(), 4.0, "and ends at beat 8");
         }
 
+        beginTest ("Copy and paste into another project, in another folder and tempo (W30)");
+        {
+            for (auto* l : lanes)
+                for (auto* c : l->getClips())
+                    editing::remove ({ c });
+
+            auto* a = newClip (2.0);
+            auto* b = tracktion::insertWaveClip (*lanes[1], "Tone 2", audio,
+                                                 { { tracktion::TimePosition::fromSeconds (3.0), tracktion::TimeDuration::fromSeconds (1.5) },
+                                                   tracktion::TimeDuration::fromSeconds (0.5) },
+                                                 tracktion::DeleteExistingClips::no).get();
+            const auto copied = editing::copy ({ a, b });
+            expectEquals (copied->count(), 2);
+
+            // Another project: another folder, so a relative path from here would not resolve there.
+            const auto other = folder.getChildFile ("Elsewhere");
+            other.createDirectory();
+            auto target = tracktion::createEmptyEdit (engine, other.getChildFile ("Other.tracktionedit"));
+            editing::useConsistentFilePaths (*target);
+            target->ensureNumberOfAudioTracks (8);
+            target->tempoSequence.getTempo (0)->setBpm (90.0);
+
+            editing::begin (*target, "Paste 2 clips");
+            const auto pasted = editing::paste (*target, *copied, 8.0);
+            expectEquals (pasted.size(), 2);
+
+            auto lane = [] (auto* c) { return editing::laneOf (*c); };
+            auto seconds = [] (auto* c) { return c->getPosition().getStart().inSeconds(); };
+            auto* first = lane (pasted[0]) == 0 ? pasted[0] : pasted[1];
+            auto* second = first == pasted[0] ? pasted[1] : pasted[0];
+
+            expectEquals (lane (first), 0, "the first clip lands on its lane");
+            expectEquals (lane (second), 1, "the second keeps its lane below it");
+            near (seconds (first), 8.0 / 1.5, "at beat 8 of a 90 bpm project");
+            near (seconds (second) - seconds (first), 2.0, "and the two keep their distance in time");
+            near (second->getPosition().getLength().inSeconds(), 1.5, "lengths are kept");
+            near (second->getPosition().getOffset().inSeconds(), 0.5, "and so is where the audio starts");
+            expect (dynamic_cast<tracktion::AudioClipBase*> (first)->getAudioFile().getFile() == audio,
+                    "the pasted clip finds its audio from the other folder");
+
+            target->getUndoManager().undo();
+            expectEquals (editing::lanes (*target)[0]->getClips().size() + editing::lanes (*target)[1]->getClips().size(), 0,
+                          "a paste undoes in one step");
+        }
+
         expectEquals (editing::named ("Move", 1), juce::String ("Move clip"));
         expectEquals (editing::named ("Move", 3), juce::String ("Move 3 clips"));
     }
