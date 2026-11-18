@@ -153,7 +153,9 @@ prints the public key again at any time.
   update (seen with 0.1.1, W28). Releases are therefore signed with Carthage's self-signed
   certificate when its secrets exist (W35): the signature is stable, so the permission is asked for
   once more after the first such update and then kept. No hardened runtime, as with ad-hoc, so
-  plugins load the same. The run's summary says which signature it used.
+  plugins load the same. The run's summary says which signature it used. Verified on the owner's
+  Mac (2026-11-18): 0.1.2-beta.2 (ad-hoc) updated to beta.3 (self-signed) and asked once; beta.3
+  updated to beta.4 and opened without asking.
 - Developer ID signing and notarisation are written into `release.yml` and switch on when the
   `APPLE_*` secrets exist.
 - Windows builds are unsigned; SmartScreen warns on first install (the release notes say what to do).
