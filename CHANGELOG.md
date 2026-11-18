@@ -10,6 +10,12 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 
 ## Unreleased
 
+## 0.1.2-beta.4 - 2026-11-18
+
+### Changed
+- Nothing new to use: this update checks that Carthage keeps its microphone permission across
+  updates. It should open without asking.
+
 ## 0.1.2-beta.3 - 2026-11-18
 
 ### Added
