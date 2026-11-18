@@ -26,6 +26,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   and play. Search across every folder, star favourites, and drag a sound onto a lane (sounds
   dragged in from the Finder land there too). Settings > Browser sets the panel's width, the text
   size, and whether sounds play only while held.
+- A start screen when Carthage opens: your recent projects and templates, each shown as a
+  miniature of its arrangement, with New and Open. File > Save as template keeps a project to
+  start new ones from. Switch the start screen off in Settings > Projects, or open it from File.
 - The sample browser finds each sound's key and tempo in the background and shows them beside
   its name. Settings > Browser can fit a dropped loop to the project's tempo.
 

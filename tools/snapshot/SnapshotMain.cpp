@@ -5,7 +5,7 @@
 //   carthage-snapshot OUTPUT_FOLDER [--device NAME] [--output-device NAME]
 //                     [--plugin-format VST3 --plugin FILE_OR_ID] [--record-seconds 3] [--scan]
 //
-// Writes main.png, samples*.png (with --samples FOLDER), tabs.png, settings.png, settings-updates.png, settings-shortcuts.png, update*.png (the update banner with sample text), plugin.png
+// Writes main.png, samples*.png (with --samples FOLDER), start*.png (start.png with --project FILE), tabs.png, settings.png, settings-updates.png, settings-shortcuts.png, update*.png (the update banner with sample text), plugin.png
 // (with --plugin) and take.png (after recording).
 
 #include <app/Commands.h>
@@ -190,6 +190,27 @@ namespace
             }
 
             onMessageThreadVoid ([this] { content->showPanel (false, false); });
+
+            // The start screen (phase 4b): empty, then with a recent project and a template made
+            // from it (--project FILE).
+            onMessageThreadVoid ([this, temp] { content->getStartScreen().setTemplatesFolder (temp.getChildFile ("Templates"));
+                                                content->showStartScreen (true); });
+            capture (outDir.getChildFile ("start-empty.png"));
+
+            if (const auto project = argValue (args, "--project"); project.isNotEmpty())
+            {
+                onMessageThreadVoid ([this, project] { session->openProject (File::getCurrentWorkingDirectory().getChildFile (project)); });
+                Thread::sleep (500);
+                std::atomic<bool> saved { false };
+                onMessageThreadVoid ([this, temp, &saved] { session->saveCopy (temp.getChildFile ("Templates/Four on the floor"),
+                                                                               [&saved] (Result) { saved = true; }); });
+                while (! saved) Thread::sleep (50);
+                onMessageThreadVoid ([this] { content->showStartScreen (true); });
+                Thread::sleep (800);   // miniatures
+                capture (outDir.getChildFile ("start.png"));
+            }
+
+            onMessageThreadVoid ([this] { content->showStartScreen (false); });
 
             // Two projects as tabs.
             onMessageThreadVoid ([this, temp] { session->newProject (temp.getChildFile ("Second song")); });

@@ -181,6 +181,31 @@ namespace carthage::project
 
     juce::File samplesIn (const juce::File& folder)   { return folder.getChildFile ("Samples"); }
 
+    std::optional<Miniature> miniatureOf (const juce::File& projectFile)
+    {
+        const auto xml = juce::parseXML (projectFile);
+
+        if (xml == nullptr || ! xml->hasTagName ("EDIT"))
+            return std::nullopt;
+
+        Miniature m;
+
+        for (auto* track : xml->getChildWithTagNameIterator ("TRACK"))
+        {
+            auto& lane = m.lanes.emplace_back();
+
+            for (auto* clip : track->getChildWithTagNameIterator ("AUDIOCLIP"))
+            {
+                const auto start = clip->getDoubleAttribute ("start");
+                const auto length = clip->getDoubleAttribute ("length");
+                lane.emplace_back (static_cast<float> (start), static_cast<float> (length));
+                m.seconds = std::max (m.seconds, start + length);
+            }
+        }
+
+        return m;
+    }
+
     juce::File collectTarget (const juce::File& samplesFolder, const juce::File& source, const juce::Array<juce::File>& taken)
     {
         auto target = samplesFolder.getChildFile (source.getFileName());

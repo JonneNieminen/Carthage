@@ -119,7 +119,13 @@ namespace carthage::ui
         for (auto* c : std::initializer_list<Component*> { &browserHeading, &panelWidthLabel, &panelWidth, &textSizeLabel, &textSize, &playWhileHeld, &fitLoops })
             body.addAndMakeVisible (c);
 
-        for (auto* c : std::initializer_list<Component*> { &projectsHeading, &copySamples, &copySamplesHint, &versionLabel, &versionValue, &checkNow, &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
+        showStart.setTooltip ("Recent projects and templates at launch; File > Start screen shows them any time");
+        showStart.onClick = [this]
+        {
+            session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("showStartScreen", showStart.getToggleState());
+        };
+
+        for (auto* c : std::initializer_list<Component*> { &projectsHeading, &showStart, &copySamples, &copySamplesHint, &versionLabel, &versionValue, &checkNow, &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
                                                            &latencyHeading, &loadHeading, &inputDeviceLabel, &outputDeviceLabel,
                                                            &rateLabel, &bufferLabel, &formatLabel, &reportedLabel, &reportedValue,
                                                            &measuredLabel, &measuredValue, &loopOutLabel, &loopInLabel, &loopHint,
@@ -210,6 +216,9 @@ namespace carthage::ui
 
     void SettingsPanel::refresh()
     {
+        showStart.setToggleState (session.getEngine().getPropertyStorage().getPropertiesFile().getBoolValue ("showStartScreen", true),
+                                  dontSendNotification);
+
         auto& adm = session.getDeviceManager();
         const auto setup = adm.getAudioDeviceSetup();
         auto* device = adm.getCurrentAudioDevice();
@@ -456,6 +465,7 @@ namespace carthage::ui
         dropoutsValue.setBounds (drops);
 
         heading (projectsHeading);
+        showStart.setBounds (r.removeFromTop (rowHeight));
         copySamples.setBounds (r.removeFromTop (rowHeight));
         copySamplesHint.setBounds (r.removeFromTop (50));
 

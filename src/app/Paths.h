@@ -25,6 +25,10 @@ namespace carthage::app
             It is created when something is recorded into it. */
         static juce::File newUntitledProject (const juce::Array<juce::File>& inUse = {});   // folders of open tabs: theirs are made only when recording
 
+        /** Templates the user saved (File > Save as template), one project folder each.
+            <settings>/Templates */
+        static juce::File templates();
+
         /** Shortcuts the user changed (only the changes). <settings>/Shortcuts.xml */
         static juce::File shortcuts();
 

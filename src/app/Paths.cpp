@@ -15,6 +15,7 @@ namespace carthage::app
     juce::File Paths::pluginCache()     { return settings().getChildFile ("Plugins"); }
     juce::File Paths::autosave()        { return settings().getChildFile ("Autosave"); }
     juce::File Paths::shortcuts()       { return settings().getChildFile ("Shortcuts.xml"); }
+    juce::File Paths::templates()       { return settings().getChildFile ("Templates"); }
 
     juce::File Paths::projects()
     {

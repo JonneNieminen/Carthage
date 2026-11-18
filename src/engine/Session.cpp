@@ -780,6 +780,7 @@ namespace carthage::engine
             return juce::Result::fail (opened.error);
 
         add (std::move (opened.edit), file, std::move (opened.info), false, false);
+        noteRecent (file);
         return juce::Result::ok();
     }
 
@@ -832,7 +833,10 @@ namespace carthage::engine
                      [this, target, file, taken, done] (juce::Result r)
                      {
                          if (r.wasOk() && isOpen (target) && file == target->file)
+                         {
                              savedAt (*target, taken);
+                             noteRecent (file);
+                         }
 
                          if (done) done (r);
                      });
@@ -896,6 +900,7 @@ namespace carthage::engine
                                  oldFolder.moveToTrash();
 
                              savedAt (q, taken);
+                             noteRecent (file);
                          }
 
                          if (done) done (r);
@@ -996,6 +1001,59 @@ namespace carthage::engine
     void Session::setAlwaysCopySamples (bool shouldCopy)
     {
         engine->getPropertyStorage().getPropertiesFile().setValue ("alwaysCopySamples", shouldCopy);
+    }
+
+    void Session::saveCopy (const juce::File& folder, std::function<void (juce::Result)> done)
+    {
+        auto& p = front();
+        const auto file = project::fileIn (folder);
+        const auto oldFolder = p.file.getParentDirectory();
+        auto copyInfo = p.info;
+        copyInfo.id = project::Info::createNew().id;   // a copy is a project of its own
+        copyInfo.view = currentView();
+        auto snapshot = project::snapshot (*p.edit, file, copyInfo, oldFolder);
+
+        writer.post ([snapshot, file, oldFolder, folder]
+                     {
+                         if (auto r = project::copyMedia (oldFolder, folder); r.failed())
+                             return r;
+
+                         return project::write (snapshot, file);
+                     },
+                     [done] (juce::Result r) { if (done) done (r); });
+    }
+
+    juce::Array<juce::File> Session::getRecentProjects() const
+    {
+        juce::Array<juce::File> files;
+
+        for (const auto& path : juce::StringArray::fromLines (engine->getPropertyStorage().getPropertiesFile().getValue ("recentProjects")))
+            if (const juce::File f (path); path.isNotEmpty() && f.existsAsFile())
+                files.add (f);
+
+        return files;
+    }
+
+    void Session::noteRecent (const juce::File& file)
+    {
+        auto& props = engine->getPropertyStorage().getPropertiesFile();
+        auto list = juce::StringArray::fromLines (props.getValue ("recentProjects"));
+        list.removeString (file.getFullPathName());
+        list.removeEmptyStrings();
+        list.insert (0, file.getFullPathName());
+
+        while (list.size() > 12)
+            list.remove (list.size() - 1);
+
+        props.setValue ("recentProjects", list.joinIntoString ("\n"));
+    }
+
+    void Session::forgetRecentProject (const juce::File& file)
+    {
+        auto& props = engine->getPropertyStorage().getPropertiesFile();
+        auto list = juce::StringArray::fromLines (props.getValue ("recentProjects"));
+        list.removeString (file.getFullPathName());
+        props.setValue ("recentProjects", list.joinIntoString ("\n"));
     }
 
     bool Session::getFitLoopsToTempo() const

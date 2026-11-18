@@ -133,6 +133,18 @@ public:
             expect (live->getAudioFile().getFile() == project::recordingsIn (copyFolder).getChildFile ("Take 1.wav"));
         }
 
+        beginTest ("The start screen's miniature reads lanes and clips from the file");
+        {
+            const auto m = project::miniatureOf (songFile);
+            expect (m.has_value());
+            expect (m->lanes.size() >= 3, "every lane");
+            int clips = 0;
+            for (const auto& lane : m->lanes) clips += static_cast<int> (lane.size());
+            expect (clips >= 2, "the take and the sample");
+            expect (m->seconds > 0.0);
+            expect (! project::miniatureOf (root.getChildFile ("nothing.carthage")).has_value(), "no file, no miniature");
+        }
+
         beginTest ("Collected samples: names are kept, a clash is numbered, Save as carries them along");
         {
             const auto samples = project::samplesIn (root.getChildFile ("Collecting"));

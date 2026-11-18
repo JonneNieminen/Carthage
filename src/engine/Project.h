@@ -78,6 +78,17 @@ namespace carthage::project
         their audio from there. Message thread. */
     void moveTo (tracktion::Edit&, const juce::File& newFile, const juce::File& oldFolder);
 
+    /** A project's arrangement in miniature, for the start screen (F20): each lane's clips as
+        start and length in seconds, read from the file's XML without building an edit. Any
+        thread; quick (a few milliseconds for hundreds of clips). */
+    struct Miniature
+    {
+        double seconds = 0.0;   ///< where the last clip ends
+        std::vector<std::vector<std::pair<float, float>>> lanes;
+    };
+
+    std::optional<Miniature> miniatureOf (const juce::File& projectFile);
+
     /** Copies `from`'s Recordings and Samples folders into `to` (Save as). Any thread. */
     juce::Result copyMedia (const juce::File& fromFolder, const juce::File& toFolder);
 

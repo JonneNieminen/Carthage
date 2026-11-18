@@ -42,8 +42,11 @@ namespace carthage::app
                     m.addCommandItem (&commands, commands::closeProject);
                     m.addCommandItem (&commands, commands::saveProject);
                     m.addCommandItem (&commands, commands::saveProjectAs);
+                    m.addCommandItem (&commands, commands::saveAsTemplate);
                     m.addSeparator();
                     m.addCommandItem (&commands, commands::collectSamples);
+                    m.addSeparator();
+                    m.addCommandItem (&commands, commands::startScreen);
                    #if ! JUCE_MAC
                     m.addSeparator();   // macOS has these in the app menu
                     m.addCommandItem (&commands, commands::audioSettings);
@@ -233,12 +236,17 @@ namespace carthage::app
                                           "Privacy & Security, Microphone, then restart Carthage.");
 
             startUpdater (content);
+            connectStartScreen();
             updateTitle();
 
+            // A project named at launch opens; else a crash's copy is offered; else the start
+            // screen, unless it is switched off (F20).
             if (projectToOpen.existsAsFile())
                 report (session->openProject (projectToOpen));
-            else
+            else if (! unclosed.empty())
                 offerRecovery (unclosed);
+            else if (session->getEngine().getPropertyStorage().getPropertiesFile().getBoolValue ("showStartScreen", true))
+                content.showStartScreen (true);
 
             // Plugins installed or updated since the last run are checked in the background;
             // --rescan-plugins checks them all (for measuring the UI during a full scan).
@@ -348,6 +356,8 @@ namespace carthage::app
                 case commands::saveProject:     save ({}); return true;
                 case commands::saveProjectAs:   saveAs ({}); return true;
                 case commands::closeProject:    closeProject(); return true;
+                case commands::startScreen:     if (auto* c = content()) c->showStartScreen (true); return true;
+                case commands::saveAsTemplate:  saveAsTemplate(); return true;
                 case commands::collectSamples:
                     session->collectSamples ([this] (Result r, int copied)
                     {
@@ -492,6 +502,64 @@ namespace carthage::app
                                       if (const auto file = fc.getResult(); file != File())
                                           report (session->openProject (file));
                                   });
+        }
+
+        /** Asks for a name, then keeps a copy of the front project as a template (F20). */
+        void saveAsTemplate()
+        {
+            auto* w = new AlertWindow ("Save as template", "A name for the template. New projects can start from it on the start screen.",
+                                       MessageBoxIconType::NoIcon, content());
+            w->addTextEditor ("name", session->isUntitled() ? String ("My template") : session->getProjectName());
+            w->addButton ("Save", 1, KeyPress (KeyPress::returnKey));
+            w->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
+
+            w->enterModalState (true, ModalCallbackFunction::create ([this, w] (int result)
+            {
+                const auto name = File::createLegalFileName (w->getTextEditorContents ("name").trim());
+
+                if (result != 1 || name.isEmpty())
+                    return;
+
+                const auto folder = Paths::templates().getChildFile (name);
+
+                if (folder.exists())
+                {
+                    report (Result::fail ("There is already a template called " + name + ". Choose another name."));
+                    return;
+                }
+
+                session->saveCopy (folder, [this, name] (Result r) { report (r, "Saved the template " + name); });
+            }), true);
+        }
+
+        /** The start screen's choices go where the File menu's do. */
+        void connectStartScreen()
+        {
+            auto* c = content();
+
+            if (c == nullptr)
+                return;
+
+            auto& start = c->getStartScreen();
+            start.setTemplatesFolder (Paths::templates());
+            start.onNew = [this] (const File& templateFile) { newProject (templateFile); };
+            start.onOpen = [this] (const File& file)
+            {
+                if (auto r = session->openProject (file); r.failed())
+                {
+                    report (r);
+                    session->forgetRecentProject (file);
+                }
+            };
+            start.onOpenOther = [this] { openProject(); };
+            start.onClose = [this] { if (auto* m = content()) m->showStartScreen (false); };
+            start.onShowAtStartChanged = [this] (bool on)
+            {
+                session->getEngine().getPropertyStorage().getPropertiesFile().setValue ("showStartScreen", on);
+
+                if (auto* m = content())
+                    m->getSettings().refresh();
+            };
         }
 
         /** Cmd/Ctrl+W (W34): closes the front tab after asking; the last one closes the window. */

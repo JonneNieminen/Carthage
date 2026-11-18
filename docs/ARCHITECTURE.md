@@ -175,6 +175,12 @@ packaging/           macos/ (sign.sh, make-dmg.sh, read-me), windows/ (Carthage.
   the Krumhansl-Kessler profiles; none for noise and drums.
 - **Time-stretching** (W36): Signalsmith Stretch through Tracktion; stretched clips and loops fitted
   to the tempo play from proxy files Tracktion renders in the background.
+- **Start screen** (`ui/StartScreen.h`, F20). At launch unless a project was named or a recovery is
+  offered, and from File > Start screen: recent projects (kept by the session, newest first, up to
+  twelve) and templates (an empty project, then `<settings>/Templates`), each with its arrangement
+  in miniature (`project::miniatureOf`, read from the file's XML on a worker). File > Save as
+  template writes a copy of the front project there (`Session::saveCopy`). Settings > Projects
+  switches it off.
 - **The timeline across tabs.** Waveform thumbnails belong to audio files, not projects, so they are
   kept when the front project changes; resolved clip paths are keyed by project file.
 
@@ -292,6 +298,9 @@ to a user folder (DECISIONS W17).
 | Projects | `~/Music/Carthage` | `Music\Carthage` |
 | A new untitled project | `<projects>/Untitled` (then `Untitled 2`, …), created when something is recorded | same |
 | Recordings | `<project>/Recordings` | same |
+| Collected samples | `<project>/Samples` | same |
+| Templates (File > Save as template) | `<settings>/Templates/<name>/` | same |
+| The sample browser's folders, favourites, keys and tempos | `<settings>/Samples.xml` | same |
 | Shortcuts the user changed (only the changes) | `<settings>/Shortcuts.xml` | same |
 | Autosaves and crash recovery | `<settings>/Autosave/<project id>/` (the last 10, and the `running` marker) | same |
 | AU and VST3 system folders (read only) | `/Library/Audio/Plug-Ins/{Components,VST3}`, and under `~` | `C:\Program Files\Common Files\VST3` |

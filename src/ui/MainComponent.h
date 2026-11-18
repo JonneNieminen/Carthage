@@ -3,6 +3,7 @@
 #include "Controls.h"
 #include "PluginBrowser.h"
 #include "SampleBrowser.h"
+#include "StartScreen.h"
 #include "ProjectTabs.h"
 #include "SettingsPanel.h"
 #include "Timeline.h"
@@ -53,6 +54,11 @@ namespace carthage::ui
         SettingsPanel& getSettings() noexcept       { return settings; }
         PluginBrowser& getPluginBrowser() noexcept  { return browser; }
         SampleBrowser& getSampleBrowser() noexcept  { return samples; }
+        StartScreen& getStartScreen() noexcept      { return startScreen; }
+
+        /** The start screen over the window, below the tabs (F20). */
+        void showStartScreen (bool);
+        bool isStartScreenShowing() const noexcept  { return startScreen.isVisible(); }
 
         /** Shows the left panel on samples or plugins; with `toggle`, the same view again hides it. */
         void showPanel (bool samplesView, bool toggle);
@@ -81,6 +87,7 @@ namespace carthage::ui
         UpdateBanner updateBanner;
         PluginBrowser browser;
         SampleBrowser samples;
+        StartScreen startScreen { session };
         bool browserOpen = true, panelShowsSamples = false;
         juce::TextButton samplesTab { "Samples" }, pluginsTab { "Plugins" };
         int panelWidth = PluginBrowser::preferredWidth;

@@ -390,6 +390,8 @@ namespace carthage::ui
         settings.onPlayWhileHeldChanged = [this] (bool held) { samples.setPlayWhileHeld (held); };
         showPanel (panelShowsSamples, false);
 
+        addChildComponent (startScreen);
+
         // Tabs: a click brings a project forward; closing asks to save, as Cmd/Ctrl+W does.
         addAndMakeVisible (tabs);
         tabs.onSelect = [this] (int index)
@@ -445,6 +447,7 @@ namespace carthage::ui
         session.onProjectClosing = [this] { closePluginWindow(); };
         session.onProjectChanged = [this]
         {
+            showStartScreen (false);   // a project came forward: that is what the start screen was for
             tabs.refresh();
             timeline.projectChanged();
             refreshToolbar();
@@ -788,6 +791,19 @@ namespace carthage::ui
         commands.commandStatusChanged();
     }
 
+    void MainComponent::showStartScreen (bool show)
+    {
+        if (show)
+        {
+            startScreen.setShowAtStart (session.getEngine().getPropertyStorage().getPropertiesFile().getBoolValue ("showStartScreen", true));
+            startScreen.refresh();
+            startScreen.toFront (false);
+        }
+
+        startScreen.setVisible (show);
+        resized();
+    }
+
     void MainComponent::setPanelWidth (int w)
     {
         panelWidth = jlimit (240, 520, w);
@@ -1047,6 +1063,7 @@ namespace carthage::ui
 
         layoutSettings (false);
         layoutUpdateBanner();
+        startScreen.setBounds (getLocalBounds().withTrimmedTop (ProjectTabs::height));
     }
 
     void MainComponent::showUpdate (std::optional<UpdateBanner::Model> model)

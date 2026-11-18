@@ -156,6 +156,14 @@ namespace carthage::engine
         bool getFitLoopsToTempo() const;
         void setFitLoopsToTempo (bool);
 
+        /** Writes a copy of the front project into `folder` (with its recordings and samples) and
+            carries on in the original: Save as template. */
+        void saveCopy (const juce::File& folder, std::function<void (juce::Result)> done);
+
+        /** Projects opened or saved, newest first, those still on disk (F20, the start screen). */
+        juce::Array<juce::File> getRecentProjects() const;
+        void forgetRecentProject (const juce::File&);
+
         /** Quitting: waits for writes in hand and records that every project closed cleanly. */
         void close();
 
@@ -305,6 +313,7 @@ namespace carthage::engine
         void putToBack();            // the front project lets go of the device and the input
         void bringForward (int);     // and another takes them up
         void savedAt (Project&, juce::uint64 changesWhenTaken);
+        void noteRecent (const juce::File&);
         bool isOpen (const Project*) const;   // a tab may close while its file is being written
         void projectStateChanged();
         juce::ValueTree currentView() const;

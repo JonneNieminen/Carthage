@@ -285,6 +285,8 @@ namespace
             check (song.getChildFile ("Song.carthage").existsAsFile(), "Song/Song.carthage exists");
             check (onMessageThread ([this] { return ! session->isUntitled() && ! session->hasUnsavedChanges() && session->getProjectName() == "Song"; }),
                    "now named Song, nothing unsaved");
+            check (onMessageThread ([this, song] { return session->getRecentProjects().contains (carthage::project::fileIn (song)); }),
+                   "Song is a recent project (the start screen)");
 
             say ("Open it again: the clip comes back");
             onMessageThreadVoid ([this] { session->newProject (folder.getChildFile ("Projects/Untitled")); });
