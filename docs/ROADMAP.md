@@ -12,7 +12,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | --- | --- |
 | 0. Brand, theme and docs | Done (2026-11-16) |
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
-| 2. CI, releases and in-app updates | In progress: v0.1.0 and v0.1.1 released, update tested; beta and Windows checks left |
+| 2. CI, releases and in-app updates | Exit checks met; waiting for the owner on two untested deliverable paths (report) |
 | 3. Plugin manager and scanning | Not started |
 | 4. Timeline, grid, snapping, tools, shortcuts | Not started |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
@@ -167,11 +167,61 @@ Exit checks:
 - [x] v0.1.0 installed from the published `.dmg` on a real Mac (owner, 2026-11-18, macOS 27: dragged to Applications, ran the `xattr` command from the notes, opened)
 - [x] v0.1.1 published; the installed app finds it, shows the banner and updates itself on quit (owner: card shown, Install on quit, reopened as 0.1.1)
 - [x] The update installs without repeating the Gatekeeper step (O6); if it does not, reported to the owner — it did not repeat: 0.1.1 opened directly. macOS did ask for microphone access again (ad-hoc signing; see report)
-- [ ] A `-beta.N` tag appears only on the beta feed, and only an app with the beta setting on sees it
-- [ ] An update is not offered a restart during playback or recording, and "Restart now" with unsaved work saves or asks first
-- [ ] Windows installer builds in CI and the WinSparkle path is exercised as far as the available hardware allows; what could not be tested is stated
+- [x] A `-beta.N` tag appears only on the beta feed, and only an app with the beta setting on sees it (0.1.2-beta.1 and beta.2: stable feed stayed at 0.1.1; the owner's app saw each beta once the setting was on)
+- [x] An update is not offered a restart during playback or recording, and "Restart now" with unsaved work saves or asks first (owner, 0.1.2-beta.2: greyed while playing, restarted into the update after stopping; there is no unsaved work before phase 4, see report)
+- [x] Windows installer builds in CI and the WinSparkle path is exercised as far as the available hardware allows; what could not be tested is stated (no Windows machine: see report)
 
-Report: _not written yet_
+Report:
+
+### Report — phase 2 (2026-11-18, 3185793)
+Works:        Carthage is released from a tag. Pushing vX.Y.Z (or vX.Y.Z-beta.N) builds macOS arm64 and
+              Windows x64, signs the DMG and the Inno Setup installer with the owner's EdDSA key,
+              writes the stable and beta feeds and publishes the GitHub Release with install notes and
+              the one-time Gatekeeper step. A failed release is rebuilt from its existing tag
+              ("Run workflow"); tags are never moved. Installed Carthage checks once on launch, offers
+              an update in a small card ("Install on quit" by default, or "Restart now", which waits
+              while playing or recording), has "Check for updates..." in the app menu and Check now
+              in Settings, shows its version there, and switches to the beta feed with "Receive beta
+              updates". CI builds and tests both platforms on every push to main.
+Tested:       Exit checks, on the owner's Mac (macOS 27, Apple silicon), with released builds:
+              - v0.1.0 installed from the published DMG: dragged to Applications, `xattr` command from
+                the notes, opened. (The Open Anyway route in the notes was not tried.)
+              - v0.1.1: the installed 0.1.0 showed the card, installed on quit, reopened as 0.1.1.
+              - O6: 0.1.1 opened directly, no Gatekeeper step (W28).
+              - Betas: 0.1.2-beta.1 and beta.2 published as pre-releases; fetched from outside, the
+                stable feed stayed at 0.1.1 while the beta feed carried each beta; the app found
+                them once "Receive beta updates" was on and installed them.
+              - Restart now greyed while playing and installed and reopened after stopping (beta.2).
+              - Windows: CI builds and tests Windows x64; every release built the installer and the
+                feed's Windows item; its EdDSA signature verifies against the public key (v0.1.0,
+                checked with openssl). Not installed or run: no Windows machine (below).
+              Both v0.1.0 downloads' signatures were verified against the public key outside Sparkle.
+              Unit tests pass on both platforms in CI.
+Measured:     Release, tag to published, with the compiler cache warm: 7-10 minutes (v0.1.1: macOS 5,
+              Windows 8). CI: macOS 5-6 minutes; Windows 17-18 (it also builds the tests and the
+              developer tools; cache hits were 44 % on its first warm run).
+Not done:     - Windows: the installer, WinSparkle's check, its window and its install were not run on
+                Windows (no machine). The WinSparkle code compiles and links in CI; its feed item is
+                signed and verified. "Install on quit" does not exist on Windows (WinSparkle
+                installs from its own window), as documented.
+              - The workflow's no-key path (publish without feeds, with a warning) is written and has
+                not run, because the key was set before the first release.
+              - Developer ID signing and notarytool are written, switched off, and have never run.
+              - "Restart now with unsaved work saves or asks first": nothing is unsaved until projects
+                exist (phase 4). The hook (Updater::Hooks::prepareToRestart) is in place and refuses
+                during a take; phase 4 makes it save or ask.
+              - macOS asks for microphone access again after every update (ad-hoc signing gives each
+                build a new identity, W28). Fix proposed: a stable signing certificate.
+              - Windows CI time; the next step is caching the compiled JUCE/Tracktion library.
+Decisions:    W25 (updater pins), W26 (version scheme), W27 (ccache), W28 (O6 answered: updates need no
+              Gatekeeper step; the microphone prompt repeats). F19 and O9 record the owner's added
+              features and their open details.
+Needs owner:  1. Accept the untested paths above (no-key publish, Developer ID steps, Windows install
+                 and update) as stated, or ask for any of them to be tested first.
+              2. Whether to add a stable self-signed signing certificate now (keeps the microphone
+                 permission across updates; you would create it once, like the update key).
+              3. Answers on the questions page (O9) before phase 4; they do not block phase 3.
+              4. The go-ahead for phase 3.
 
 ## Phase 3 — Plugin manager and scanning
 
