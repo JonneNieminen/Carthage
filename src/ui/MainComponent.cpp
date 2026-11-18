@@ -372,6 +372,31 @@ namespace carthage::ui
                 insertPlugin (e->description);
         };
         session.onPluginsChanged = [this] { browser.refresh(); };
+
+        // The toolbar: a button per tool, with its key as its label, and the grid.
+        static constexpr const char* toolKeys[] = { "E", "P", "B", "C", "D", "T", "Z", "S" };
+
+        for (int i = 0; i < 8; ++i)
+        {
+            auto* b = toolButtons.add (new TextButton (toolKeys[i]));
+            const auto id = cmd::tools()[i];
+            b->setTooltip (cmd::tooltip (commands, id));
+            b->onClick = [this, i] { timeline.setTool (static_cast<Timeline::Tool> (i)); refreshToolbar(); };
+            addAndMakeVisible (b);
+        }
+
+        snapButton.setTooltip (cmd::tooltip (commands, cmd::toggleGrid));
+        snapButton.onClick = [this] { commands.invokeDirectly (cmd::toggleGrid, false); };
+        addAndMakeVisible (snapButton);
+
+        gridMenu.setTooltip ("The grid clips snap to");
+        gridMenu.onChange = [this] { showGridMenu(); };
+        addAndMakeVisible (gridMenu);
+
+        timeline.onToolUsed = [this] { usedWhileHeld = true; };
+        timeline.onStatus = [this] (const String& text) { setStatus (text); };
+        timeline.onSelectionChanged = [this] { commands.commandStatusChanged(); };
+        refreshToolbar();
         addChildComponent (updateBanner);   // shown by the app's updater
         settings.onClose = [this] { toggleSettings(); };
 
@@ -426,6 +451,18 @@ namespace carthage::ui
             case cmd::record:            info.setTicked (session.isRecording()); break;
             case cmd::audioSettings:     info.setTicked (settingsOpen); break;
             case cmd::pluginBrowser:     info.setTicked (browserOpen); break;
+            case cmd::toggleGrid:        info.setTicked (timeline.getGrid().enabled); break;
+            case cmd::undo:              info.setActive (session.getEdit().getUndoManager().canUndo());
+                                         info.shortName = "Undo " + session.getEdit().getUndoManager().getUndoDescription(); break;
+            case cmd::redo:              info.setActive (session.getEdit().getUndoManager().canRedo()); break;
+            case cmd::duplicateClips:
+            case cmd::deleteClips:
+            case cmd::nudgeLeft:
+            case cmd::nudgeRight:
+            case cmd::loopSelection:     info.setActive (! timeline.getSelectedClips().isEmpty()); break;
+            case cmd::toolSelect: case cmd::toolDraw: case cmd::toolPaint: case cmd::toolSlice:
+            case cmd::toolDelete: case cmd::toolMute: case cmd::toolZoom: case cmd::toolStretch:
+                info.setTicked (cmd::tools()[static_cast<int> (timeline.getTool())] == id); break;
             case cmd::measureLatency:    info.setActive (! session.isRecording()); break;
             default: break;
         }
@@ -441,6 +478,19 @@ namespace carthage::ui
             case cmd::toggleMonitoring: session.setMonitoring (! session.isMonitoring()); return true;
             case cmd::choosePlugin:     choosePlugin(); return true;
             case cmd::pluginBrowser:    toggleBrowser(); return true;
+            case cmd::toolSelect: case cmd::toolDraw: case cmd::toolPaint: case cmd::toolSlice:
+            case cmd::toolDelete: case cmd::toolMute: case cmd::toolZoom: case cmd::toolStretch:
+                toolCommand (info); return true;
+            case cmd::undo:             session.getEdit().getUndoManager().undo(); commands.commandStatusChanged(); return true;
+            case cmd::redo:             session.getEdit().getUndoManager().redo(); commands.commandStatusChanged(); return true;
+            case cmd::toggleGrid:       timeline.getGrid().enabled = ! timeline.getGrid().enabled; timeline.gridChanged(); refreshToolbar(); return true;
+            case cmd::splitAtPlayhead:  timeline.splitAtPlayhead(); return true;
+            case cmd::duplicateClips:   timeline.duplicateSelection(); return true;
+            case cmd::deleteClips:      timeline.deleteSelection(); return true;
+            case cmd::nudgeLeft:        timeline.nudgeSelection (-1); return true;
+            case cmd::nudgeRight:       timeline.nudgeSelection (1); return true;
+            case cmd::addMarker:        timeline.addMarkerAtPlayhead(); return true;
+            case cmd::loopSelection:    timeline.loopSelection(); return true;
             case cmd::openPluginEditor: openPluginWindow(); return true;
             case cmd::bypassPlugin:
                 if (auto* p = session.getInsertedPlugin())
@@ -530,6 +580,90 @@ namespace carthage::ui
     }
 
     //==============================================================================================
+    void MainComponent::toolCommand (const InvocationInfo& info)
+    {
+        const auto tool = static_cast<Timeline::Tool> (cmd::tools().indexOf (info.commandID));
+
+        // From a menu or a button: just switch.
+        if (info.invocationMethod != ApplicationCommandTarget::InvocationInfo::fromKeyPress)
+        {
+            timeline.setTool (tool);
+            heldToolCommand = 0;
+            refreshToolbar();
+            return;
+        }
+
+        if (info.isKeyDown)
+        {
+            if (heldToolCommand == info.commandID)
+                return;   // key repeat
+
+            if (heldToolCommand == 0)
+                toolBeforeHold = timeline.getTool();
+
+            heldToolCommand = info.commandID;
+            usedWhileHeld = false;
+            timeline.setTool (tool);
+        }
+        else if (heldToolCommand == info.commandID)
+        {
+            // Released: a tap keeps the tool; a hold (or using it while held) goes back (F7).
+            if (info.millisecsSinceKeyPressed > 300 || usedWhileHeld)
+                timeline.setTool (toolBeforeHold);
+
+            heldToolCommand = 0;
+        }
+
+        refreshToolbar();
+    }
+
+    void MainComponent::refreshToolbar()
+    {
+        for (int i = 0; i < toolButtons.size(); ++i)
+        {
+            const bool on = static_cast<int> (timeline.getTool()) == i;
+            // The active tool is live: the accent (AGENTS.md, UI).
+            toolButtons[i]->setColour (TextButton::buttonColourId, on ? theme::accent : theme::bg);
+            toolButtons[i]->setColour (TextButton::textColourOffId, on ? theme::onAccent : theme::muted);
+        }
+
+        snapButton.setColour (TextButton::buttonColourId, timeline.getGrid().enabled ? theme::hover : theme::bg);
+        snapButton.setColour (TextButton::textColourOffId, timeline.getGrid().enabled ? theme::text : theme::faint);
+
+        // The grid menu: divisions, then the feel, then adaptive; the current choice first.
+        const auto& g = timeline.getGrid();
+        gridMenu.clear (dontSendNotification);
+        static constexpr const char* names[] = { "Bar", "Beat", "1/2 beat", "1/4 beat", "1/8 beat", "1/16 beat", "1/32 beat", "1/64 beat" };
+
+        for (int i = 0; i < 8; ++i)
+            gridMenu.addItem (names[i], i + 1);
+
+        gridMenu.addSeparator();
+        gridMenu.addItem ("Straight", 101);
+        gridMenu.addItem ("Triplet", 102);
+        gridMenu.addItem ("Dotted", 103);
+        gridMenu.addSeparator();
+        gridMenu.addItem (String ("Adaptive (follows zoom)") + (g.adaptive ? " - on" : ""), 201);
+        gridMenu.setText (g.describe (timeline.beatsPerBar(), timeline.getPixelsPerBeat()), dontSendNotification);
+        commands.commandStatusChanged();
+    }
+
+    void MainComponent::showGridMenu()
+    {
+        auto& g = timeline.getGrid();
+        const auto id = gridMenu.getSelectedId();
+
+        if (id >= 1 && id <= 8)        g.division = static_cast<time::Division> (id - 1);
+        else if (id == 101)            g.feel = time::Feel::straight;
+        else if (id == 102)            g.feel = time::Feel::triplet;
+        else if (id == 103)            g.feel = time::Feel::dotted;
+        else if (id == 201)            g.adaptive = ! g.adaptive;
+
+        g.enabled = true;
+        timeline.gridChanged();
+        refreshToolbar();
+    }
+
     void MainComponent::choosePlugin()
     {
         // The browser is where plugins are chosen; this opens it with the search ready.
@@ -739,6 +873,18 @@ namespace carthage::ui
         toStartButton.setBounds (top.removeFromLeft (36));
         top.removeFromLeft (theme::space4);
         timeLabel.setBounds (top.removeFromLeft (140));
+        top.removeFromLeft (theme::space4);
+
+        for (auto* b : toolButtons)
+        {
+            b->setBounds (top.removeFromLeft (28).withSizeKeepingCentre (28, 28));
+            top.removeFromLeft (2);
+        }
+
+        top.removeFromLeft (theme::space3);
+        gridMenu.setBounds (top.removeFromLeft (170).withSizeKeepingCentre (170, 28));
+        top.removeFromLeft (theme::space1);
+        snapButton.setBounds (top.removeFromLeft (64).withSizeKeepingCentre (64, 28));
 
         settingsButton.setBounds (top.removeFromRight (36));
         top.removeFromRight (theme::space4);

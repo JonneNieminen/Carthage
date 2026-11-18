@@ -206,6 +206,13 @@ namespace carthage::ui
             g.setColour (colour.withAlpha (muted ? 0.3f : 0.55f));
             g.drawRoundedRectangle (body.reduced (0.5f), theme::radiusXs, theme::stroke);
 
+            if (timeline.isSelected (c))
+            {
+                // Selection is live: the accent.
+                g.setColour (theme::accent);
+                g.drawRoundedRectangle (body.reduced (0.5f), theme::radiusXs, 2.0f);
+            }
+
             if (auto* wave = dynamic_cast<tracktion::WaveAudioClip*> (&c))
             {
                 auto& thumb = timeline.thumbnailFor (wave->getOriginalFile());
@@ -242,6 +249,389 @@ namespace carthage::ui
         }
 
         void changeListenerCallback (ChangeBroadcaster*) override   { repaint(); }
+
+        //==========================================================================================
+        // Tools. Every gesture opens one named transaction on mouse-down; the changes until
+        // mouse-up join it, so a whole drag undoes in one step.
+        struct Hit
+        {
+            tracktion::Clip* clip = nullptr;
+            enum class Zone { none, body, leftEdge, rightEdge } zone = Zone::none;
+        };
+
+        struct Original { tracktion::EditItemID id; double start = 0.0, end = 0.0; };
+
+        enum class Drag { none, move, trimStart, trimEnd, stretch, slip, marquee, paint, erase, mute, zoomRange };
+
+        Drag drag = Drag::none;
+        double anchorBeat = 0.0, appliedBeats = 0.0, lastPaintEnd = 0.0;
+        int anchorLane = 0, appliedLanes = 0;
+        tracktion::EditItemID primary;
+        std::vector<Original> originals;
+        Array<tracktion::EditItemID> touched;
+        Rectangle<int> marquee;
+        Point<int> downAt;
+
+        static constexpr int edgePixels = 6;
+
+        double beatAt (int x) const   { return timeline.beatAtX (static_cast<float> (x + getX())); }
+        int laneAt (int y) const      { return (y + timeline.scrollY) / laneHeight; }
+
+        Hit clipAt (Point<int> p) const
+        {
+            const auto lanesList = timeline.laneTracks();
+            const auto lane = laneAt (p.y);
+
+            if (lane < 0 || lane >= lanesList.size())
+                return {};
+
+            for (auto* c : lanesList[lane]->getClips())
+            {
+                const auto x0 = timeline.xAtBeat (editing::startBeat (*c)) - static_cast<float> (getX());
+                const auto x1 = timeline.xAtBeat (editing::endBeat (*c)) - static_cast<float> (getX());
+
+                const auto px = static_cast<float> (p.x);
+
+                if (px < x0 - 1.0f || px > x1 + 1.0f)
+                    continue;
+
+                const auto width = x1 - x0;
+                const auto edge = std::min (static_cast<float> (edgePixels), width / 3.0f);
+
+                if (px <= x0 + edge) return { c, Hit::Zone::leftEdge };
+                if (px >= x1 - edge) return { c, Hit::Zone::rightEdge };
+                return { c, Hit::Zone::body };
+            }
+
+            return {};
+        }
+
+        double snapped (double beat, bool bypass, const editing::Clips& excluding) const
+        {
+            return time::snap (beat, timeline.grid, timeline.snapTargets (excluding), timeline.beatsPerBar(),
+                               timeline.pixelsPerBeat, bypass).beat;
+        }
+
+        tracktion::Clip* clipFor (tracktion::EditItemID id) const   { return tracktion::findClipForID (timeline.session.getEdit(), id); }
+
+        void used()   { if (timeline.onToolUsed) timeline.onToolUsed(); }
+
+        void begin (const String& name)   { editing::begin (timeline.session.getEdit(), name); }
+
+        void mouseMove (const MouseEvent& e) override
+        {
+            const auto hit = clipAt (e.getPosition());
+            const bool edge = hit.zone == Hit::Zone::leftEdge || hit.zone == Hit::Zone::rightEdge;
+
+            switch (timeline.tool)
+            {
+                case Tool::select:
+                case Tool::stretch: setMouseCursor (edge ? MouseCursor::LeftRightResizeCursor
+                                                         : hit.clip != nullptr ? MouseCursor::DraggingHandCursor : MouseCursor::NormalCursor); break;
+                case Tool::slice:   setMouseCursor (MouseCursor::IBeamCursor); break;
+                case Tool::zoom:    setMouseCursor (MouseCursor::CrosshairCursor); break;
+                default:            setMouseCursor (MouseCursor::PointingHandCursor); break;
+            }
+        }
+
+        void mouseDown (const MouseEvent& e) override
+        {
+            drag = Drag::none;
+            downAt = e.getPosition();
+            anchorBeat = beatAt (e.x);
+            anchorLane = laneAt (e.y);
+            appliedBeats = 0.0;
+            appliedLanes = 0;
+            touched.clear();
+            originals.clear();
+
+            const auto hit = clipAt (e.getPosition());
+            const bool bypass = e.mods.isCommandDown();
+            auto& edit = timeline.session.getEdit();
+            const auto lanesList = timeline.laneTracks();
+
+            switch (timeline.tool)
+            {
+                case Tool::select:
+                case Tool::stretch:
+                {
+                    if (hit.clip == nullptr)
+                    {
+                        if (! e.mods.isShiftDown())
+                            timeline.clearSelection();
+
+                        drag = Drag::marquee;
+                        marquee = {};
+                        return;
+                    }
+
+                    if (e.mods.isShiftDown())
+                    {
+                        auto clips = timeline.getSelectedClips();
+                        if (clips.contains (hit.clip)) clips.removeFirstMatchingValue (hit.clip); else clips.add (hit.clip);
+                        timeline.selectOnly (clips);
+                    }
+                    else if (! timeline.isSelected (*hit.clip))
+                    {
+                        timeline.selectOnly ({ hit.clip });
+                    }
+
+                    timeline.brush = hit.clip->itemID;
+                    primary = hit.clip->itemID;
+                    const auto edge = hit.zone == Hit::Zone::leftEdge || hit.zone == Hit::Zone::rightEdge;
+
+                    if (edge && e.mods.isCommandDown())          drag = Drag::slip;
+                    else if (hit.zone == Hit::Zone::rightEdge && (e.mods.isAltDown() || timeline.tool == Tool::stretch)) drag = Drag::stretch;
+                    else if (hit.zone == Hit::Zone::leftEdge)    drag = Drag::trimStart;
+                    else if (hit.zone == Hit::Zone::rightEdge)   drag = Drag::trimEnd;
+                    else                                         drag = Drag::move;
+
+                    const auto clips = drag == Drag::move ? timeline.getSelectedClips() : editing::Clips { hit.clip };
+
+                    for (auto* c : clips)
+                        originals.push_back ({ c->itemID, editing::startBeat (*c), editing::endBeat (*c) });
+
+                    const auto n = static_cast<int> (clips.size());
+                    begin (drag == Drag::move ? editing::named ("Move", n) : drag == Drag::slip ? String ("Slip clip")
+                           : drag == Drag::stretch ? String ("Stretch clip") : String ("Trim clip"));
+                    return;
+                }
+
+                case Tool::draw:
+                case Tool::paint:
+                {
+                    if (hit.clip != nullptr)
+                    {
+                        timeline.brush = hit.clip->itemID;   // choose what to draw
+                        timeline.selectOnly ({ hit.clip });
+                        return;
+                    }
+
+                    auto* source = clipFor (timeline.brush);
+
+                    if (source == nullptr || anchorLane < 0 || anchorLane >= lanesList.size())
+                    {
+                        if (timeline.onStatus) timeline.onStatus ("Click a clip first to choose what to draw");
+                        return;
+                    }
+
+                    begin (timeline.tool == Tool::draw ? "Draw clip" : "Paint clips");
+                    const auto at = std::max (0.0, snapped (anchorBeat, bypass, {}));
+
+                    if (auto* placed = editing::placeCopy (*source, *lanesList[anchorLane], at))
+                    {
+                        lastPaintEnd = editing::endBeat (*placed);
+                        timeline.selectOnly ({ placed });
+                    }
+
+                    drag = timeline.tool == Tool::paint ? Drag::paint : Drag::none;
+                    used();
+                    return;
+                }
+
+                case Tool::slice:
+                    if (hit.clip != nullptr)
+                    {
+                        begin ("Slice clip");
+                        editing::split (edit, { hit.clip }, snapped (anchorBeat, bypass, { hit.clip }));
+                        used();
+                    }
+                    return;
+
+                case Tool::erase:
+                    begin ("Delete clips");
+                    drag = Drag::erase;
+                    eraseOrMute (hit);
+                    return;
+
+                case Tool::mute:
+                    begin ("Mute clips");
+                    drag = Drag::mute;
+                    eraseOrMute (hit);
+                    return;
+
+                case Tool::zoom:
+                    drag = Drag::zoomRange;
+                    marquee = {};
+                    return;
+            }
+        }
+
+        void eraseOrMute (const Hit& hit)
+        {
+            if (hit.clip == nullptr || touched.contains (hit.clip->itemID))
+                return;
+
+            touched.add (hit.clip->itemID);
+
+            if (drag == Drag::erase)
+            {
+                timeline.selected.removeFirstMatchingValue (hit.clip->itemID);
+                editing::remove ({ hit.clip });
+            }
+            else
+            {
+                editing::toggleMute ({ hit.clip });
+            }
+
+            used();
+        }
+
+        void mouseDrag (const MouseEvent& e) override
+        {
+            const bool bypass = e.mods.isCommandDown();
+            const auto beat = beatAt (e.x);
+
+            switch (drag)
+            {
+                case Drag::move:
+                {
+                    auto* lead = clipFor (primary);
+                    if (lead == nullptr) return;
+
+                    const auto& o = *std::find_if (originals.begin(), originals.end(), [this] (const Original& x) { return x.id == primary; });
+                    editing::Clips moving;
+                    for (const auto& x : originals) if (auto* c = clipFor (x.id)) moving.add (c);
+
+                    const auto wanted = snapped (o.start + (beat - anchorBeat), bypass, moving) - o.start;
+                    const auto laneShift = std::clamp (laneAt (e.y) - anchorLane, -anchorLane, timeline.laneTracks().size() - 1 - anchorLane);
+
+                    if (std::abs (wanted - appliedBeats) > 1.0e-9 || laneShift != appliedLanes)
+                    {
+                        editing::move (moving, wanted - appliedBeats, laneShift - appliedLanes);
+                        appliedBeats = editing::startBeat (*lead) - o.start;
+                        appliedLanes = laneShift;
+                        used();
+                    }
+                    return;
+                }
+
+                case Drag::trimStart:
+                case Drag::trimEnd:
+                case Drag::stretch:
+                case Drag::slip:
+                {
+                    auto* c = clipFor (primary);
+                    if (c == nullptr || originals.empty()) return;
+
+                    const auto& o = originals.front();
+
+                    if (drag == Drag::slip)
+                    {
+                        const auto delta = beat - anchorBeat;
+                        editing::slip (*c, delta - appliedBeats);
+                        appliedBeats = delta;
+                    }
+                    else
+                    {
+                        const auto edge = drag == Drag::trimStart ? o.start : o.end;
+                        const auto to = snapped (edge + (beat - anchorBeat), bypass, { c });
+
+                        if (drag == Drag::trimStart)     editing::trimStart (*c, to);
+                        else if (drag == Drag::trimEnd)  editing::trimEnd (*c, to);
+                        else                             editing::stretchEnd (*c, to);
+                    }
+
+                    used();
+                    return;
+                }
+
+                case Drag::paint:
+                {
+                    auto* source = clipFor (timeline.brush);
+                    const auto lane = std::clamp (anchorLane, 0, timeline.laneTracks().size() - 1);
+
+                    // Copies one after another, as far as the pointer has gone.
+                    while (source != nullptr && beat >= lastPaintEnd)
+                    {
+                        auto* placed = editing::placeCopy (*source, *timeline.laneTracks()[lane], lastPaintEnd);
+                        if (placed == nullptr) break;
+                        lastPaintEnd = editing::endBeat (*placed);
+                        used();
+                    }
+                    return;
+                }
+
+                case Drag::erase:
+                case Drag::mute:
+                    eraseOrMute (clipAt (e.getPosition()));
+                    return;
+
+                case Drag::marquee:
+                case Drag::zoomRange:
+                    marquee = Rectangle<int> (downAt, e.getPosition());
+                    if (drag == Drag::zoomRange) marquee = marquee.withY (0).withHeight (getHeight());
+                    selectInMarquee (e.mods.isShiftDown());
+                    repaint();
+                    return;
+
+                case Drag::none:
+                    return;
+            }
+        }
+
+        void selectInMarquee (bool add)
+        {
+            if (drag != Drag::marquee)
+                return;
+
+            editing::Clips inside = add ? timeline.getSelectedClips() : editing::Clips{};
+            const auto lanesList = timeline.laneTracks();
+
+            for (int i = 0; i < lanesList.size(); ++i)
+            {
+                const auto y = i * laneHeight - timeline.scrollY;
+
+                if (y + laneHeight < marquee.getY() || y > marquee.getBottom())
+                    continue;
+
+                for (auto* c : lanesList[i]->getClips())
+                {
+                    const auto x0 = timeline.xAtBeat (editing::startBeat (*c)) - static_cast<float> (getX());
+                    const auto x1 = timeline.xAtBeat (editing::endBeat (*c)) - static_cast<float> (getX());
+
+                    if (x1 >= static_cast<float> (marquee.getX()) && x0 <= static_cast<float> (marquee.getRight()))
+                        inside.addIfNotAlreadyThere (c);
+                }
+            }
+
+            timeline.selectOnly (inside);
+        }
+
+        void mouseUp (const MouseEvent& e) override
+        {
+            if (drag == Drag::zoomRange)
+            {
+                if (marquee.getWidth() > 8)
+                {
+                    // Fill the view with the dragged range.
+                    const auto from = beatAt (marquee.getX()), to = beatAt (marquee.getRight());
+                    timeline.pixelsPerBeat = std::clamp (getWidth() / std::max (to - from, 1.0e-3), minPixelsPerBeat, maxPixelsPerBeat);
+                    timeline.setScrollBeat (from);
+                }
+                else
+                {
+                    timeline.setZoom (timeline.pixelsPerBeat * (e.mods.isAltDown() ? 0.5 : 2.0), beatAt (e.x));
+                }
+
+                used();
+            }
+
+            drag = Drag::none;
+            marquee = {};
+            repaint();
+        }
+
+        void paintOverChildren (Graphics& g) override
+        {
+            if (! marquee.isEmpty())
+            {
+                g.setColour (theme::accent.withAlpha (0.12f));
+                g.fillRect (marquee);
+                g.setColour (theme::accent.withAlpha (0.6f));
+                g.drawRect (marquee, 1);
+            }
+        }
     };
 
     //==============================================================================================
@@ -363,6 +753,143 @@ namespace carthage::ui
         lanes->repaint();
         headers->repaint();
         updateScrollBars();
+    }
+
+    //==============================================================================================
+    void Timeline::setTool (Tool t)
+    {
+        tool = t;
+        lanes->setMouseCursor (MouseCursor::NormalCursor);
+    }
+
+    bool Timeline::isSelected (const tracktion::Clip& c) const   { return selected.contains (c.itemID); }
+
+    editing::Clips Timeline::getSelectedClips() const
+    {
+        editing::Clips clips;
+
+        for (const auto& id : selected)
+            if (auto* c = tracktion::findClipForID (session.getEdit(), id))
+                clips.add (c);
+
+        return clips;
+    }
+
+    void Timeline::selectOnly (const editing::Clips& clips)
+    {
+        selected.clearQuick();
+
+        for (auto* c : clips)
+            selected.add (c->itemID);
+
+        lanes->repaint();
+
+        if (onSelectionChanged)
+            onSelectionChanged();
+    }
+
+    void Timeline::clearSelection()   { selectOnly ({}); }
+
+    double Timeline::playheadBeat() const
+    {
+        return secondsToBeats (session.getEdit().getTransport().getPosition().inSeconds());
+    }
+
+    time::SnapTargets Timeline::snapTargets (const editing::Clips& excluding) const
+    {
+        time::SnapTargets t;
+
+        for (auto* track : laneTracks())
+            for (auto* c : track->getClips())
+                if (! excluding.contains (c))
+                {
+                    t.clipEdges.push_back (editing::startBeat (*c));
+                    t.clipEdges.push_back (editing::endBeat (*c));
+                }
+
+        for (auto* m : session.getEdit().getMarkerManager().getMarkers())
+            t.markers.push_back (editing::startBeat (*m));
+
+        t.playhead = playheadBeat();
+        return t;
+    }
+
+    void Timeline::splitAtPlayhead()
+    {
+        auto clips = getSelectedClips();
+
+        if (clips.isEmpty())   // nothing selected: every clip under the playhead
+            for (auto* t : laneTracks())
+                for (auto* c : t->getClips())
+                    if (editing::startBeat (*c) < playheadBeat() && editing::endBeat (*c) > playheadBeat())
+                        clips.add (c);
+
+        if (clips.isEmpty())
+            return;
+
+        editing::begin (session.getEdit(), editing::named ("Split", clips.size()));
+        editing::split (session.getEdit(), clips, playheadBeat());
+    }
+
+    void Timeline::duplicateSelection()
+    {
+        const auto clips = getSelectedClips();
+
+        if (clips.isEmpty())
+            return;
+
+        editing::begin (session.getEdit(), editing::named ("Duplicate", clips.size()));
+        selectOnly (editing::duplicate (clips));
+    }
+
+    void Timeline::deleteSelection()
+    {
+        const auto clips = getSelectedClips();
+
+        if (clips.isEmpty())
+            return;
+
+        editing::begin (session.getEdit(), editing::named ("Delete", clips.size()));
+        selected.clearQuick();
+        editing::remove (clips);
+    }
+
+    void Timeline::nudgeSelection (int steps)
+    {
+        const auto clips = getSelectedClips();
+
+        if (clips.isEmpty())
+            return;
+
+        editing::begin (session.getEdit(), editing::named ("Nudge", clips.size()));
+        editing::move (clips, steps * grid.stepBeats (beatsPerBar(), pixelsPerBeat), 0);
+    }
+
+    void Timeline::addMarkerAtPlayhead()
+    {
+        editing::begin (session.getEdit(), "Add marker");
+        editing::addMarker (session.getEdit(), playheadBeat());
+    }
+
+    void Timeline::loopSelection()
+    {
+        const auto clips = getSelectedClips();
+
+        if (clips.isEmpty())
+            return;
+
+        auto from = editing::startBeat (*clips.getFirst()), to = editing::endBeat (*clips.getFirst());
+
+        for (auto* c : clips)
+        {
+            from = std::min (from, editing::startBeat (*c));
+            to = std::max (to, editing::endBeat (*c));
+        }
+
+        editing::begin (session.getEdit(), "Loop selection");
+        editing::setLoopRange (session.getEdit(), from, to);
+        session.getEdit().getTransport().looping = true;
+        ruler->repaint();
     }
 
     //==============================================================================================

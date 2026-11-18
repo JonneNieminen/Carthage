@@ -23,9 +23,9 @@ namespace carthage::app
         StringArray getMenuBarNames() override
         {
            #if JUCE_MAC
-            return { "Transport", "Input", "Plugin" };
+            return { "Transport", "Input", "Plugin", "Edit", "Tools" };
            #else
-            return { "Transport", "Input", "Plugin", "Help" };   // macOS has the app menu for this
+            return { "Transport", "Input", "Plugin", "Edit", "Tools", "Help" };   // macOS has the app menu for this
            #endif
         }
 
@@ -51,6 +51,21 @@ namespace carthage::app
                     m.addCommandItem (&commands, commands::bypassPlugin);
                     break;
                 case 3:
+                    for (auto id : { commands::undo, commands::redo })
+                        m.addCommandItem (&commands, id);
+                    m.addSeparator();
+                    for (auto id : { commands::splitAtPlayhead, commands::duplicateClips, commands::deleteClips,
+                                     commands::nudgeLeft, commands::nudgeRight })
+                        m.addCommandItem (&commands, id);
+                    m.addSeparator();
+                    for (auto id : { commands::addMarker, commands::loopSelection, commands::toggleGrid })
+                        m.addCommandItem (&commands, id);
+                    break;
+                case 4:
+                    for (auto id : commands::tools())
+                        m.addCommandItem (&commands, id);
+                    break;
+                case 5:
                     m.addCommandItem (&commands, commands::checkForUpdates);
                     break;
                 default:

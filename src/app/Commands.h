@@ -25,12 +25,28 @@ namespace carthage::app
             measureLatency,
             checkForUpdates,   // handled by the application, not the window (app menu)
             pluginBrowser,
+
+            // Timeline tools (F7). In this order: tools() maps them to the timeline's Tool values.
+            toolSelect, toolDraw, toolPaint, toolSlice, toolDelete, toolMute, toolZoom, toolStretch,
+
+            // Timeline edits
+            undo, redo, toggleGrid, splitAtPlayhead, duplicateClips, deleteClips,
+            nudgeLeft, nudgeRight, addMarker, loopSelection,
         };
+
+        /** The tool commands, in Timeline::Tool order. */
+        inline juce::Array<juce::CommandID> tools()
+        {
+            return { toolSelect, toolDraw, toolPaint, toolSlice, toolDelete, toolMute, toolZoom, toolStretch };
+        }
 
         inline juce::Array<juce::CommandID> all()
         {
             return { record, playStop, returnToStart, toggleMonitoring, choosePlugin,
-                     openPluginEditor, bypassPlugin, audioSettings, measureLatency, pluginBrowser };
+                     openPluginEditor, bypassPlugin, audioSettings, measureLatency, pluginBrowser,
+                     toolSelect, toolDraw, toolPaint, toolSlice, toolDelete, toolMute, toolZoom, toolStretch,
+                     undo, redo, toggleGrid, splitAtPlayhead, duplicateClips, deleteClips,
+                     nudgeLeft, nudgeRight, addMarker, loopSelection };
         }
 
         /** Commands the application itself performs, whatever window is in front. */
@@ -80,6 +96,27 @@ namespace carthage::app
                     info.setInfo ("Settings", "Audio interface, latency and updates", "Settings", 0);
                     info.addDefaultKeypress (',', primary);
                     break;
+                // Tools: a tap switches; holding the key switches until it is released (F7).
+                case toolSelect:  info.setInfo ("Select", "Select, move and trim clips; drag an edge to trim, with Option/Alt to stretch, with Cmd/Ctrl to slip", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('e', 0); break;
+                case toolDraw:    info.setInfo ("Draw", "Place a copy of the last clip you used where you click", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('p', 0); break;
+                case toolPaint:   info.setInfo ("Paint", "Drag to place copies of the last clip one after another", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('b', 0); break;
+                case toolSlice:   info.setInfo ("Slice", "Click a clip to cut it in two there", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('c', 0); break;
+                case toolDelete:  info.setInfo ("Delete", "Click or drag over clips to delete them", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('d', 0); break;
+                case toolMute:    info.setInfo ("Mute", "Click or drag over clips to mute or unmute them", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('t', 0); break;
+                case toolZoom:    info.setInfo ("Zoom", "Click to zoom in, Option/Alt-click to zoom out, drag across a range to fill the view with it", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('z', 0); break;
+                case toolStretch: info.setInfo ("Stretch", "Drag a clip's edge to time-stretch it", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('s', 0); break;
+
+                case undo:            info.setInfo ("Undo", "Undo the last edit", "Edit", 0); info.addDefaultKeypress ('z', primary); break;
+                case redo:            info.setInfo ("Redo", "Redo the edit you undid", "Edit", 0); info.addDefaultKeypress ('z', primary | juce::ModifierKeys::shiftModifier); break;
+                case toggleGrid:      info.setInfo ("Snap to grid", "Turn the grid on or off", "Edit", 0); info.addDefaultKeypress ('g', 0); break;
+                case splitAtPlayhead: info.setInfo ("Split at playhead", "Cut the selected clips (or every clip under the playhead) in two at the playhead", "Edit", 0); info.addDefaultKeypress ('e', primary); break;
+                case duplicateClips:  info.setInfo ("Duplicate", "Copy the selected clips right after themselves", "Edit", 0); info.addDefaultKeypress ('d', primary); break;
+                case deleteClips:     info.setInfo ("Delete clips", "Delete the selected clips", "Edit", 0); info.addDefaultKeypress (KP::deleteKey, 0); info.addDefaultKeypress (KP::backspaceKey, 0); break;
+                case nudgeLeft:       info.setInfo ("Nudge left", "Move the selected clips one grid step earlier", "Edit", 0); info.addDefaultKeypress (KP::leftKey, 0); break;
+                case nudgeRight:      info.setInfo ("Nudge right", "Move the selected clips one grid step later", "Edit", 0); info.addDefaultKeypress (KP::rightKey, 0); break;
+                case addMarker:       info.setInfo ("Add marker", "Add a marker at the playhead", "Edit", 0); info.addDefaultKeypress ('m', juce::ModifierKeys::shiftModifier); break;
+                case loopSelection:   info.setInfo ("Loop selection", "Loop the range the selected clips cover", "Edit", 0); info.addDefaultKeypress ('l', primary); break;
+
                 case pluginBrowser:
                     info.setInfo ("Show plugins", "Show or hide the plugin browser", "Plugin", 0);
                     info.addDefaultKeypress (KP::F8Key, 0);

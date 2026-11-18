@@ -69,6 +69,19 @@ namespace carthage::ui
         PluginBrowser browser;
         bool browserOpen = true;
 
+        // Toolbar: the tools (labelled by their keys), the grid menu and the snap toggle.
+        juce::OwnedArray<juce::TextButton> toolButtons;
+        juce::ComboBox gridMenu;
+        juce::TextButton snapButton { "Snap" };
+        void refreshToolbar();
+        void showGridMenu();
+
+        // Hold-to-switch (F7): the tool before a held key, and whether the tool was used meanwhile.
+        juce::CommandID heldToolCommand = 0;
+        Timeline::Tool toolBeforeHold = Timeline::Tool::select;
+        bool usedWhileHeld = false;
+        void toolCommand (const InvocationInfo&);
+
         std::unique_ptr<PluginWindow> pluginWindow;
         std::optional<double> recordingFrom;
         double lastFrameTime = 0.0;

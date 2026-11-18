@@ -11,6 +11,15 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- A timeline with eight lanes, a bar and beat ruler, and a grid (1/4 beat by default; bar to 1/64
+  beat, triplet, dotted, or adaptive to the zoom), switched with G or the Snap button. Clips snap to
+  the grid, to other clips' edges, to markers and to the playhead; hold Cmd (Ctrl on Windows) to
+  move freely.
+- Tools on the toolbar and on their keys: E select, P draw, B paint, C slice, D delete, T mute,
+  Z zoom, S stretch. Tap a key to switch; hold it to use the tool until you let go. Drag a clip's
+  edge to trim it, with Option/Alt to stretch it, with Cmd/Ctrl to slip its audio.
+- Undo and Redo for every edit; split at the playhead, duplicate, delete, nudge with the arrow keys,
+  markers, and loop the selection, from the Edit menu and their keys.
 - A plugin browser on the left (F8): search by any part of a name or maker, filter by
   instruments or effects, format and maker, star favourites, and find recently used plugins at the
   top. Double-click a plugin, press Enter, or drag it onto the plugin card to use it.

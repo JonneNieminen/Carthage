@@ -2,6 +2,7 @@
 
 #include "theme/Theme.h"
 
+#include <engine/Editing.h>
 #include <engine/Session.h>
 #include <engine/time/Grid.h>
 
@@ -26,6 +27,32 @@ namespace carthage::ui
     public:
         explicit Timeline (engine::Session&);
         ~Timeline() override;
+
+        /** The tools (F7), in the command table's order (app::commands::tools()). */
+        enum class Tool { select, draw, paint, slice, erase, mute, zoom, stretch };
+
+        void setTool (Tool);
+        Tool getTool() const noexcept   { return tool; }
+
+        /** Called when a tool did something with the mouse (a held tool key then reverts on release). */
+        std::function<void()> onToolUsed;
+
+        /** A short message for the status line ("Click a clip first to choose what to draw"). */
+        std::function<void (const juce::String&)> onStatus;
+
+        /** Selection: clips by their ids, so it survives undo. */
+        editing::Clips getSelectedClips() const;
+        void selectOnly (const editing::Clips&);
+        void clearSelection();
+        std::function<void()> onSelectionChanged;
+
+        /** The edit operations the keyboard drives, each one named undo step. */
+        void splitAtPlayhead();
+        void duplicateSelection();
+        void deleteSelection();
+        void nudgeSelection (int steps);
+        void addMarkerAtPlayhead();
+        void loopSelection();
 
         /** Once per frame: where the playhead is, and the start of the take in progress (if any). */
         void setPlayhead (double seconds, std::optional<double> recordingFrom);
@@ -60,6 +87,9 @@ namespace carthage::ui
 
         engine::Session& session;
         juce::ValueTree editState;
+        Tool tool = Tool::select;
+        juce::Array<tracktion::EditItemID> selected;
+        tracktion::EditItemID brush;   // the clip the draw and paint tools place
         time::Grid grid;
         double pixelsPerBeat = 24.0;
         double scrollBeat = 0.0;
@@ -84,6 +114,9 @@ namespace carthage::ui
         juce::Colour laneColour (int laneIndex) const;
         double secondsToBeats (double seconds) const;
         double beatsToSeconds (double beats) const;
+        double playheadBeat() const;
+        time::SnapTargets snapTargets (const editing::Clips& excluding) const;
+        bool isSelected (const tracktion::Clip&) const;
         void repaintLanes();
         void updateScrollBars();
         juce::Rectangle<int> lanesArea() const;
