@@ -42,6 +42,8 @@ namespace carthage::app
                     m.addCommandItem (&commands, commands::closeProject);
                     m.addCommandItem (&commands, commands::saveProject);
                     m.addCommandItem (&commands, commands::saveProjectAs);
+                    m.addSeparator();
+                    m.addCommandItem (&commands, commands::collectSamples);
                    #if ! JUCE_MAC
                     m.addSeparator();   // macOS has these in the app menu
                     m.addCommandItem (&commands, commands::audioSettings);
@@ -343,6 +345,14 @@ namespace carthage::app
                 case commands::saveProject:     save ({}); return true;
                 case commands::saveProjectAs:   saveAs ({}); return true;
                 case commands::closeProject:    closeProject(); return true;
+                case commands::collectSamples:
+                    session->collectSamples ([this] (Result r, int copied)
+                    {
+                        report (r, copied == 0 ? String ("Every sample is already in the project")
+                                               : copied == 1 ? String ("Copied a sample into the project")
+                                                             : "Copied " + String (copied) + " samples into the project");
+                    });
+                    return true;
                 case commands::nextProject:
                 case commands::previousProject:
                 {

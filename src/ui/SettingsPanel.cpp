@@ -24,7 +24,8 @@ namespace carthage::ui
         title.setText ("Settings", dontSendNotification);
 
         for (auto [label, text] : { std::pair { &interfaceHeading, "Interface" }, { &recordingHeading, "Recording" },
-                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &updatesHeading, "Updates" },
+                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" },
+                                    { &updatesHeading, "Updates" },
                                     { &shortcutsHeading, "Keyboard shortcuts" } })
         {
             styleLabel (*label, theme::textSm, theme::muted, true);
@@ -69,7 +70,16 @@ namespace carthage::ui
         for (auto* c : { &inputDevice, &outputDevice, &rate, &buffer, &format, &loopOut, &loopIn })
             body.addAndMakeVisible (*c);
 
-        for (auto* c : std::initializer_list<Component*> { &versionLabel, &versionValue, &checkNow, &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
+        // Projects: where samples live (W30).
+        styleLabel (copySamplesHint, theme::textSm, theme::muted);
+        copySamplesHint.setJustificationType (Justification::topLeft);
+        copySamplesHint.setText ("Samples you paste or drop into a project are copied into its Samples folder, so the folder "
+                                 "holds everything the project needs. Off: they stay where they are.", dontSendNotification);
+        copySamples.setToggleState (session.getAlwaysCopySamples(), dontSendNotification);
+        copySamples.setTooltip ("File > Collect samples into project does the same for a project now");
+        copySamples.onClick = [this] { session.setAlwaysCopySamples (copySamples.getToggleState()); };
+
+        for (auto* c : std::initializer_list<Component*> { &projectsHeading, &copySamples, &copySamplesHint, &versionLabel, &versionValue, &checkNow, &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
                                                            &latencyHeading, &loadHeading, &inputDeviceLabel, &outputDeviceLabel,
                                                            &rateLabel, &bufferLabel, &formatLabel, &reportedLabel, &reportedValue,
                                                            &measuredLabel, &measuredValue, &loopOutLabel, &loopInLabel, &loopHint,
@@ -404,6 +414,10 @@ namespace carthage::ui
         dropoutsLabel.setBounds (drops.removeFromLeft (labelWidth));
         resetDropouts.setBounds (drops.removeFromRight (64));
         dropoutsValue.setBounds (drops);
+
+        heading (projectsHeading);
+        copySamples.setBounds (r.removeFromTop (rowHeight));
+        copySamplesHint.setBounds (r.removeFromTop (50));
 
         heading (updatesHeading);
         {

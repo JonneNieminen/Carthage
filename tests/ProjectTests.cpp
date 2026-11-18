@@ -115,7 +115,7 @@ public:
             const auto copyFile = project::fileIn (copyFolder);
 
             const auto snap = project::snapshot (e, copyFile, opened.info, songFolder);
-            expect (project::copyRecordings (songFolder, copyFolder).wasOk());
+            expect (project::copyMedia (songFolder, copyFolder).wasOk());
             expect (project::write (snap, copyFile).wasOk());
             expect (project::recordingsIn (copyFolder).getChildFile ("Take 1.wav").existsAsFile(), "the take was copied");
 
@@ -131,6 +131,26 @@ public:
             project::moveTo (e, copyFile, songFolder);
             auto* live = dynamic_cast<tracktion::AudioClipBase*> (editing::lanes (e)[0]->getClips()[0]);
             expect (live->getAudioFile().getFile() == project::recordingsIn (copyFolder).getChildFile ("Take 1.wav"));
+        }
+
+        beginTest ("Collected samples: names are kept, a clash is numbered, Save as carries them along");
+        {
+            const auto samples = project::samplesIn (root.getChildFile ("Collecting"));
+            samples.createDirectory();
+            const auto other = writeTone (root.getChildFile ("Other place/Kick.wav"), 0.3);   // a different Kick: another size
+
+            const auto first = project::collectTarget (samples, sample, {});
+            expectEquals (first.getFileName(), juce::String ("Kick.wav"), "a sample keeps its name");
+            expect (sample.copyFileTo (first));
+            expect (project::collectTarget (samples, sample, {}) == first, "the same file already there is reused");
+            expectEquals (project::collectTarget (samples, other, {}).getFileName(), juce::String ("Kick 2.wav"),
+                          "a different file with the same name is numbered");
+            expectEquals (project::collectTarget (samples, other, { samples.getChildFile ("Kick 2.wav") }).getFileName(), juce::String ("Kick 3.wav"),
+                          "and so is one taken by another sample in the same batch");
+
+            const auto moved = root.getChildFile ("Collected elsewhere");
+            expect (project::copyMedia (samples.getParentDirectory(), moved).wasOk());
+            expect (project::samplesIn (moved).getChildFile ("Kick.wav").existsAsFile(), "Save as copies the Samples folder");
         }
 
         beginTest ("A file from a newer Carthage is refused, an older or plain edit opens, junk is refused");

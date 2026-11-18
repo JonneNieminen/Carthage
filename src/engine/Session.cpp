@@ -855,7 +855,7 @@ namespace carthage::engine
 
         writer.post ([snapshot, file, oldFolder, folder]
                      {
-                         if (auto r = project::copyRecordings (oldFolder, folder); r.failed())
+                         if (auto r = project::copyMedia (oldFolder, folder); r.failed())
                              return r;
 
                          return project::write (snapshot, file);
@@ -890,6 +890,102 @@ namespace carthage::engine
 
                          if (done) done (r);
                      });
+    }
+
+    void Session::collectSamples (std::function<void (juce::Result, int)> done)
+    {
+        auto& p = front();
+        const auto folder = p.file.getParentDirectory();
+        const auto samples = project::samplesIn (folder);
+
+        struct Move { tracktion::EditItemID clip; juce::File from, to; };
+        std::vector<Move> moves;
+        juce::Array<juce::File> targets;
+
+        for (auto* lane : editing::lanes (*p.edit))
+        {
+            for (auto* c : lane->getClips())
+            {
+                auto* audio = dynamic_cast<tracktion::AudioClipBase*> (c);
+                const auto from = audio != nullptr ? audio->getOriginalFile() : juce::File();
+
+                if (! from.existsAsFile() || from.isAChildOf (folder))
+                    continue;
+
+                // The same file used by several clips is copied once.
+                auto to = juce::File();
+
+                for (const auto& m : moves)
+                    if (m.from == from)
+                        to = m.to;
+
+                if (to == juce::File())
+                {
+                    to = project::collectTarget (samples, from, targets);
+                    targets.add (to);
+                }
+
+                moves.push_back ({ c->itemID, from, to });
+            }
+        }
+
+        if (moves.empty())
+        {
+            if (done) done (juce::Result::ok(), 0);
+            return;
+        }
+
+        auto* target = &p;
+
+        writer.post ([moves, samples]
+                     {
+                         if (! samples.createDirectory())
+                             return juce::Result::fail ("Carthage could not create " + samples.getFullPathName());
+
+                         for (const auto& m : moves)
+                             if (! m.to.existsAsFile() && ! m.from.copyFileTo (m.to))
+                                 return juce::Result::fail ("Carthage could not copy " + m.from.getFileName() + " into the project");
+
+                         return juce::Result::ok();
+                     },
+                     [this, target, moves, done] (juce::Result r)
+                     {
+                         int copied = 0;
+
+                         if (r.wasOk() && isOpen (target))
+                         {
+                             auto& edit = *target->edit;
+                             editing::begin (edit, "Collect samples");
+                             juce::Array<juce::File> counted;
+
+                             for (const auto& m : moves)
+                             {
+                                 auto* audio = dynamic_cast<tracktion::AudioClipBase*> (tracktion::findClipForID (edit, m.clip));
+
+                                 if (audio == nullptr || audio->getOriginalFile() != m.from)
+                                     continue;   // removed or changed while the files were copied
+
+                                 audio->getSourceFileReference().setToFile (m.to, tracktion::SourceFileReference::PathStyle::alwaysRelative, false);
+                                 audio->sourceMediaChanged();
+                                 counted.addIfNotAlreadyThere (m.to);
+                             }
+
+                             copied = counted.size();
+                             projectStateChanged();
+                         }
+
+                         if (done) done (r, copied);
+                     });
+    }
+
+    bool Session::getAlwaysCopySamples() const
+    {
+        return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("alwaysCopySamples", false);
+    }
+
+    void Session::setAlwaysCopySamples (bool shouldCopy)
+    {
+        engine->getPropertyStorage().getPropertiesFile().setValue ("alwaysCopySamples", shouldCopy);
     }
 
     bool Session::isOpen (const Project* p) const

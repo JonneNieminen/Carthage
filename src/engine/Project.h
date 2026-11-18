@@ -32,6 +32,14 @@ namespace carthage::project
     /** The folder takes are recorded into. */
     juce::File recordingsIn (const juce::File& folder);
 
+    /** The folder samples are collected into (W30, "Collect samples into project"). */
+    juce::File samplesIn (const juce::File& folder);
+
+    /** Where `source` goes in `samplesFolder`: its own name, numbered if that name is taken by a
+        different file on disk or by another target in `taken`. The same file already collected
+        (same name and size) keeps its name. */
+    juce::File collectTarget (const juce::File& samplesFolder, const juce::File& source, const juce::Array<juce::File>& taken);
+
     /** A new, empty edit whose file is `projectFile`, with Carthage's path rule (W32). */
     std::unique_ptr<tracktion::Edit> createEdit (tracktion::Engine&, const juce::File& projectFile);
 
@@ -70,8 +78,8 @@ namespace carthage::project
         their audio from there. Message thread. */
     void moveTo (tracktion::Edit&, const juce::File& newFile, const juce::File& oldFolder);
 
-    /** Copies `from`'s Recordings folder into `to`. Any thread. */
-    juce::Result copyRecordings (const juce::File& fromFolder, const juce::File& toFolder);
+    /** Copies `from`'s Recordings and Samples folders into `to` (Save as). Any thread. */
+    juce::Result copyMedia (const juce::File& fromFolder, const juce::File& toFolder);
 
     /** Saves and copies off the message thread, one job at a time, and reports back on the
         message thread. Destroying it waits for the job in hand. */

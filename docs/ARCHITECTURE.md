@@ -144,6 +144,12 @@ packaging/           macos/ (sign.sh, make-dmg.sh, read-me), windows/ (Carthage.
   lanes; Tracktion makes new ids and writes the paths relative to the new project where it can. A
   clip pasted from another project keeps pointing at that project's file until its samples are
   collected.
+- **Collected samples** (`Session::collectSamples`, W30). Clips may play files from anywhere; File >
+  Collect samples into project copies every file the front project uses from outside its folder
+  into `<project>/Samples/` (keeping names, numbering a clash with a different file of the same name,
+  `project::collectTarget`) on the writer thread, then points the clips at the copies as one undo
+  step. The "Copy samples into the project" setting runs it after every paste (and, with the sample
+  browser, every drop). Save as copies `Samples/` along with `Recordings/` (`project::copyMedia`).
 - **The timeline across tabs.** Waveform thumbnails belong to audio files, not projects, so they are
   kept when the front project changes; resolved clip paths are keyed by project file.
 

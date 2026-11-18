@@ -946,6 +946,9 @@ namespace carthage::ui
         auto& edit = session.getEdit();
         editing::begin (edit, editing::named ("Paste", copied->count()));
         selectOnly (editing::paste (edit, *copied, secondsToBeats (session.getPositionSeconds())));
+
+        if (session.getAlwaysCopySamples())
+            session.collectSamples();   // clips from another project bring their files along (W30)
     }
 
     void Timeline::nudgeSelection (int steps)

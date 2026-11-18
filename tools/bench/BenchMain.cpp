@@ -350,7 +350,27 @@ namespace
             check (pasted, "it lands in Other on the same lane and finds its audio in Song's folder");
             check (onMessageThread ([this] { return session->describeProject (1).unsaved && ! session->describeProject (0).unsaved; }),
                    "Other is unsaved, Song untouched");
-            onMessageThreadVoid ([this] { session->getEdit().getUndoManager().undo(); });
+
+            say ("Collect samples into Other");
+            const auto collected = await ([this] (auto done)
+            {
+                session->collectSamples ([done] (Result r, int n)
+                {
+                    done (r.failed() ? r : n == 1 ? Result::ok() : Result::fail ("copied " + String (n)));
+                });
+            });
+            check (collected.wasOk(), "one sample copied: " + (collected.wasOk() ? String ("yes") : collected.getErrorMessage()));
+            check (onMessageThread ([this]
+                   {
+                       const auto samples = carthage::project::samplesIn (session->getProjectFolder());
+                       for (auto* lane : editing::lanes (session->getEdit()))
+                           for (auto* c : lane->getClips())
+                               if (auto* audio = dynamic_cast<tracktion::AudioClipBase*> (c))
+                                   return audio->getOriginalFile().isAChildOf (samples) && audio->getOriginalFile().existsAsFile();
+                       return false;
+                   }),
+                   "the clip now plays the copy in Other's Samples folder");
+            onMessageThreadVoid ([this] { auto& um = session->getEdit().getUndoManager(); um.undo(); um.undo(); });
             onMessageThreadVoid ([this] { session->showProject (1); session->closeProject(); });   // Other
             onMessageThreadVoid ([this] { session->newProject (folder.getChildFile ("Projects/Untitled 2")); });
             onMessageThreadVoid ([this] { session->showProject (0); session->closeProject(); });   // Song

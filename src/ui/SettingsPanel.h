@@ -46,7 +46,9 @@ namespace carthage::ui
     private:
         engine::Session& session;
 
-        juce::Label title, interfaceHeading, recordingHeading, latencyHeading, loadHeading, updatesHeading, updatesHint, shortcutsHeading;
+        juce::Label title, interfaceHeading, recordingHeading, latencyHeading, loadHeading, updatesHeading, updatesHint, shortcutsHeading,
+                    projectsHeading, copySamplesHint;
+        juce::ToggleButton copySamples { "Copy samples into the project" };
         ShortcutEditor shortcuts;
         juce::Viewport viewport;
         juce::Component body;

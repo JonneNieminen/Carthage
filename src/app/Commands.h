@@ -41,6 +41,7 @@ namespace carthage::app
             closeProject, minimiseWindow, toggleFullScreen,
             nextProject, previousProject,
             copyClips, cutClips, pasteClips,
+            collectSamples,
         };
 
         /** The tool commands, in Timeline::Tool order. */
@@ -63,7 +64,7 @@ namespace carthage::app
         inline juce::Array<juce::CommandID> application()
         {
             return { checkForUpdates, newProject, openProject, saveProject, saveProjectAs, closeProject,
-                     minimiseWindow, toggleFullScreen, nextProject, previousProject };
+                     minimiseWindow, toggleFullScreen, nextProject, previousProject, collectSamples };
         }
 
         /** Name, description, category and default keys. Flags (enabled, ticked) are added by the
@@ -160,6 +161,9 @@ namespace carthage::app
                    #else
                     info.addDefaultKeypress (KP::F11Key, 0);
                    #endif
+                    break;
+                case collectSamples:
+                    info.setInfo ("Collect samples into project", "Copy the samples this project uses from other folders into its own Samples folder", "File", 0);
                     break;
                 case nextProject:
                     info.setInfo ("Next project", "Bring the next tab to the front", "Window", 0);

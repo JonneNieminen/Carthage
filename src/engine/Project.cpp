@@ -179,32 +179,59 @@ namespace carthage::project
                     clip->sourceMediaChanged();
     }
 
-    juce::Result copyRecordings (const juce::File& fromFolder, const juce::File& toFolder)
-    {
-        const auto from = recordingsIn (fromFolder);
+    juce::File samplesIn (const juce::File& folder)   { return folder.getChildFile ("Samples"); }
 
-        if (! from.isDirectory() || fromFolder == toFolder)
+    juce::File collectTarget (const juce::File& samplesFolder, const juce::File& source, const juce::Array<juce::File>& taken)
+    {
+        auto target = samplesFolder.getChildFile (source.getFileName());
+
+        for (int n = 2;; ++n)
+        {
+            const bool sameFileThere = target.existsAsFile() && target.getSize() == source.getSize();
+
+            if (! taken.contains (target) && (! target.existsAsFile() || sameFileThere))
+                return target;
+
+            target = samplesFolder.getChildFile (source.getFileNameWithoutExtension() + " " + juce::String (n) + source.getFileExtension());
+        }
+    }
+
+    namespace
+    {
+        juce::Result copyFolder (const juce::File& from, const juce::File& to)
+        {
+            if (! from.isDirectory())
+                return juce::Result::ok();
+
+            if (! to.createDirectory())
+                return juce::Result::fail ("Carthage could not create " + to.getFullPathName());
+
+            for (const auto& entry : juce::RangedDirectoryIterator (from, true, "*", juce::File::findFiles))
+            {
+                const auto target = to.getChildFile (entry.getFile().getRelativePathFrom (from));
+
+                if (target.existsAsFile() && target.getSize() == entry.getFileSize())
+                    continue;
+
+                target.getParentDirectory().createDirectory();
+
+                if (! entry.getFile().copyFileTo (target))
+                    return juce::Result::fail ("Carthage could not copy " + entry.getFile().getFileName() + " into the project");
+            }
+
+            return juce::Result::ok();
+        }
+    }
+
+    juce::Result copyMedia (const juce::File& fromFolder, const juce::File& toFolder)
+    {
+        if (fromFolder == toFolder)
             return juce::Result::ok();
 
-        const auto to = recordingsIn (toFolder);
+        if (auto r = copyFolder (recordingsIn (fromFolder), recordingsIn (toFolder)); r.failed())
+            return r;
 
-        if (! to.createDirectory())
-            return juce::Result::fail ("Carthage could not create " + to.getFullPathName());
-
-        for (const auto& entry : juce::RangedDirectoryIterator (from, true, "*", juce::File::findFiles))
-        {
-            const auto target = to.getChildFile (entry.getFile().getRelativePathFrom (from));
-
-            if (target.existsAsFile() && target.getSize() == entry.getFileSize())
-                continue;
-
-            target.getParentDirectory().createDirectory();
-
-            if (! entry.getFile().copyFileTo (target))
-                return juce::Result::fail ("Carthage could not copy " + entry.getFile().getFileName() + " into the project");
-        }
-
-        return juce::Result::ok();
+        return copyFolder (samplesIn (fromFolder), samplesIn (toFolder));
     }
 
     //==============================================================================================

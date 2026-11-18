@@ -137,6 +137,16 @@ namespace carthage::engine
             copying its recordings along, and carries on there. */
         void saveAs (const juce::File& folder, std::function<void (juce::Result)> done);
 
+        /** Copies every audio file the front project uses from outside its folder into its
+            Samples folder, then points the clips at the copies, as one undo step ("Collect
+            samples", W30). The copying runs on the writer; `done` gets how many files were copied.
+            Files that no longer exist are left as they are. */
+        void collectSamples (std::function<void (juce::Result, int)> done = {});
+
+        /** Settings: collect a project's samples whenever clips from outside it arrive (W30). */
+        bool getAlwaysCopySamples() const;
+        void setAlwaysCopySamples (bool);
+
         /** Quitting: waits for writes in hand and records that every project closed cleanly. */
         void close();
 
