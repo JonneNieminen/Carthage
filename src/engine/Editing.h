@@ -59,6 +59,10 @@ namespace carthage::editing
         the edit could not find their audio. Call once on every edit Carthage creates or loads. */
     void useConsistentFilePaths (tracktion::Edit&);
 
+    /** The same rule as a resolver for an edit not built yet (Edit::Options::filePathResolver),
+        so clips find their files while the edit loads. `editFile` is asked each time. */
+    tracktion::Edit::FilePathResolver consistentFilePaths (std::function<juce::File()> editFile);
+
     /** Lanes in order: the edit's audio tracks. */
     juce::Array<tracktion::AudioTrack*> lanes (tracktion::Edit&);
     int laneOf (const tracktion::Clip&);

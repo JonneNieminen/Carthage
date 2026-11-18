@@ -64,8 +64,8 @@ namespace carthage::engine
     {
         folders.settings.createDirectory();
         folders.pluginCache.createDirectory();
-        folders.project.createDirectory();
-        folders.recordings.createDirectory();
+        if (folders.autosave != juce::File())
+            autosaves.emplace (folders.autosave);
 
         engine = std::make_unique<tracktion::Engine> (std::make_unique<Storage> (folders.settings),
                                                       std::make_unique<tracktion::UIBehaviour>(),
@@ -103,23 +103,18 @@ namespace carthage::engine
         callback = std::make_unique<AudioCallback> (*engine, recorder, probe);
         callback->attach();
 
-        edit = tracktion::createEmptyEdit (*engine, folders.project.getChildFile ("Session.tracktionedit"));
-        editing::useConsistentFilePaths (*edit);   // clips beside the edit find their audio (W32)
-        edit->playInStopEnabled = true;    // the graph runs while stopped, so the input is always heard
-        edit->ensureNumberOfAudioTracks (8);   // lanes; the first holds the guitar input and its takes
-        track = tracktion::getAudioTracks (*edit).getFirst();
-        track->setName ("Guitar");
-
-        for (int i = 1; i < tracktion::getAudioTracks (*edit).size(); ++i)
-            tracktion::getAudioTracks (*edit)[i]->setName ("Lane " + juce::String (i + 1));
-
         dm.addChangeListener (this);
         prepareForDevice();
-        applyInputRouting();
+
+        const auto file = project::fileIn (folders.project);
+        adopt (project::createEdit (*engine, file), file, project::Info::createNew(), true, true);
     }
 
     Session::~Session()
     {
+        autosaveTimer.stopTimer();
+        settleTimer.stopTimer();
+        writer.waitUntilIdle();
         pluginScanner.reset();   // stops a scan and waits for its scanners before anything else goes
         engine->getDeviceManager().removeChangeListener (this);
 
@@ -127,6 +122,7 @@ namespace carthage::engine
             recorder.stop();
 
         edit->getTransport().stop (false, true);
+        edit->getUndoManager().removeChangeListener (this);
         callback->detach();
         callback.reset();
         track = nullptr;
@@ -136,8 +132,19 @@ namespace carthage::engine
     }
 
     //==============================================================================================
-    void Session::changeListenerCallback (juce::ChangeBroadcaster*)
+    void Session::changeListenerCallback (juce::ChangeBroadcaster* source)
     {
+        if (edit != nullptr && source == &edit->getUndoManager())
+        {
+            // An edit: autosave after the next pause (W30).
+            ++changeCount;
+            changedSinceAutosave = true;
+            namedChangeSinceAdopt = namedChangeSinceAdopt || edit->getUndoManager().getUndoDescription().isNotEmpty();
+            lastChange = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+            projectStateChanged();
+            return;
+        }
+
         if (routing)
             return;   // our own re-routing makes the engine broadcast; nothing new to do
 
@@ -299,7 +306,10 @@ namespace carthage::engine
 
         ++takeNumber;
         const auto name = "Take " + juce::String (takeNumber);
-        const auto file = folders.recordings.getNonexistentChildFile (
+        if (! recordings.createDirectory())
+            return juce::Result::fail ("Carthage could not create " + recordings.getFullPathName());
+
+        const auto file = recordings.getNonexistentChildFile (
             name + juce::Time::getCurrentTime().formatted (" %Y-%m-%d %H%M%S"), ".wav", false);
 
         TakeRecorder::Format format;
@@ -405,6 +415,7 @@ namespace carthage::engine
         }
 
         const auto clipName = result.file.getFileNameWithoutExtension();
+        editing::begin (*edit, "Record take");
         tracktion::insertWaveClip (*track, clipName, result.file, position, tracktion::DeleteExistingClips::yes);
 
         lastTake = TakeInfo { result, startSeconds, alignment, clipName, interrupted, placedByGuess };
@@ -499,5 +510,292 @@ namespace carthage::engine
     int Session::getAlignmentSamples() const
     {
         return measuredRoundTrip.value_or (getReportedLatency().roundTripSamples());
+    }
+
+    //==============================================================================================
+    // Projects
+    void Session::adopt (std::unique_ptr<tracktion::Edit> newEdit, const juce::File& file, project::Info newInfo, bool isUntitled, bool isNew)
+    {
+        jassert (newEdit != nullptr && ! isRecording());
+
+        if (edit != nullptr)
+        {
+            if (onProjectClosing)
+                onProjectClosing();
+
+            edit->getTransport().stop (false, true);
+            edit->getUndoManager().removeChangeListener (this);
+
+            if (autosaves)
+                autosaves->markClosed (info.id);
+        }
+
+        track = nullptr;
+        edit = std::move (newEdit);   // the old edit goes here, after the new one exists
+        projectFile = file;
+        recordings = project::recordingsIn (file.getParentDirectory());
+        info = std::move (newInfo);
+        untitled = isUntitled;
+        recovered = false;
+        lastTake.reset();
+
+        edit->playInStopEnabled = true;    // the graph runs while stopped, so the input is always heard
+
+        // Eight lanes; the first holds the guitar input and its takes.
+        const auto existing = isNew ? 0 : tracktion::getAudioTracks (*edit).size();
+        edit->ensureNumberOfAudioTracks (8);
+        const auto lanes = tracktion::getAudioTracks (*edit);
+        track = lanes.getFirst();
+
+        if (existing == 0)
+            track->setName ("Guitar");
+
+        for (int i = std::max (1, existing); i < lanes.size(); ++i)
+            lanes[i]->setName ("Lane " + juce::String (i + 1));
+
+        applyInputRouting();
+
+        // Setting up is not an edit: nothing to undo, nothing unsaved.
+        auto& um = edit->getUndoManager();
+        um.clearUndoHistory();
+        um.dispatchPendingMessages();
+        edit->resetChangedStatus();
+        um.addChangeListener (this);
+
+        // Tracktion registers the audio inputs with the new edit a moment later, as an unnamed
+        // undoable step, and clears its changed flag after ~200 ms. Once that has happened, and if
+        // the user has not edited yet, the step is dropped so Undo starts at the user's first edit.
+        namedChangeSinceAdopt = false;
+        settleTimer.startTimer (400);
+
+        changedSinceAutosave = false;
+        lastAutosave.reset();
+
+        if (autosaves)
+        {
+            autosaves->markOpen (info.id, projectFile);
+            autosaveTimer.startTimer (500);
+        }
+
+        if (onProjectChanged)
+            onProjectChanged();
+
+        projectStateChanged();
+    }
+
+    void Session::settle()
+    {
+        settleTimer.stopTimer();
+
+        if (edit == nullptr || namedChangeSinceAdopt)
+            return;
+
+        auto& um = edit->getUndoManager();
+        um.removeChangeListener (this);
+        um.clearUndoHistory();
+        um.dispatchPendingMessages();
+        um.addChangeListener (this);
+
+        if (! recovered)
+            edit->resetChangedStatus();
+
+        changedSinceAutosave = false;
+        projectStateChanged();
+    }
+
+    void Session::projectStateChanged()
+    {
+        if (onProjectStateChanged)
+            onProjectStateChanged();
+    }
+
+    bool Session::hasUnsavedChanges() const
+    {
+        return recovered || edit->hasChangedSinceSaved();
+    }
+
+    juce::ValueTree Session::currentView() const
+    {
+        return getViewState ? getViewState() : juce::ValueTree();
+    }
+
+    juce::Result Session::newProject (const juce::File& folder)
+    {
+        if (isRecording())
+            return juce::Result::fail ("Stop recording first");
+
+        const auto file = project::fileIn (folder);
+        adopt (project::createEdit (*engine, file), file, project::Info::createNew(), true, true);
+        return juce::Result::ok();
+    }
+
+    juce::Result Session::openProject (const juce::File& chosen)
+    {
+        if (isRecording())
+            return juce::Result::fail ("Stop recording first");
+
+        const auto file = chosen.isDirectory() ? project::fileIn (chosen) : chosen;
+        auto opened = project::open (*engine, file, file);
+
+        if (opened.edit == nullptr)
+            return juce::Result::fail (opened.error);
+
+        adopt (std::move (opened.edit), file, std::move (opened.info), false, false);
+        return juce::Result::ok();
+    }
+
+    juce::Result Session::recover (const autosave::Store::Recovery& r)
+    {
+        if (isRecording())
+            return juce::Result::fail ("Stop recording first");
+
+        auto opened = project::open (*engine, r.autosave, r.projectFile);
+
+        if (opened.edit == nullptr)
+            return juce::Result::fail (opened.error);
+
+        opened.info.id = r.projectId;   // its autosaves carry on in the same folder
+        adopt (std::move (opened.edit), r.projectFile, std::move (opened.info), ! r.projectFile.existsAsFile(), false);
+        recovered = true;
+        projectStateChanged();
+        return juce::Result::ok();
+    }
+
+    void Session::savedAt (const juce::File& file, juce::uint64 changesWhenTaken)
+    {
+        // Edits made while the file was being written are still unsaved.
+        edit->getUndoManager().dispatchPendingMessages();
+
+        if (changeCount == changesWhenTaken)
+            edit->resetChangedStatus();
+
+        recovered = false;
+        juce::ignoreUnused (file);
+        projectStateChanged();
+    }
+
+    void Session::save (std::function<void (juce::Result)> done)
+    {
+        if (untitled)
+        {
+            if (done) done (juce::Result::fail ("This project has not been saved yet: choose where"));
+            return;
+        }
+
+        info.view = currentView();
+        auto snapshot = project::snapshot (*edit, projectFile, info);
+        const auto file = projectFile;
+        const auto taken = changeCount;
+
+        writer.post ([snapshot, file] { return project::write (snapshot, file); },
+                     [this, file, taken, done] (juce::Result r)
+                     {
+                         if (r.wasOk() && file == projectFile)
+                             savedAt (file, taken);
+
+                         if (done) done (r);
+                     });
+    }
+
+    void Session::saveAs (const juce::File& folder, std::function<void (juce::Result)> done)
+    {
+        if (isRecording())
+        {
+            if (done) done (juce::Result::fail ("Stop recording first"));
+            return;
+        }
+
+        const auto file = project::fileIn (folder);
+        const auto oldFolder = getProjectFolder();
+        const auto wasUntitled = untitled;
+
+        // A saved project copied somewhere else is a second project: it gets its own id, so the
+        // two never share autosaves. An untitled one keeps its id and its autosaves.
+        auto newInfo = info;
+        newInfo.view = currentView();
+
+        if (! wasUntitled)
+            newInfo.id = project::Info::createNew().id;
+
+        auto snapshot = project::snapshot (*edit, file, newInfo, oldFolder);
+        const auto taken = changeCount;
+
+        writer.post ([snapshot, file, oldFolder, folder]
+                     {
+                         if (auto r = project::copyRecordings (oldFolder, folder); r.failed())
+                             return r;
+
+                         return project::write (snapshot, file);
+                     },
+                     [this, file, oldFolder, wasUntitled, newInfo, taken, done] (juce::Result r)
+                     {
+                         if (r.wasOk())
+                         {
+                             // Carry on in the new folder: point the clips at the copies.
+                             project::moveTo (*edit, file, oldFolder);
+
+                             if (autosaves && newInfo.id != info.id)
+                                 autosaves->markClosed (info.id);
+
+                             projectFile = file;
+                             recordings = project::recordingsIn (file.getParentDirectory());
+                             info = newInfo;
+                             untitled = false;
+
+                             if (autosaves)
+                                 autosaves->markOpen (info.id, projectFile);
+
+                             // An untitled project's folder held only its recordings, now copied:
+                             // it goes to the bin, where it can still be found.
+                             if (wasUntitled && oldFolder.isDirectory() && oldFolder != file.getParentDirectory())
+                                 oldFolder.moveToTrash();
+
+                             savedAt (file, taken);
+                         }
+
+                         if (done) done (r);
+                     });
+    }
+
+    void Session::autosaveIfDue()
+    {
+        if (! autosaves)
+            return;
+
+        const auto now = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+
+        if (! autosavePolicy.isDue (now, changedSinceAutosave, lastChange, lastAutosave))
+            return;
+
+        changedSinceAutosave = false;
+
+        // Tracktion's own updates right after loading reach the undo manager too; they are not
+        // the user's edits, and Tracktion clears its changed flag after them.
+        if (! hasUnsavedChanges())
+            return;
+
+        lastAutosave = now;
+        info.view = currentView();
+        auto snapshot = project::snapshot (*edit, projectFile, info);
+        const auto target = autosaves->nextFile (info.id);
+        const auto id = info.id;
+        const auto keep = autosavePolicy.keep;
+        const auto store = *autosaves;
+
+        writer.post ([snapshot, target, store, id, keep]
+        {
+            auto r = project::write (snapshot, target);
+            store.prune (id, keep);
+            return r;
+        });
+    }
+
+    void Session::close()
+    {
+        autosaveTimer.stopTimer();
+        writer.waitUntilIdle();
+
+        if (autosaves)
+            autosaves->markClosed (info.id);
     }
 }

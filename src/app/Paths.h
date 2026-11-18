@@ -21,11 +21,9 @@ namespace carthage::app
         /** Default home for projects. ~/Music/Carthage (macOS), Music\Carthage (Windows) */
         static juce::File projects();
 
-        /** The project phase 1 records into, until projects can be saved (phase 4). */
-        static juce::File currentProject();
-
-        /** Recordings live inside their project, so a project folder is self-contained. */
-        static juce::File recordingsFor (const juce::File& project);
+        /** A folder for a new, untitled project: <projects>/Untitled, or Untitled 2, 3… if taken.
+            It is created when something is recorded into it. */
+        static juce::File newUntitledProject();
 
         /** Autosaves and the crash marker (phase 4). <settings>/Autosave */
         static juce::File autosave();

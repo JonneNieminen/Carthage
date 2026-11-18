@@ -84,6 +84,7 @@ build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench latenc
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench align --device "Audient iD44" \
     --rate 48000 --buffer 64 --in 4 --click-out 3 --measured-out 3
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench scanall --parallel 4
+build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench projects   # save, reopen, autosave, recovery
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench takes --device "Audient iD44" \
     --rate 48000 --buffer 512 --plugin-format AudioUnit --plugin "AudioUnit:Effects/aufx,Akrc,Bgrn"
 ```

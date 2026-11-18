@@ -407,6 +407,19 @@ namespace carthage::ui
             updateFigures();
         };
 
+        // Projects: the view is saved with the project; a new project replaces the edit.
+        session.getViewState = [this] { return timeline.getViewState(); };
+        session.onProjectClosing = [this] { closePluginWindow(); };
+        session.onProjectChanged = [this]
+        {
+            timeline.projectChanged();
+            refreshToolbar();
+            signalRow->refreshPlugin();
+            signalRow->setMessage ({}, false);
+            updateTransportButtons();
+            commands.commandStatusChanged();
+        };
+
         session.onTakeEnded = [this] (const engine::TakeRecorder::Result& result)
         {
             takeFinished (result);
@@ -428,6 +441,9 @@ namespace carthage::ui
         session.onDeviceChanged = nullptr;
         session.onTakeEnded = nullptr;
         session.onPluginsChanged = nullptr;
+        session.getViewState = nullptr;
+        session.onProjectClosing = nullptr;
+        session.onProjectChanged = nullptr;
         closePluginWindow();
     }
 

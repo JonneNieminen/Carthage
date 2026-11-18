@@ -32,6 +32,9 @@ namespace carthage::app
             // Timeline edits
             undo, redo, toggleGrid, splitAtPlayhead, duplicateClips, deleteClips,
             nudgeLeft, nudgeRight, addMarker, loopSelection,
+
+            // Projects (handled by the application: they can replace the window's edit)
+            newProject, openProject, saveProject, saveProjectAs,
         };
 
         /** The tool commands, in Timeline::Tool order. */
@@ -52,7 +55,7 @@ namespace carthage::app
         /** Commands the application itself performs, whatever window is in front. */
         inline juce::Array<juce::CommandID> application()
         {
-            return { checkForUpdates };
+            return { checkForUpdates, newProject, openProject, saveProject, saveProjectAs };
         }
 
         /** Name, description, category and default keys. Flags (enabled, ticked) are added by the
@@ -116,6 +119,11 @@ namespace carthage::app
                 case nudgeRight:      info.setInfo ("Nudge right", "Move the selected clips one grid step later", "Edit", 0); info.addDefaultKeypress (KP::rightKey, 0); break;
                 case addMarker:       info.setInfo ("Add marker", "Add a marker at the playhead", "Edit", 0); info.addDefaultKeypress ('m', juce::ModifierKeys::shiftModifier); break;
                 case loopSelection:   info.setInfo ("Loop selection", "Loop the range the selected clips cover", "Edit", 0); info.addDefaultKeypress ('l', primary); break;
+
+                case newProject:      info.setInfo ("New project", "Start an empty project", "File", 0); info.addDefaultKeypress ('n', primary); break;
+                case openProject:     info.setInfo (juce::String::fromUTF8 ("Open\xe2\x80\xa6"), "Open a saved project", "File", 0); info.addDefaultKeypress ('o', primary); break;
+                case saveProject:     info.setInfo ("Save", "Save the project", "File", 0); info.addDefaultKeypress ('s', primary); break;
+                case saveProjectAs:   info.setInfo (juce::String::fromUTF8 ("Save as\xe2\x80\xa6"), "Save the project in a new folder, with its recordings", "File", 0); info.addDefaultKeypress ('s', primary | juce::ModifierKeys::shiftModifier); break;
 
                 case pluginBrowser:
                     info.setInfo ("Show plugins", "Show or hide the plugin browser", "Plugin", 0);

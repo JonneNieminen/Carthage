@@ -1,9 +1,11 @@
 #pragma once
 
 #include "AudioCallback.h"
+#include "Autosave.h"
 #include "LatencyProbe.h"
 #include "PluginLibrary.h"
 #include "PluginScan.h"
+#include "Project.h"
 #include "TakePlacement.h"
 #include "TakeRecorder.h"
 
@@ -19,8 +21,8 @@ namespace carthage::engine
     {
         juce::File settings;      ///< Audio device settings (the engine's property storage)
         juce::File pluginCache;   ///< Known plugins and the blocklist
-        juce::File project;       ///< The current project folder
-        juce::File recordings;    ///< Where takes are written; inside the project folder
+        juce::File project;       ///< The folder of the untitled project the session starts with
+        juce::File autosave;      ///< Autosaves and crash markers; none (tools, tests) turns autosave off
     };
 
     /** Phase 1's engine: one audio interface, one input, one plugin, one lane of takes.
@@ -30,6 +32,10 @@ namespace carthage::engine
         TakeRecorder, not by the engine's own recorder, because the engine's path takes locks and
         allocates on the audio thread (docs/ARCHITECTURE.md, "Recording"). A finished take becomes
         a clip on the track at the position it was played, corrected for the interface's latency.
+
+        The edit is the open project (phase 4a, engine/Project.h). New, Open and recovery replace
+        it, and onProjectChanged tells the UI to let go of the old one. Saves and autosaves are
+        written by a worker; the edit is copied on the message thread first.
 
         All methods: message thread.
     */
@@ -56,6 +62,59 @@ namespace carthage::engine
         std::function<void()> onPluginsChanged;
         const Folders& getFolders() const noexcept              { return folders; }
         const juce::File& getScanner() const noexcept           { return scanner; }
+
+        //==========================================================================================
+        // The project
+        const juce::File& getProjectFile() const noexcept   { return projectFile; }
+        juce::File getProjectFolder() const                 { return projectFile.getParentDirectory(); }
+        juce::String getProjectName() const                 { return getProjectFolder().getFileName(); }
+
+        /** Never saved: Save has to ask where. */
+        bool isUntitled() const noexcept                    { return untitled; }
+        bool hasUnsavedChanges() const;
+
+        /** The view state the project was opened with (the UI's own; may be invalid). */
+        const juce::ValueTree& getOpenedView() const noexcept   { return info.view; }
+
+        /** The UI's view state, asked for whenever the project is written. */
+        std::function<juce::ValueTree()> getViewState;
+
+        /** About to replace the edit: plugin windows and anything else holding its objects close. */
+        std::function<void()> onProjectClosing;
+
+        /** The edit was replaced (new, open, recover): everything holding the old one lets go. */
+        std::function<void()> onProjectChanged;
+
+        /** The name, the unsaved state or the folder changed (the window title follows). */
+        std::function<void()> onProjectStateChanged;
+
+        /** A new, empty, untitled project whose folder (created when something is recorded) is
+            `folder`. */
+        juce::Result newProject (const juce::File& folder);
+
+        /** Opens a `.carthage` file (or a project folder holding one). */
+        juce::Result openProject (const juce::File&);
+
+        /** Opens the autosave of a project Carthage did not close cleanly. The project counts as
+            unsaved until it is saved. */
+        juce::Result recover (const autosave::Store::Recovery&);
+
+        /** Writes the project to its file in the background; `done` runs on the message thread. */
+        void save (std::function<void (juce::Result)> done);
+
+        /** Writes the project into `folder` (created if needed) as `<folder>/<name>.carthage`,
+            copying its recordings along, and carries on there. */
+        void saveAs (const juce::File& folder, std::function<void (juce::Result)> done);
+
+        /** Quitting: waits for writes in hand and records that the project closed cleanly. */
+        void close();
+
+        /** Null when the session was made without an autosave folder. */
+        autosave::Store* getAutosaves() noexcept    { return autosaves ? &*autosaves : nullptr; }
+        void setAutosavePolicy (autosave::Policy p) noexcept   { autosavePolicy = p; }
+
+        /** Writes an autosave now if one is due (the timer calls it; tests call it directly). */
+        void autosaveIfDue();
 
         //==========================================================================================
         // Input
@@ -149,6 +208,27 @@ namespace carthage::engine
         std::unique_ptr<AudioCallback> callback;
         std::unique_ptr<tracktion::Edit> edit;
         tracktion::AudioTrack* track = nullptr;
+
+        // The project
+        juce::File projectFile, recordings;
+        project::Info info;
+        bool untitled = true, recovered = false;
+        std::optional<autosave::Store> autosaves;
+        autosave::Policy autosavePolicy;
+        project::Writer writer;
+        juce::TimedCallback autosaveTimer { [this] { autosaveIfDue(); } };
+        bool changedSinceAutosave = false;
+        double lastChange = 0.0;
+        std::optional<double> lastAutosave;
+        juce::uint64 changeCount = 0;
+        bool namedChangeSinceAdopt = false;
+        juce::TimedCallback settleTimer { [this] { settle(); } };
+
+        void adopt (std::unique_ptr<tracktion::Edit>, const juce::File& file, project::Info, bool isUntitled, bool isNew);
+        void savedAt (const juce::File& file, juce::uint64 changesWhenTaken);
+        void projectStateChanged();
+        void settle();
+        juce::ValueTree currentView() const;
 
         int inputChannel = 0;
         bool inputStereo = false, monitoring = true;

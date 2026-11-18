@@ -11,6 +11,11 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Projects: File > New, Open, Save and Save as (Cmd/Ctrl+N, O, S, Shift+S). A project is a folder
+  holding its file and its recordings; Save as copies the recordings along. Zoom, scroll and the
+  grid are saved with it. Carthage asks before closing a project with unsaved changes.
+- Autosave: after you pause editing for 2 seconds, at most every 2 minutes, keeping the last 10.
+  If Carthage does not close properly, it offers the newest autosave the next time it opens.
 - A timeline with eight lanes, a bar and beat ruler, and a grid (1/4 beat by default; bar to 1/64
   beat, triplet, dotted, or adaptive to the zoom), switched with G or the Snap button. Clips snap to
   the grid, to other clips' edges, to markers and to the playhead; hold Cmd (Ctrl on Windows) to

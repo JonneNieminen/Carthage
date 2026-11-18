@@ -693,6 +693,57 @@ namespace carthage::ui
         vScroll.removeListener (this);
     }
 
+    void Timeline::projectChanged()
+    {
+        editState.removeListener (this);
+        editState = session.getEdit().state;
+        editState.addListener (this);
+        selected.clearQuick();
+        brush = {};
+        thumbnails.clear();
+        thumbnailCache.clear();
+        lastPlayheadSeconds = -1.0;
+        lastRecordingFrom.reset();
+        setViewState (session.getOpenedView());
+        headers->repaint();
+        ruler->repaint();
+        repaintLanes();
+
+        if (onSelectionChanged)
+            onSelectionChanged();
+    }
+
+    juce::ValueTree Timeline::getViewState() const
+    {
+        juce::ValueTree v ("VIEW");
+        v.setProperty ("pixelsPerBeat", pixelsPerBeat, nullptr);
+        v.setProperty ("scrollBeat", scrollBeat, nullptr);
+        v.setProperty ("scrollY", scrollY, nullptr);
+        v.setProperty ("gridDivision", static_cast<int> (grid.division), nullptr);
+        v.setProperty ("gridFeel", static_cast<int> (grid.feel), nullptr);
+        v.setProperty ("gridAdaptive", grid.adaptive, nullptr);
+        v.setProperty ("snap", grid.enabled, nullptr);
+        return v;
+    }
+
+    void Timeline::setViewState (const juce::ValueTree& v)
+    {
+        const time::Grid defaults;
+
+        // Anything missing or out of range falls back to the defaults: an older file still opens.
+        const auto division = static_cast<int> (v.getProperty ("gridDivision", static_cast<int> (defaults.division)));
+        const auto feel = static_cast<int> (v.getProperty ("gridFeel", static_cast<int> (defaults.feel)));
+        grid.division = division >= 0 && division <= static_cast<int> (time::Division::sixtyFourth) ? static_cast<time::Division> (division) : defaults.division;
+        grid.feel = feel >= 0 && feel <= static_cast<int> (time::Feel::dotted) ? static_cast<time::Feel> (feel) : defaults.feel;
+        grid.adaptive = v.getProperty ("gridAdaptive", defaults.adaptive);
+        grid.enabled = v.getProperty ("snap", defaults.enabled);
+
+        pixelsPerBeat = std::clamp (static_cast<double> (v.getProperty ("pixelsPerBeat", 24.0)), minPixelsPerBeat, maxPixelsPerBeat);
+        scrollY = std::max (0, static_cast<int> (v.getProperty ("scrollY", 0)));
+        setScrollBeat (v.getProperty ("scrollBeat", 0.0));
+        resized();
+    }
+
     //==============================================================================================
     Array<tracktion::AudioTrack*> Timeline::laneTracks() const
     {

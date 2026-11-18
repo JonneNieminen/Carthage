@@ -44,14 +44,14 @@ namespace carthage::editing
         }
     }
 
-    void useConsistentFilePaths (Edit& edit)
+    Edit::FilePathResolver consistentFilePaths (std::function<juce::File()> editFileOf)
     {
-        edit.filePathResolver = [&edit] (const juce::String& path) -> juce::File
+        return [editFileOf = std::move (editFileOf)] (const juce::String& path) -> juce::File
         {
             if (juce::File::isAbsolutePath (path))
                 return path;
 
-            const auto editFile = edit.editFileRetriever ? edit.editFileRetriever() : juce::File();
+            const auto editFile = editFileOf ? editFileOf() : juce::File();
 
             if (editFile == juce::File())
                 return {};
@@ -68,6 +68,11 @@ namespace carthage::editing
 
             return asWritten;
         };
+    }
+
+    void useConsistentFilePaths (Edit& edit)
+    {
+        edit.filePathResolver = consistentFilePaths ([&edit] { return edit.editFileRetriever ? edit.editFileRetriever() : juce::File(); });
     }
 
     void begin (Edit& edit, const juce::String& name)

@@ -23,9 +23,9 @@ namespace carthage::app
         StringArray getMenuBarNames() override
         {
            #if JUCE_MAC
-            return { "Transport", "Input", "Plugin", "Edit", "Tools" };
+            return { "File", "Transport", "Input", "Plugin", "Edit", "Tools" };
            #else
-            return { "Transport", "Input", "Plugin", "Edit", "Tools", "Help" };   // macOS has the app menu for this
+            return { "File", "Transport", "Input", "Plugin", "Edit", "Tools", "Help" };   // macOS has the app menu for this
            #endif
         }
 
@@ -36,21 +36,28 @@ namespace carthage::app
             switch (index)
             {
                 case 0:
+                    m.addCommandItem (&commands, commands::newProject);
+                    m.addCommandItem (&commands, commands::openProject);
+                    m.addSeparator();
+                    m.addCommandItem (&commands, commands::saveProject);
+                    m.addCommandItem (&commands, commands::saveProjectAs);
+                    break;
+                case 1:
                     m.addCommandItem (&commands, commands::playStop);
                     m.addCommandItem (&commands, commands::record);
                     m.addCommandItem (&commands, commands::returnToStart);
                     break;
-                case 1:
+                case 2:
                     m.addCommandItem (&commands, commands::toggleMonitoring);
                     m.addSeparator();
                     m.addCommandItem (&commands, commands::measureLatency);
                     break;
-                case 2:
+                case 3:
                     m.addCommandItem (&commands, commands::choosePlugin);
                     m.addCommandItem (&commands, commands::openPluginEditor);
                     m.addCommandItem (&commands, commands::bypassPlugin);
                     break;
-                case 3:
+                case 4:
                     for (auto id : { commands::undo, commands::redo })
                         m.addCommandItem (&commands, id);
                     m.addSeparator();
@@ -61,11 +68,11 @@ namespace carthage::app
                     for (auto id : { commands::addMarker, commands::loopSelection, commands::toggleGrid })
                         m.addCommandItem (&commands, id);
                     break;
-                case 4:
+                case 5:
                     for (auto id : commands::tools())
                         m.addCommandItem (&commands, id);
                     break;
-                case 5:
+                case 6:
                     m.addCommandItem (&commands, commands::checkForUpdates);
                     break;
                 default:
@@ -163,10 +170,14 @@ namespace carthage::app
             engine::Folders folders;
             folders.settings = Paths::settings();
             folders.pluginCache = Paths::pluginCache();
-            folders.project = Paths::currentProject();
-            folders.recordings = Paths::recordingsFor (folders.project);
+            folders.project = Paths::newUntitledProject();
+            folders.autosave = Paths::autosave();
+
+            // Before the session marks its own new project as open: what did the last run leave?
+            const auto unclosed = carthage::autosave::Store (folders.autosave).findUnclosed();
 
             session = std::make_unique<engine::Session> (folders, Paths::scanner());
+            session->onProjectStateChanged = [this] { updateTitle(); };
 
             menuBar = std::make_unique<MenuBar> (commands);
             auto& content = window->showSession (*session, commands);
@@ -184,6 +195,8 @@ namespace carthage::app
                                           "Privacy & Security, Microphone, then restart Carthage.");
 
             startUpdater (content);
+            updateTitle();
+            offerRecovery (unclosed);
 
             // Plugins installed or updated since the last run are checked in the background;
             // --rescan-plugins checks them all (for measuring the UI during a full scan).
@@ -198,7 +211,19 @@ namespace carthage::app
 
             // Nothing in Carthage is unsaved yet (projects arrive in phase 4); a take in progress
             // is the only work to protect, and isBusy already refuses a restart during one.
-            hooks.prepareToRestart = [this] { return session == nullptr || ! session->isRecording(); };
+            // A restart for an update saves nothing by itself: with unsaved changes it waits for
+            // the user (the banner's restart then asks to save, like quitting).
+            hooks.prepareToRestart = [this]
+            {
+                if (session == nullptr)
+                    return true;
+
+                if (session->isRecording() || session->hasUnsavedChanges())
+                    return false;
+
+                session->close();
+                return true;
+            };
 
             hooks.showOffer = [&content] (std::optional<Updater::Offer> offer)
             {
@@ -247,7 +272,8 @@ namespace carthage::app
             if (commands::application().contains (id))
             {
                 commands::describe (id, info);
-                info.setActive (updater != nullptr);
+                info.setActive (id == commands::checkForUpdates ? updater != nullptr
+                                                                : session != nullptr && ! session->isRecording());
                 return;
             }
 
@@ -256,15 +282,193 @@ namespace carthage::app
 
         bool perform (const InvocationInfo& info) override
         {
-            if (info.commandID == commands::checkForUpdates)
+            switch (info.commandID)
             {
-                if (updater != nullptr)
-                    updater->checkNow();
+                case commands::checkForUpdates:
+                    if (updater != nullptr)
+                        updater->checkNow();
+                    return true;
+                case commands::newProject:      newProject(); return true;
+                case commands::openProject:     openProject(); return true;
+                case commands::saveProject:     save ({}); return true;
+                case commands::saveProjectAs:   saveAs ({}); return true;
+                default:                        return JUCEApplication::perform (info);
+            }
+        }
 
-                return true;
+        //==========================================================================================
+        // Projects
+        ui::MainComponent* content() const
+        {
+            return window != nullptr ? dynamic_cast<ui::MainComponent*> (window->getContentComponent()) : nullptr;
+        }
+
+        void report (const Result& r, const String& success = {})
+        {
+            if (auto* c = content())
+            {
+                if (r.failed())
+                    c->showMessage (r.getErrorMessage(), true);
+                else if (success.isNotEmpty())
+                    c->showMessage (success, false);
+            }
+        }
+
+        void updateTitle()
+        {
+            if (window == nullptr || session == nullptr)
+                return;
+
+            const auto edited = session->hasUnsavedChanges();
+            auto title = session->getProjectName();
+
+           #if ! JUCE_MAC
+            if (edited)
+                title << " *";   // macOS shows it in the close button instead
+           #endif
+
+            window->setName (title + String::fromUTF8 (" \xe2\x80\x94 Carthage"));
+
+            if (auto* peer = window->getPeer())
+                peer->setDocumentEditedStatus (edited);
+        }
+
+        /** Runs `then` once the current project may be closed: at once if nothing is unsaved,
+            otherwise after asking (and saving, if the user says so). */
+        void whenClosable (std::function<void()> then)
+        {
+            if (session == nullptr || ! session->hasUnsavedChanges())
+            {
+                then();
+                return;
             }
 
-            return JUCEApplication::perform (info);
+            enum { saveIt = 1, discard = 2, cancel = 0 };
+
+            const auto options = MessageBoxOptions()
+                                     .withIconType (MessageBoxIconType::QuestionIcon)
+                                     .withTitle (String::fromUTF8 ("Save changes to \xe2\x80\x9c") + session->getProjectName() + String::fromUTF8 ("\xe2\x80\x9d?"))
+                                     .withMessage ("If you don't save, the changes since you last saved are lost.")
+                                     .withButton (MessageBoxButtonOptions ("Save", saveIt).withPreferredAction())
+                                     .withButton (MessageBoxButtonOptions ("Don't save", discard).withRole (MessageBoxButtonRole::destroy))
+                                     .withButton (MessageBoxButtonOptions ("Cancel", cancel).withRole (MessageBoxButtonRole::cancel))
+                                     .withAssociatedComponent (content());
+
+            AlertWindow::showAsync (options, [this, then] (int result)
+            {
+                if (result == saveIt)
+                    save ([then] (bool saved) { if (saved) then(); });
+                else if (result == discard)
+                    then();
+            });
+        }
+
+        void newProject()
+        {
+            whenClosable ([this] { report (session->newProject (Paths::newUntitledProject())); });
+        }
+
+        void openProject()
+        {
+            whenClosable ([this]
+            {
+                chooser = std::make_unique<FileChooser> ("Open a project", Paths::projects(), "*.carthage");
+                chooser->launchAsync (FileBrowserComponent::openMode | FileBrowserComponent::canSelectFiles,
+                                      [this] (const FileChooser& fc)
+                                      {
+                                          if (const auto file = fc.getResult(); file != File())
+                                              report (session->openProject (file));
+                                      });
+            });
+        }
+
+        /** Saves; asks where first if the project was never saved. `then` gets whether it was. */
+        void save (std::function<void (bool)> then)
+        {
+            if (session->isUntitled())
+            {
+                saveAs (std::move (then));
+                return;
+            }
+
+            session->save ([this, then] (Result r)
+            {
+                report (r, "Saved");
+
+                if (then)
+                    then (r.wasOk());
+            });
+        }
+
+        /** A project is a folder: the name the user types becomes the folder and the file in it. */
+        void saveAs (std::function<void (bool)> then)
+        {
+            const auto suggested = session->isUntitled() ? Paths::projects().getChildFile ("My song")
+                                                          : session->getProjectFolder().getSiblingFile (session->getProjectName() + " copy");
+
+            chooser = std::make_unique<FileChooser> ("Save the project as", suggested, String());
+            chooser->launchAsync (FileBrowserComponent::saveMode | FileBrowserComponent::warnAboutOverwriting,
+                                  [this, then] (const FileChooser& fc)
+                                  {
+                                      auto folder = fc.getResult();
+
+                                      if (folder == File())
+                                      {
+                                          if (then) then (false);
+                                          return;
+                                      }
+
+                                      if (folder.hasFileExtension (carthage::project::extension))
+                                          folder = folder.withFileExtension ({});
+
+                                      if (folder.existsAsFile())
+                                      {
+                                          report (Result::fail (folder.getFileName() + " is a file. Choose another name."));
+                                          if (then) then (false);
+                                          return;
+                                      }
+
+                                      session->saveAs (folder, [this, then, folder] (Result r)
+                                      {
+                                          report (r, "Saved as " + folder.getFileName());
+
+                                          if (then)
+                                              then (r.wasOk());
+                                      });
+                                  });
+        }
+
+        /** Carthage did not quit cleanly last time: offer the newest autosave. */
+        void offerRecovery (const std::vector<carthage::autosave::Store::Recovery>& unclosed)
+        {
+            if (unclosed.empty())
+                return;
+
+            auto* store = session->getAutosaves();
+
+            // Only the newest is offered; the others keep their autosaves on disk.
+            for (size_t i = 1; i < unclosed.size(); ++i)
+                store->markClosed (unclosed[i].projectId);
+
+            const auto r = unclosed.front();
+            const auto name = r.projectFile.getParentDirectory().getFileName();
+
+            const auto options = MessageBoxOptions()
+                                     .withIconType (MessageBoxIconType::WarningIcon)
+                                     .withTitle ("Carthage did not close properly")
+                                     .withMessage (String::fromUTF8 ("It saved a copy of \xe2\x80\x9c") + name + String::fromUTF8 ("\xe2\x80\x9d at ")
+                                                   + r.savedAt.formatted ("%H:%M on %e %b") + ". Open it?")
+                                     .withButton (MessageBoxButtonOptions ("Open the copy", 1).withPreferredAction())
+                                     .withButton (MessageBoxButtonOptions ("Not now", 0).withRole (MessageBoxButtonRole::cancel))
+                                     .withAssociatedComponent (content());
+
+            AlertWindow::showAsync (options, [this, r] (int result)
+            {
+                if (result == 1)
+                    report (session->recover (r), "Opened the copy. Save it to keep it.");
+                else if (auto* s = session->getAutosaves())
+                    s->markClosed (r.projectId);
+            });
         }
 
         void shutdown() override
@@ -286,7 +490,13 @@ namespace carthage::app
             if (session != nullptr && session->isRecording())
                 session->stopRecording();
 
-            quit();
+            whenClosable ([this]
+            {
+                if (session != nullptr)
+                    session->close();
+
+                quit();
+            });
         }
 
     private:
@@ -297,6 +507,7 @@ namespace carthage::app
         std::unique_ptr<MainWindow> window;
         std::unique_ptr<TooltipWindow> tooltips;
         std::unique_ptr<Updater> updater;
+        std::unique_ptr<FileChooser> chooser;
     };
 }
 

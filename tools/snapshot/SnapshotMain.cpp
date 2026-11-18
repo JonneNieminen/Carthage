@@ -109,7 +109,6 @@ namespace
                 f.settings = temp.getChildFile ("Settings");
                 f.pluginCache = temp.getChildFile ("Plugins");
                 f.project = temp.getChildFile ("Project");
-                f.recordings = f.project.getChildFile ("Recordings");
                 session = std::make_unique<engine::Session> (f, File::getSpecialLocation (File::currentExecutableFile)
                                                                      .getSiblingFile ("carthage-scan"));
 

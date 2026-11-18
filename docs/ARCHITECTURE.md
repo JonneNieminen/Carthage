@@ -98,15 +98,30 @@ packaging/           macos/ (sign.sh, make-dmg.sh, read-me), windows/ (Carthage.
 - **Edits.** Each user action opens one transaction on `Edit::getUndoManager()` with a name
   ("Move clip", "Trim 3 clips"); a drag opens it on mouse-down and every change until mouse-up joins
   it. Undo and Redo are commands in the command table.
-- **Project file.** A project is a folder: `<Name>.carthage` (the edit's XML, with a `CARTHAGE` child
-  holding `formatVersion` and view state such as zoom and grid), `Recordings/` and, in 4b, `Samples/`.
-  Saving writes a temporary file beside the old one and renames it over, so a crash mid-save never
-  leaves a half-written project. An older format version always opens (AGENTS.md).
-- **Autosave and recovery.** After an edit, once the user pauses for 2 s and at most every 2 minutes
-  (W30), the edit's state is copied on the message thread and written by a worker to
-  `<settings>/Autosave/<project id>/`, keeping the last 10. A `running` marker there is removed on a
-  clean quit; finding one at launch means Carthage did not quit cleanly, and it offers the newest
-  autosave.
+- **Project file** (`engine/Project.h`). A project is a folder: `<Name>.carthage` (the edit's XML,
+  with a `CARTHAGE` child holding `formatVersion`, the project's `id` and a `VIEW` child that the
+  timeline fills with zoom, scroll and grid), `Recordings/` and, in 4b, `Samples/`. Saving copies the
+  edit on the message thread (`project::snapshot`) and a single writer thread (`project::Writer`)
+  writes a temporary file beside the old one and renames it over, so a crash mid-save never leaves a
+  half-written project. Clip paths are rewritten on the copy: inside the project folder relative to
+  the file (W32), anything else absolute, so a moved folder keeps working. Save as copies
+  `Recordings/` into the new folder and moves the open edit there (`project::moveTo`); an untitled
+  project's old folder goes to the bin. A file from a newer format is refused with a message; an
+  older one opens; a damaged one is never overwritten.
+- **The session's edit is the open project.** `Session` starts with a new untitled project in
+  `<projects>/Untitled` (or `Untitled 2`…), created only when something is recorded into it. New,
+  Open and recovery build the new edit, then replace the old one (`onProjectClosing` lets plugin
+  windows close first; `onProjectChanged` lets the timeline follow). Opening is not an edit: Tracktion
+  registers the inputs with a new edit as an unnamed undo step a moment later, and the session drops
+  that step once the edit settles (W33). Unsaved changes are Tracktion's changed flag.
+- **Autosave and recovery** (`engine/Autosave.h`). After an edit, once the user pauses for 2 s and at
+  most every 2 minutes (W30), the edit is copied on the message thread and written by the writer to
+  `<settings>/Autosave/<project id>/<date time>.carthage`, keeping the last 10. Paths in an autosave
+  are relative to the project file, so recovery opens it as that project. A `running` marker there
+  names the project file; it is removed when the project closes cleanly. At launch, before the new
+  session marks its own project, the app looks for markers: one whose newest autosave is newer than
+  the project file means Carthage did not quit cleanly, and the newest such autosave is offered. A
+  recovered project counts as unsaved until it is saved.
 
 ## Threads
 
@@ -220,8 +235,9 @@ to a user folder (DECISIONS W17).
 | Settings (audio device, later shortcuts and updates) | `~/Library/Application Support/Carthage` | `%APPDATA%\Carthage` |
 | Plugin scan cache (`KnownPlugins.xml`, `Blocklist.xml`) | `<settings>/Plugins` | same |
 | Projects | `~/Music/Carthage` | `Music\Carthage` |
-| Recordings | `<project>/Recordings` (phase 1: `<projects>/Untitled/Recordings`) | same |
-| Autosaves and crash recovery (phase 4) | `<settings>/Autosave` | same |
+| A new untitled project | `<projects>/Untitled` (then `Untitled 2`, …), created when something is recorded | same |
+| Recordings | `<project>/Recordings` | same |
+| Autosaves and crash recovery | `<settings>/Autosave/<project id>/` (the last 10, and the `running` marker) | same |
 | AU and VST3 system folders (read only) | `/Library/Audio/Plug-Ins/{Components,VST3}`, and under `~` | `C:\Program Files\Common Files\VST3` |
 
 Project files carry a format version from the first commit that writes one (phase 4); a project saved

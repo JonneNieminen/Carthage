@@ -7,6 +7,8 @@ add_library(carthage_engine STATIC
     PluginScan.cpp PluginScan.h
     RealtimeCheck.h
     Editing.cpp Editing.h
+    Project.cpp Project.h
+    Autosave.cpp Autosave.h
     Session.cpp Session.h
     TakePlacement.h
     TakeRecorder.cpp TakeRecorder.h)

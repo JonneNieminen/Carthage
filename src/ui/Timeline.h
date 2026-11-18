@@ -60,6 +60,13 @@ namespace carthage::ui
         time::Grid& getGrid() noexcept   { return grid; }
         void gridChanged()               { repaintLanes(); }
 
+        /** The session opened another project: forget the old edit's clips and follow the new one. */
+        void projectChanged();
+
+        /** Zoom, scroll and grid, saved in the project file (engine/Project.h carries it). */
+        juce::ValueTree getViewState() const;
+        void setViewState (const juce::ValueTree&);
+
         /** View: pixels per beat, and the beat at the left edge of the lanes. */
         double getPixelsPerBeat() const noexcept    { return pixelsPerBeat; }
         void setZoom (double newPixelsPerBeat, double aroundBeat);

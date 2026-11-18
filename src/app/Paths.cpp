@@ -20,11 +20,14 @@ namespace carthage::app
         return juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("Carthage");
     }
 
-    juce::File Paths::currentProject()  { return projects().getChildFile ("Untitled"); }
-
-    juce::File Paths::recordingsFor (const juce::File& project)
+    juce::File Paths::newUntitledProject()
     {
-        return project.getChildFile ("Recordings");
+        auto folder = projects().getChildFile ("Untitled");
+
+        for (int n = 2; folder.exists(); ++n)
+            folder = projects().getChildFile ("Untitled " + juce::String (n));
+
+        return folder;
     }
 
     std::vector<juce::File> Paths::systemPluginFolders()

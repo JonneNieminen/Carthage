@@ -8,6 +8,7 @@ target_sources(carthage_tests PRIVATE
     LatencyProbeTests.cpp
     PluginLibraryTests.cpp
     PluginScanTests.cpp
+    ProjectTests.cpp
     TakePlacementTests.cpp
     TakeRecorderTests.cpp
     ThemeTests.cpp)

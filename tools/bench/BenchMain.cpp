@@ -19,6 +19,9 @@
 //                          [--plugin-format VST3|AudioUnit --plugin FILE_OR_ID] [--while-playing]
 //                          (records takes back to back the way a player does: R, play, R, R, ...;
 //                          every other one after returning to the start; reports any that ended early)
+//   carthage-bench projects
+//                          (through the app's Session: save as, reopen, save, autosave after a pause, a
+//                          crash left behind and its recovery; needs no particular device)
 //   carthage-bench align   --device NAME --rate HZ --buffer N --in N [--seconds 10] [--click-out N] [--settle-ms N]
 //                          [--measured-out N]
 //
@@ -31,6 +34,7 @@
 
 #include "WorkgroupJoins.h"
 
+#include <engine/Editing.h>
 #include <engine/Session.h>
 
 #include <iostream>
@@ -106,7 +110,7 @@ namespace
                 f.settings = folder.getChildFile ("Settings");
                 f.pluginCache = folder.getChildFile ("Plugins");
                 f.project = folder.getChildFile ("Project");
-                f.recordings = f.project.getChildFile ("Recordings");
+                f.autosave = folder.getChildFile ("Autosave");
                 session = std::make_unique<engine::Session> (f, File::getSpecialLocation (File::currentExecutableFile)
                                                                      .getSiblingFile ("carthage-scan"));
             });
@@ -122,6 +126,7 @@ namespace
             else if (args.command == "takes")   result = takes();
             else if (args.command == "wgprobe") result = wgprobe();
             else if (args.command == "scanall") result = scanall();
+            else if (args.command == "projects") result = projects();
             else say ("unknown command: " + args.command);
 
             onMessageThreadVoid ([this] { session.reset(); });
@@ -138,6 +143,131 @@ namespace
         Args args;
         File folder;
         std::unique_ptr<engine::Session> session;
+
+        //==========================================================================================
+        int checksFailed = 0;
+
+        void check (bool ok, const String& what)
+        {
+            say ((ok ? "  ok    " : "  FAIL  ") + what);
+            checksFailed += ok ? 0 : 1;
+        }
+
+        /** Waits for an async result posted to the message thread. */
+        template <typename Start>
+        Result await (Start&& start)
+        {
+            std::optional<Result> result;
+            WaitableEvent done;
+            onMessageThreadVoid ([&] { start ([&] (Result r) { result = r; done.signal(); }); });
+            done.wait (10000);
+            return result.value_or (Result::fail ("timed out"));
+        }
+
+        int clipCount()
+        {
+            return onMessageThread ([this]
+            {
+                int n = 0;
+                for (auto* t : tracktion::getAudioTracks (session->getEdit()))
+                    n += t->getClips().size();
+                return n;
+            });
+        }
+
+        int projects()
+        {
+            const auto tone = folder.getChildFile ("Elsewhere/tone.wav");
+            onMessageThreadVoid ([&]
+            {
+                tone.getParentDirectory().createDirectory();
+                WavAudioFormat wav;
+                std::unique_ptr<OutputStream> stream = std::make_unique<FileOutputStream> (tone);
+                auto w = wav.createWriterFor (stream, AudioFormatWriterOptions{}.withSampleRate (48000.0).withNumChannels (1).withBitsPerSample (16));
+                AudioBuffer<float> b (1, 48000);
+                b.clear();
+                w->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
+            });
+
+            say ("A new session is untitled and unchanged");
+            check (onMessageThread ([this] { return session->isUntitled() && ! session->hasUnsavedChanges(); }), "untitled, nothing unsaved");
+            waitMs (600);   // Tracktion clears its changed flag after loading
+            check (! onMessageThread ([this] { return session->hasUnsavedChanges(); }), "still nothing unsaved after the engine settles");
+
+            say ("An edit makes it unsaved; Save as writes the folder and clears it");
+            onMessageThreadVoid ([&]
+            {
+                auto& edit = session->getEdit();
+                carthage::editing::begin (edit, "Add clip");
+                tracktion::insertWaveClip (*tracktion::getAudioTracks (edit)[2], "tone", tone,
+                                           { { tracktion::TimePosition::fromSeconds (2.0), tracktion::TimeDuration::fromSeconds (1.0) } },
+                                           tracktion::DeleteExistingClips::no);
+                edit.getUndoManager().dispatchPendingMessages();
+            });
+            check (onMessageThread ([this] { return session->hasUnsavedChanges(); }), "unsaved after an edit");
+
+            const auto song = folder.getChildFile ("Projects/Song");
+            auto r = await ([&] (auto done) { session->saveAs (song, done); });
+            check (r.wasOk(), "save as: " + (r.wasOk() ? String ("written") : r.getErrorMessage()));
+            check (song.getChildFile ("Song.carthage").existsAsFile(), "Song/Song.carthage exists");
+            check (onMessageThread ([this] { return ! session->isUntitled() && ! session->hasUnsavedChanges() && session->getProjectName() == "Song"; }),
+                   "now named Song, nothing unsaved");
+
+            say ("Open it again: the clip comes back");
+            onMessageThreadVoid ([this] { session->newProject (folder.getChildFile ("Projects/Untitled")); });
+            check (clipCount() == 0, "a new project is empty");
+            check (onMessageThread ([&] { return session->openProject (song).wasOk(); }), "open the folder");
+            check (clipCount() == 1, "one clip");
+            waitMs (600);   // as a person would: Tracktion settles the new edit first
+            check (! onMessageThread ([this] { return session->hasUnsavedChanges() || session->getEdit().getUndoManager().canUndo(); }),
+                   "opening is not an edit: nothing unsaved, nothing to undo");
+
+            say ("Autosave: after a pause, written to the project's autosave folder");
+            onMessageThreadVoid ([this] { session->setAutosavePolicy ({ 0.3, 0.0, 10 }); });
+            onMessageThreadVoid ([this]
+            {
+                auto& edit = session->getEdit();
+                carthage::editing::begin (edit, "Move clip");
+                auto* c = tracktion::getAudioTracks (edit)[2]->getClips().getFirst();
+                carthage::editing::move ({ c }, 4.0, 0);
+                edit.getUndoManager().dispatchPendingMessages();
+            });
+            waitMs (1500);
+            const auto unclosed = onMessageThread ([this] { return carthage::autosave::Store (folder.getChildFile ("Autosave")).findUnclosed(); });
+            check (unclosed.size() == 1, "an open project with an autosave looks unclosed (as after a crash): " + String (unclosed.size()));
+
+            if (unclosed.size() == 1)
+            {
+                say ("Recover it, as after a crash: the moved clip is there and the project is unsaved");
+                const auto moved = onMessageThread ([this]
+                {
+                    auto* c = tracktion::getAudioTracks (session->getEdit())[2]->getClips().getFirst();
+                    return c->getPosition().getStart().inSeconds();
+                });
+                check (onMessageThread ([&] { return session->recover (unclosed.front()).wasOk(); }), "recover");
+                check (clipCount() == 1, "one clip");
+                const auto recovered = onMessageThread ([this]
+                {
+                    auto* c = tracktion::getAudioTracks (session->getEdit())[2]->getClips().getFirst();
+                    auto* a = dynamic_cast<tracktion::AudioClipBase*> (c);
+                    return std::pair { c->getPosition().getStart().inSeconds(), a != nullptr && a->getAudioFile().getFile().existsAsFile() };
+                });
+                check (std::abs (recovered.first - moved) < 1.0e-6, "at its moved position");
+                check (recovered.second, "its audio is found");
+                check (onMessageThread ([this] { return session->hasUnsavedChanges(); }), "unsaved until saved");
+
+                r = await ([&] (auto done) { session->save (done); });
+                check (r.wasOk(), "save");
+                check (! onMessageThread ([this] { return session->hasUnsavedChanges(); }), "saved");
+            }
+
+            say ("A clean close leaves no marker");
+            onMessageThreadVoid ([this] { session->close(); });
+            check (carthage::autosave::Store (folder.getChildFile ("Autosave")).findUnclosed().empty(), "nothing to recover");
+
+            say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
+            return checksFailed == 0 ? 0 : 1;
+        }
 
         //------------------------------------------------------------------------------------------
         String describeDevice()
