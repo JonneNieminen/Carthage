@@ -253,7 +253,7 @@ Deliver:
 - [ ] Split at playhead or cursor, duplicate, nudge, crossfades, loop range, markers, cached waveform thumbnails
 - [ ] Shortcut editor; every shortcut rebindable
 - [ ] **Proposed here, owner to confirm (O5):** undo/redo for everything so far, project save and load, autosave and crash recovery
-- [ ] **Owner's additions (F19), details in O9:** autosave only while the user is working (edit-driven, proposed); several projects open as tabs; the sample browser (proposed here, so samples drag onto lanes), with the click-or-hold play setting and its size and text-size settings
+- [ ] **Owner's additions (F19, W30):** edit-driven autosave (2 s pause, at most every 2 min, last 10 kept); projects as folders, several open as tabs (only the front one plays); "Collect samples into project", and always-copy as a setting; the sample browser (WAV, AIFF, FLAC, MP3, OGG; preview to the main output; click plays the whole sound by default; search and favourites; key and tempo detection; optional stretch to project tempo), with its size and text-size settings; a start screen with recent projects and templates, switchable (F20)
 
 Exit checks:
 - [ ] Frame time while zooming and scrolling a project with a few hundred clips, measured on a 120 Hz display and reported
@@ -275,7 +275,8 @@ Deliver:
 - [ ] Input/output picker per channel; "Guitar in → this channel, armed, monitoring" action; keyboard-driven selection
 - [ ] Plugin delay compensation across the whole graph; low-latency monitoring mode
 - [ ] **Proposed here, owner to confirm (O5):** metronome, count-in, loop recording with takes, punch in/out
-- [ ] **Owner's addition (F19), details in O9:** plugin presets, saved and loaded per plugin and (proposed) per Insert Line
+- [ ] **Owner's addition (F19, W30):** plugin presets in one format for one plugin or a whole Insert Line, in a folder the user chooses; opening .vstpreset and .aupreset, and other DAWs' presets as far as their formats allow
+- [ ] **Owner's ideas (F20):** CPU use per plugin; running chosen plugins in their own process; a tuner on the main view; recording the processed sound beside the dry one; take comping; freeze; stems export; MIDI learn
 
 Exit checks:
 - [ ] A clip, an instrument and a live input each routed to an arbitrary channel, then re-routed, while playing
@@ -312,6 +313,7 @@ Deliver:
 - [ ] Export: WAV 16/24/32-float and FLAC, with the quality settings from feature 8
 - [ ] README updated with real screenshots, install steps and the shortcut table; feature cards added to the README art
 - [ ] A pass over every feature in the brief, 1–12, with anything missing listed
+- [ ] **Owner's ideas (F20):** illustrated getting-started help (wiring an interface and microphone, what plugins do, starting with guitar), input level help, and troubleshooting that finds and fixes the actual problem
 
 Exit checks:
 - [ ] Every folder button opens the right folder
