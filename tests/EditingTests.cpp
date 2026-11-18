@@ -207,6 +207,23 @@ public:
                           "a paste undoes in one step");
         }
 
+        beginTest ("Stretching keeps pitch; a loop fitted to the tempo keeps its beats (W36)");
+        {
+            auto* stretched = newClip (0.0);
+            editing::stretchEnd (*stretched, 12.0);
+            expect (dynamic_cast<tracktion::AudioClipBase*> (stretched)->getTimeStretchMode() != tracktion::TimeStretcher::disabled,
+                    "a stretched clip is time-stretched, not sped up");
+
+            // The 4-second file as a loop at 60 bpm holds 4 beats; in this 120 bpm project that is 2 s.
+            auto* loop = editing::insertFile (*lanes[1], audio, 16.0);
+            editing::fitToTempo (*loop, 60.0);
+            auto* fitted = dynamic_cast<tracktion::AudioClipBase*> (loop);
+            expect (fitted->getAutoTempo(), "it follows the tempo");
+            near (editing::endBeat (*loop) - editing::startBeat (*loop), 4.0, "four beats long");
+            near (loop->getPosition().getLength().inSeconds(), 2.0, "two seconds at 120 bpm");
+            editing::remove ({ stretched, loop });
+        }
+
         beginTest ("A dropped sound lands at the beat, as long as the file (W30)");
         {
             auto* dropped = editing::insertFile (*lanes[1], audio, 6.0);

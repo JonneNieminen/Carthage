@@ -65,6 +65,9 @@ namespace carthage::engine
     {
         *alive = false;
         stopThread (4000);
+
+        if (saveSoon.isTimerRunning())
+            save();   // analyses not written yet
     }
 
     void SampleLibrary::addRoot (const juce::File& folder)
@@ -112,6 +115,9 @@ namespace carthage::engine
             samples = std::move (index->samples);
             indexing.store (false);
             changed();
+
+            if (onIndexed)
+                onIndexed();
         });
     }
 
@@ -136,6 +142,9 @@ namespace carthage::engine
         build (roots, folders, samples, nullptr);
         indexing.store (false);
         changed();
+
+        if (onIndexed)
+            onIndexed();
     }
 
     std::vector<size_t> SampleLibrary::find (const juce::String& query, bool favouritesOnly) const
@@ -228,8 +237,13 @@ namespace carthage::engine
     void SampleLibrary::setAnalysis (const juce::File& f, const Analysis& a)
     {
         analyses[f.getFullPathName()] = { f.getSize(), f.getLastModificationTime().toMilliseconds(), a };
-        save();
-        changed();
+
+        // Many arrive in a row: write and tell in batches.
+        if (! saveSoon.isTimerRunning())
+            saveSoon.startTimer (2000);
+
+        if (! changeSoon.isTimerRunning())
+            changeSoon.startTimer (250);
     }
 
     void SampleLibrary::changed()

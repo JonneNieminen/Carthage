@@ -167,6 +167,14 @@ packaging/           macos/ (sign.sh, make-dmg.sh, read-me), windows/ (Carthage.
   `carthage-sample:<path>`; the lanes also take audio files from the Finder/Explorer. A drop shows
   a ghost of where and how long the sound lands, snapped like any edit, and is one undo step
   (`editing::insertFile`).
+- **Key and tempo** (`engine/SampleAnalysis.h`). A background-priority thread analyses every listed
+  sound that has no analysis yet (the first minute, mixed to mono) and stores the result in the
+  library, which writes `Samples.xml` and tells the browser in batches. Tempo: spectral-flux onsets,
+  their autocorrelation over 60 to 200 bpm, the faster of two related tempos when both are strong,
+  and for a loop the tempo that makes it whole bars; none for one-shots. Key: a chromagram against
+  the Krumhansl-Kessler profiles; none for noise and drums.
+- **Time-stretching** (W36): Signalsmith Stretch through Tracktion; stretched clips and loops fitted
+  to the tempo play from proxy files Tracktion renders in the background.
 - **The timeline across tabs.** Waveform thumbnails belong to audio files, not projects, so they are
   kept when the front project changes; resolved clip paths are keyed by project file.
 

@@ -89,6 +89,8 @@ namespace carthage::engine
         };
 
         sampleLibrary = std::make_unique<SampleLibrary> (folders.settings);
+        sampleAnalyser = std::make_unique<SampleAnalyser> (*sampleLibrary);
+        sampleLibrary->onIndexed = [this] { sampleAnalyser->update(); };
 
         // Engine render threads join the device's audio workgroup (F8). Must be set before the
         // playback context is created.
@@ -994,6 +996,16 @@ namespace carthage::engine
     void Session::setAlwaysCopySamples (bool shouldCopy)
     {
         engine->getPropertyStorage().getPropertiesFile().setValue ("alwaysCopySamples", shouldCopy);
+    }
+
+    bool Session::getFitLoopsToTempo() const
+    {
+        return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("fitLoopsToTempo", false);
+    }
+
+    void Session::setFitLoopsToTempo (bool fit)
+    {
+        engine->getPropertyStorage().getPropertiesFile().setValue ("fitLoopsToTempo", fit);
     }
 
     bool Session::isOpen (const Project* p) const

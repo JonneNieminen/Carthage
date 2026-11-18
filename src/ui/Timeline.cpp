@@ -738,6 +738,11 @@ namespace carthage::ui
             for (const auto& f : dropping)
                 if (auto* c = editing::insertFile (*tracks[dropLane], f, beat))
                 {
+                    // A loop of known tempo can follow the project's (Settings > Browser).
+                    if (timeline.session.getFitLoopsToTempo())
+                        if (const auto a = timeline.session.getSampleLibrary().getAnalysis (f); a && a->bpm)
+                            editing::fitToTempo (*c, *a->bpm);
+
                     added.add (c);
                     beat = editing::endBeat (*c);
                 }

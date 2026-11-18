@@ -58,6 +58,7 @@ namespace carthage::ui
         juce::Slider panelWidth;
         juce::ComboBox textSize;
         juce::ToggleButton playWhileHeld { "Play sounds only while held" };
+        juce::ToggleButton fitLoops { "Fit loops to the project tempo" };
         ShortcutEditor shortcuts;
         juce::Viewport viewport;
         juce::Component body;

@@ -9,6 +9,7 @@ add_library(carthage_engine STATIC
     Editing.cpp Editing.h
     Project.cpp Project.h
     Autosave.cpp Autosave.h
+    SampleAnalysis.cpp SampleAnalysis.h
     SampleLibrary.cpp SampleLibrary.h
     SamplePreview.cpp SamplePreview.h
     Session.cpp Session.h

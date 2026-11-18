@@ -255,9 +255,36 @@ namespace carthage::editing
         if (oldLength <= 0.0 || newLength <= 0.0)
             return;
 
-        // A longer clip plays slower: speed scales by old / new length.
+        // A longer clip plays slower: speed scales by old / new length. With a stretch mode set,
+        // Tracktion time-stretches it, so the pitch stays where it was (W36).
+        if (auto* audio = dynamic_cast<AudioClipBase*> (&c); audio != nullptr && audio->getTimeStretchMode() == TimeStretcher::disabled)
+            audio->setTimeStretchMode (TimeStretcher::defaultMode);
+
         c.setSpeedRatio (c.getSpeedRatio() * oldLength / newLength);
         c.setEnd (newEnd, true);
+        crossfade (c);
+    }
+
+    void fitToTempo (Clip& c, double bpm)
+    {
+        auto* audio = dynamic_cast<AudioClipBase*> (&c);
+
+        if (audio == nullptr || bpm <= 0.0)
+            return;
+
+        const auto info = audio->getWaveInfo();
+        const auto seconds = info.getLengthInSeconds();
+
+        if (seconds <= 0.0)
+            return;
+
+        audio->getLoopInfo().setBpm (bpm, info);
+        audio->setTimeStretchMode (TimeStretcher::defaultMode);
+        audio->setAutoTempo (true);
+
+        // As many beats as the loop holds, at the project's tempo from where it starts.
+        const auto beats = seconds * bpm / 60.0;
+        c.setEnd (timeAt (c, startBeat (c) + beats), true);
         crossfade (c);
     }
 

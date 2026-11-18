@@ -69,8 +69,12 @@ namespace carthage::engine
         const std::vector<Folder>& getFolders() const noexcept      { return folders; }
         const std::vector<Sample>& getSamples() const noexcept      { return samples; }
 
-        /** After a new index, a favourite or an analysis. */
+        /** After a new index, a favourite or an analysis (analyses arrive many at a time, so
+            those are told at most four times a second). */
         std::function<void()> onChange;
+
+        /** After a new index only (the analyser looks for new sounds). */
+        std::function<void()> onIndexed;
 
         //==========================================================================================
         // Finding
@@ -105,6 +109,8 @@ namespace carthage::engine
 
         void load();
         void save() const;
+        juce::TimedCallback saveSoon { [this] { saveSoon.stopTimer(); save(); } };
+        juce::TimedCallback changeSoon { [this] { changeSoon.stopTimer(); changed(); } };
         void changed();
         void run() override;
     };

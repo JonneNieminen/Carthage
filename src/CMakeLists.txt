@@ -42,6 +42,9 @@ target_compile_definitions(carthage_juce
         $<$<PLATFORM_ID:Windows>:JUCE_WASAPI=1>
         # No stock plugins (F4): Tracktion's Airwindows effects stay compiled out.
         TRACKTION_AIR_WINDOWS=0
+        # Time-stretching (DECISIONS W36): Signalsmith Stretch, MIT, header-only, shipped inside the
+        # pinned Tracktion. The stretch tool keeps pitch, and loops can follow the project tempo.
+        TRACKTION_ENABLE_TIMESTRETCH_SIGNALSMITH=1
         TRACKTION_ENABLE_ARA=0
         TRACKTION_ENABLE_SINGLETONS=0
         TRACKTION_LOG_DEVICES=0

@@ -32,6 +32,10 @@ namespace carthage::editing
     /** Changes the clip's length by time-stretching its content to fill it (Option/Alt drag, S tool). */
     void stretchEnd (tracktion::Clip&, double newEndBeat);
 
+    /** Makes an audio clip of a loop at `bpm` follow the project's tempo (W30's option): its
+        content is time-stretched, keeping its pitch, and it keeps its length in beats. */
+    void fitToTempo (tracktion::Clip&, double bpm);
+
     /** Slides the content inside the clip; the clip stays put (Cmd/Ctrl drag). */
     void slip (tracktion::Clip&, double deltaBeats);
 

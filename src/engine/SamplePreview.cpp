@@ -85,6 +85,7 @@ namespace carthage::engine
 
         // The gain moves to the slider's value across the block, so moving it never clicks.
         const auto target = gain.load (std::memory_order_relaxed);
+        // fifo.read's scope marks the frames read when it ends (JUCE's ScopedRead).
         const auto step = (target - lastGain) / static_cast<float> (numSamples);
         auto g = lastGain;
         const auto scope = fifo.read (numSamples);
@@ -184,15 +185,16 @@ namespace carthage::engine
                                                           converted.getWritePointer (ch), out, in, 0);
 
                     readPosition += used;
-                    const auto scope = fifo.write (out);
-
-                    for (int ch = 0; ch < 2; ++ch)
                     {
-                        if (scope.blockSize1 > 0) ring.copyFrom (ch, scope.startIndex1, converted, ch, 0, scope.blockSize1);
-                        if (scope.blockSize2 > 0) ring.copyFrom (ch, scope.startIndex2, converted, ch, scope.blockSize1, scope.blockSize2);
-                    }
+                        // The scope marks the frames written when it ends (JUCE's ScopedWrite).
+                        const auto scope = fifo.write (out);
 
-                    fifo.finishedWrite (scope.blockSize1 + scope.blockSize2);
+                        for (int ch = 0; ch < 2; ++ch)
+                        {
+                            if (scope.blockSize1 > 0) ring.copyFrom (ch, scope.startIndex1, converted, ch, 0, scope.blockSize1);
+                            if (scope.blockSize2 > 0) ring.copyFrom (ch, scope.startIndex2, converted, ch, scope.blockSize1, scope.blockSize2);
+                        }
+                    }
 
                     if (readPosition >= reader->lengthInSamples)
                         sourceDone.store (true);

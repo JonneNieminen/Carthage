@@ -1,3 +1,4 @@
+#include <engine/SampleAnalysis.h>
 #include <engine/SampleLibrary.h>
 #include <engine/SamplePreview.h>
 
@@ -22,6 +23,84 @@ namespace
 
         writer->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
         return file;
+    }
+}
+
+namespace synth
+{
+    constexpr double rate = 44100.0;
+
+    double hz (int midi)   { return 440.0 * std::pow (2.0, (midi - 69) / 12.0); }
+
+    /** Chords, each held for `seconds`, with a second harmonic. */
+    std::vector<float> chords (const std::vector<std::vector<int>>& progression, double seconds)
+    {
+        std::vector<float> out;
+
+        for (const auto& chord : progression)
+        {
+            const auto n = static_cast<int> (seconds * rate);
+
+            for (int i = 0; i < n; ++i)
+            {
+                const auto t = i / rate;
+                const auto env = std::min (1.0, std::min (i, n - i) / 2000.0);
+                double v = 0.0;
+
+                for (auto m : chord)
+                    v += std::sin (2 * juce::MathConstants<double>::pi * hz (m) * t) + 0.3 * std::sin (4 * juce::MathConstants<double>::pi * hz (m) * t);
+
+                out.push_back (static_cast<float> (0.15 * env * v));
+            }
+        }
+
+        return out;
+    }
+
+    /** One plucked note per beat at `bpm`. */
+    std::vector<float> line (double bpm, const std::vector<int>& notes)
+    {
+        std::vector<float> out;
+        const auto n = static_cast<int> (60.0 / bpm * rate);
+
+        for (auto m : notes)
+            for (int i = 0; i < n; ++i)
+            {
+                const auto t = i / rate;
+                out.push_back (static_cast<float> (0.5 * std::exp (-t * 4.0)
+                                                   * (std::sin (2 * juce::MathConstants<double>::pi * hz (m) * t)
+                                                      + 0.5 * std::sin (4 * juce::MathConstants<double>::pi * hz (m) * t))));
+            }
+
+        return out;
+    }
+
+    /** A click on every beat at `bpm` for `seconds`. */
+    std::vector<float> clicks (double bpm, double seconds)
+    {
+        std::vector<float> out (static_cast<size_t> (seconds * rate), 0.0f);
+
+        for (double beat = 0.0; beat * 60.0 / bpm < seconds; beat += 1.0)
+        {
+            const auto start = static_cast<size_t> (beat * 60.0 / bpm * rate);
+
+            for (size_t i = 0; i < 1200 && start + i < out.size(); ++i)
+                out[start + i] = static_cast<float> (0.8 * std::exp (-static_cast<double> (i) / 180.0)
+                                                     * std::sin (2 * juce::MathConstants<double>::pi * 1000.0 * static_cast<double> (i) / rate));
+        }
+
+        return out;
+    }
+
+    std::vector<float> noise (double seconds)
+    {
+        juce::Random r (7);
+        std::vector<float> out (static_cast<size_t> (seconds * rate));
+
+        for (size_t i = 0; i < out.size(); ++i)
+            out[i] = static_cast<float> (0.6 * std::exp (-static_cast<double> (i) / 3000.0) * (r.nextDouble() * 2.0 - 1.0));
+
+        return out;
     }
 }
 
@@ -104,6 +183,32 @@ public:
 
             writeSine (loop, 0.3);   // rewritten: another size
             expect (! samples.getAnalysis (loop).has_value(), "a changed file is analysed again");
+        }
+
+        beginTest ("Key and tempo of sounds whose key and tempo are known");
+        {
+            const auto run = [] (const std::vector<float>& v) { return engine::analysis::analyse (v.data(), static_cast<int> (v.size()), synth::rate); };
+
+            // A minor with its raised seventh (Am Dm E Am), and C major (C F G C): two bars each chord.
+            const auto aMinor = run (synth::chords ({ { 57, 60, 64 }, { 50, 53, 57 }, { 52, 56, 59 }, { 57, 60, 64 } }, 2.0));
+            expectEquals (aMinor.key, juce::String ("A minor"));
+            const auto cMajor = run (synth::chords ({ { 48, 52, 55 }, { 53, 57, 60 }, { 55, 59, 62 }, { 48, 52, 55 } }, 2.0));
+            expectEquals (cMajor.key, juce::String ("C major"));
+
+            // A bass line in E minor at 90 bpm, 16 beats.
+            const auto bass = run (synth::line (90.0, { 40, 40, 43, 45, 47, 45, 43, 40, 40, 40, 43, 45, 47, 45, 43, 40 }));
+            expect (bass.bpm.has_value(), "the bass line has a tempo");
+            expectWithinAbsoluteError (bass.bpm.value_or (0.0), 90.0, 0.5, "90 bpm");
+            expectEquals (bass.key, juce::String ("E minor"));
+
+            const auto click = run (synth::clicks (120.0, 8.0));
+            expectWithinAbsoluteError (click.bpm.value_or (0.0), 120.0, 0.5, "clicks at 120 bpm");
+            const auto fast = run (synth::clicks (174.0, 8.0));
+            expectWithinAbsoluteError (fast.bpm.value_or (0.0), 174.0, 1.0, "clicks at 174 bpm");
+
+            const auto snare = run (synth::noise (0.4));
+            expect (snare.key.isEmpty() && ! snare.bpm.has_value(), "a noise burst: no key, no tempo");
+            expectWithinAbsoluteError (snare.seconds, 0.4, 0.01);
         }
 
         beginTest ("Preview: plays at its own volume; a new sound replaces the old at once; stop is silent");

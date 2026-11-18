@@ -6,6 +6,7 @@
 #include "PluginLibrary.h"
 #include "PluginScan.h"
 #include "Project.h"
+#include "SampleAnalysis.h"
 #include "SampleLibrary.h"
 #include "SamplePreview.h"
 #include "TakePlacement.h"
@@ -151,6 +152,10 @@ namespace carthage::engine
         bool getAlwaysCopySamples() const;
         void setAlwaysCopySamples (bool);
 
+        /** Settings: a dropped loop whose tempo is known follows the project's tempo (W30). */
+        bool getFitLoopsToTempo() const;
+        void setFitLoopsToTempo (bool);
+
         /** Quitting: waits for writes in hand and records that every project closed cleanly. */
         void close();
 
@@ -248,6 +253,7 @@ namespace carthage::engine
         std::unique_ptr<PluginLibrary> library;
         std::unique_ptr<PluginScanner> pluginScanner;   // after the catalogue: destroyed first
         std::unique_ptr<SampleLibrary> sampleLibrary;
+        std::unique_ptr<SampleAnalyser> sampleAnalyser;   // after the library: stopped first
         std::unique_ptr<tracktion::Engine> engine;
         TakeRecorder recorder;
         LatencyProbe probe;

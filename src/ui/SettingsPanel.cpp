@@ -111,7 +111,12 @@ namespace carthage::ui
             if (onPlayWhileHeldChanged) onPlayWhileHeldChanged (playWhileHeld.getToggleState());
         };
 
-        for (auto* c : std::initializer_list<Component*> { &browserHeading, &panelWidthLabel, &panelWidth, &textSizeLabel, &textSize, &playWhileHeld })
+        fitLoops.setToggleState (session.getFitLoopsToTempo(), dontSendNotification);
+        fitLoops.setTooltip ("A loop dropped on a lane is stretched to the project's tempo, keeping its pitch, when its tempo is known. "
+                             "Off: loops play as recorded.");
+        fitLoops.onClick = [this] { session.setFitLoopsToTempo (fitLoops.getToggleState()); };
+
+        for (auto* c : std::initializer_list<Component*> { &browserHeading, &panelWidthLabel, &panelWidth, &textSizeLabel, &textSize, &playWhileHeld, &fitLoops })
             body.addAndMakeVisible (c);
 
         for (auto* c : std::initializer_list<Component*> { &projectsHeading, &copySamples, &copySamplesHint, &versionLabel, &versionValue, &checkNow, &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
@@ -458,6 +463,7 @@ namespace carthage::ui
         row (panelWidthLabel, panelWidth);
         row (textSizeLabel, textSize);
         playWhileHeld.setBounds (r.removeFromTop (rowHeight));
+        fitLoops.setBounds (r.removeFromTop (rowHeight));
 
         heading (updatesHeading);
         {

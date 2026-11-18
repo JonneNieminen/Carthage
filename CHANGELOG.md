@@ -26,6 +26,12 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   and play. Search across every folder, star favourites, and drag a sound onto a lane (sounds
   dragged in from the Finder land there too). Settings > Browser sets the panel's width, the text
   size, and whether sounds play only while held.
+- The sample browser finds each sound's key and tempo in the background and shows them beside
+  its name. Settings > Browser can fit a dropped loop to the project's tempo.
+
+### Changed
+- Stretching a clip (the S tool, or Option/Alt on an edge) keeps its pitch.
+
 
 ## 0.1.2-beta.4 - 2026-11-18
 
