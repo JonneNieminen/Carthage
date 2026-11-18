@@ -14,7 +14,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
 | 3. Plugin manager and scanning | Verified (2026-11-18) |
-| 4. Timeline, grid, snapping, tools, shortcuts | 4a verified (2026-11-18); 4b next, after the owner's go-ahead |
+| 4. Timeline, grid, snapping, tools, shortcuts | 4a verified (2026-11-18); 4b built and measured, the owner's hands-on checks next |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
 | 7. Help page, icon and polish | Not started |
@@ -351,10 +351,10 @@ Needs owner:  1. Make the signing certificate (docs/RELEASING.md, "Making the si
 ### Phase 4b — projects as tabs, the sample browser, the start screen
 
 Deliver (F19, F20, W30):
-- [ ] Projects as folders, several open as tabs; only the front one plays, the others pause with plugins loaded; copy and paste between tabs
-- [ ] "Collect samples into project", and always-copy as a setting
-- [ ] The sample browser on the left with the plugin browser: built from the user's own folders ("Add folder"), deep folders, WAV, AIFF, FLAC, MP3, OGG; a click plays the whole sound by default, or plays while held (setting); preview to the main output with its own volume; search and favourites; key and tempo detection; optional stretch to project tempo; panel width and text size in Settings; drag onto lanes
-- [ ] A start screen with recent projects and templates, on by default, switchable in Settings
+- [x] Projects as folders, several open as tabs; only the front one plays, the others pause with plugins loaded; copy and paste between tabs
+- [x] "Collect samples into project", and always-copy as a setting
+- [x] The sample browser on the left with the plugin browser: built from the user's own folders ("Add folder"), deep folders, WAV, AIFF, FLAC, MP3, OGG; a click plays the whole sound by default, or plays while held (setting); preview to the main output with its own volume; search and favourites; key and tempo detection; optional stretch to project tempo; panel width and text size in Settings; drag onto lanes
+- [x] A start screen with recent projects and templates, on by default, switchable in Settings
 
 Exit checks:
 - [ ] Two projects open as tabs; switching is instant and only the front one plays; a clip copied from one pastes into the other
@@ -362,7 +362,16 @@ Exit checks:
 - [ ] Key and tempo detection checked on samples with known key and tempo; results reported
 - [ ] The start screen opens recent projects and templates; switching it off works
 
-Report: _not written yet_
+Report: _after the owner's hands-on checks_. Measured so far (2026-11-18): ten tab switches between
+the 300-clip demo and an empty project, slowest 18-21 ms; nothing unsaved after switching; only the
+front project has a playback graph; a clip copied in one tab pastes into another on the same lane
+and finds its audio (carthage-bench projects). A library of 2,976 generated sounds in 12 packs:
+indexed in 166 ms, slowest of eight searches 4.0 ms, analysis 4.3 ms a file (about 13 s for all, in
+the background), preview ready 2.6 ms after the click (carthage-bench samples); the app held 120 Hz
+while indexing and analysing it (0-1 late frames a second over 20 s, after one 250 ms frame at
+launch). Key and tempo on generated sounds: A minor, C major, E minor and 90, 120 and 174 bpm all
+right; held chords no tempo; a noise burst nothing; a tuned hit its note (SampleTests). RTSan, 60 s
+with NeuralAmpModeler and the preview playing: 0 failures, no report in Carthage's code, 0 dropouts.
 
 ## Phase 5 — Mixer, insert Lines, per-channel I/O
 
