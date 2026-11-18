@@ -89,7 +89,8 @@ Numbers go in the phase report. An impression ("feels smooth", "low latency") is
   `build/<preset>/test-plugins/Carthage Test Crash.vst3` and `… Hang.vst3`): the unit test checks the
   scanner reports one as crashed and the other as hung; `carthage-bench scanall --folder
   build/<preset>/test-plugins` runs the real background scan with them among the real plugins.
-- **Frame time.** Run the app with `CARTHAGE_FRAME_LOG=1` (on macOS: `open --env CARTHAGE_FRAME_LOG=1
+- **Frame time.** `carthage-bench demo --out build/demo/Demo --clips 300` writes a project with 300
+  clips over the eight lanes; pass its `.carthage` file to the app to open it at launch. Run the app with `CARTHAGE_FRAME_LOG=1` (on macOS: `open --env CARTHAGE_FRAME_LOG=1
   --stderr frames.log Carthage.app --args --rescan-plugins` to rescan everything at launch); once a
   second it writes the frame intervals (median, p99, worst, late frames) and the scan's state.
 - **Back-to-back takes.** `carthage-bench takes` records takes the way a player does (record, stop,

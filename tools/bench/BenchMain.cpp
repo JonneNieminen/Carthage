@@ -22,6 +22,10 @@
 //   carthage-bench projects
 //                          (through the app's Session: save as, reopen, save, autosave after a pause, a
 //                          crash left behind and its recovery; needs no particular device)
+//   carthage-bench demo    --out FOLDER [--clips 300]
+//                          (writes a project folder with that many clips over the eight lanes, for
+//                          measuring the timeline's frame time; open it with File > Open or
+//                          `open Carthage.app --args FOLDER/NAME.carthage`)
 //   carthage-bench align   --device NAME --rate HZ --buffer N --in N [--seconds 10] [--click-out N] [--settle-ms N]
 //                          [--measured-out N]
 //
@@ -127,6 +131,7 @@ namespace
             else if (args.command == "wgprobe") result = wgprobe();
             else if (args.command == "scanall") result = scanall();
             else if (args.command == "projects") result = projects();
+            else if (args.command == "demo")     result = demo();
             else say ("unknown command: " + args.command);
 
             onMessageThreadVoid ([this] { session.reset(); });
@@ -173,6 +178,74 @@ namespace
                     n += t->getClips().size();
                 return n;
             });
+        }
+
+        int demo()
+        {
+            const File out (File::getCurrentWorkingDirectory().getChildFile (args.get ("out", "Demo")));
+            const auto count = args.getInt ("clips", 300);
+
+            if (out.exists() && ! out.isDirectory())
+            {
+                say (out.getFullPathName() + " is a file");
+                return 1;
+            }
+
+            // A few takes of different lengths: a decaying chord, so the waveforms show shape.
+            Array<File> takes;
+            for (int t = 0; t < 4; ++t)
+            {
+                const auto file = carthage::project::recordingsIn (out).getChildFile ("Demo take " + String (t + 1) + ".wav");
+                file.getParentDirectory().createDirectory();
+                WavAudioFormat wav;
+                std::unique_ptr<OutputStream> stream = std::make_unique<FileOutputStream> (file);
+                auto w = wav.createWriterFor (stream, AudioFormatWriterOptions{}.withSampleRate (48000.0).withNumChannels (1).withBitsPerSample (16));
+                const auto seconds = 1.0 + t * 0.75;
+                AudioBuffer<float> b (1, static_cast<int> (48000 * seconds));
+
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto x = static_cast<float> (i) / 48000.0f;
+                    const auto env = std::exp (-x * (2.0f + static_cast<float> (t)));
+                    b.setSample (0, i, 0.5f * env * (std::sin (x * 2.0f * MathConstants<float>::pi * 110.0f * static_cast<float> (t + 1))
+                                                     + 0.5f * std::sin (x * 2.0f * MathConstants<float>::pi * 165.0f)));
+                }
+
+                w->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
+                takes.add (file);
+            }
+
+            const auto r = onMessageThread ([&]
+            {
+                const auto file = carthage::project::fileIn (out);
+                auto edit = carthage::project::createEdit (session->getEngine(), file);
+                edit->ensureNumberOfAudioTracks (8);
+                const auto lanes = tracktion::getAudioTracks (*edit);
+                Random random (42);
+                std::array<double, 8> next {};
+
+                for (int i = 0; i < count; ++i)
+                {
+                    const auto lane = i % 8;
+                    const auto& take = takes[random.nextInt (takes.size())];
+                    const auto length = 1.0 + random.nextInt (3) * 0.5;
+                    next[static_cast<size_t> (lane)] += random.nextInt (3) * 0.5;
+                    tracktion::insertWaveClip (*lanes[lane], "Clip " + String (i + 1), take,
+                                               { { tracktion::TimePosition::fromSeconds (next[static_cast<size_t> (lane)]), tracktion::TimeDuration::fromSeconds (length) } },
+                                               tracktion::DeleteExistingClips::no);
+                    next[static_cast<size_t> (lane)] += length;
+                }
+
+                lanes[0]->setName ("Guitar");
+                for (int i = 1; i < lanes.size(); ++i)
+                    lanes[i]->setName ("Lane " + String (i + 1));
+
+                return carthage::project::write (carthage::project::snapshot (*edit, file, carthage::project::Info::createNew()), file);
+            });
+
+            say (r.wasOk() ? "wrote " + carthage::project::fileIn (out).getFullPathName() + " with " + String (count) + " clips"
+                           : r.getErrorMessage());
+            return r.wasOk() ? 0 : 1;
         }
 
         int projects()

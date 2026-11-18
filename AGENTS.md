@@ -85,6 +85,9 @@ build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench align 
     --rate 48000 --buffer 64 --in 4 --click-out 3 --measured-out 3
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench scanall --parallel 4
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench projects   # save, reopen, autosave, recovery
+build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench demo --out build/demo/Demo --clips 300
+open --env CARTHAGE_FRAME_LOG=1 --stderr build/demo/frames.log build/release/src/app/Carthage_artefacts/Release/Carthage.app \
+    --args "$PWD/build/demo/Demo/Demo.carthage"   # a project on the command line opens at launch
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench takes --device "Audient iD44" \
     --rate 48000 --buffer 512 --plugin-format AudioUnit --plugin "AudioUnit:Effects/aufx,Akrc,Bgrn"
 ```

@@ -160,8 +160,13 @@ namespace carthage::app
         const String getApplicationVersion() override   { return CARTHAGE_VERSION_STRING; }
         bool moreThanOneInstanceAllowed() override      { return false; }
 
-        void initialise (const String&) override
+        void initialise (const String& commandLine) override
         {
+            // A project given on the command line (or by the OS) opens once the engine is up.
+            for (const auto& arg : StringArray::fromTokens (commandLine, true))
+                if (const File f (arg.unquoted()); File::isAbsolutePath (arg.unquoted()) && f.hasFileExtension (carthage::project::extension))
+                    projectToOpen = f;
+
             LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
             tooltips = std::make_unique<TooltipWindow> (nullptr, 600);
             window = std::make_unique<MainWindow>();
@@ -203,7 +208,11 @@ namespace carthage::app
 
             startUpdater (content);
             updateTitle();
-            offerRecovery (unclosed);
+
+            if (projectToOpen.existsAsFile())
+                report (session->openProject (projectToOpen));
+            else
+                offerRecovery (unclosed);
 
             // Plugins installed or updated since the last run are checked in the background;
             // --rescan-plugins checks them all (for measuring the UI during a full scan).
@@ -544,6 +553,7 @@ namespace carthage::app
         std::unique_ptr<Updater> updater;
         std::unique_ptr<FileChooser> chooser;
         std::unique_ptr<ShortcutSaver> shortcutSaver;
+        File projectToOpen;
     };
 }
 
