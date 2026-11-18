@@ -6,6 +6,7 @@ add_library(carthage_engine STATIC
     time/Grid.cpp time/Grid.h
     PluginScan.cpp PluginScan.h
     RealtimeCheck.h
+    Editing.cpp Editing.h
     Session.cpp Session.h
     TakePlacement.h
     TakeRecorder.cpp TakeRecorder.h)

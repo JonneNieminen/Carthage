@@ -3,6 +3,7 @@ add_subdirectory(plugins)   # broken test plugins for the scanner (macOS)
 juce_add_console_app(carthage_tests PRODUCT_NAME "carthage-tests")
 target_sources(carthage_tests PRIVATE
     TestMain.cpp
+    EditingTests.cpp
     GridTests.cpp
     LatencyProbeTests.cpp
     PluginLibraryTests.cpp

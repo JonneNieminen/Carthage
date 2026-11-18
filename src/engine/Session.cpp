@@ -1,4 +1,5 @@
 #include "Session.h"
+#include "Editing.h"
 
 #include <tracktion_graph/tracktion_graph.h>
 
@@ -103,6 +104,7 @@ namespace carthage::engine
         callback->attach();
 
         edit = tracktion::createEmptyEdit (*engine, folders.project.getChildFile ("Session.tracktionedit"));
+        editing::useConsistentFilePaths (*edit);   // clips beside the edit find their audio (W32)
         edit->playInStopEnabled = true;    // the graph runs while stopped, so the input is always heard
         edit->ensureNumberOfAudioTracks (1);
         track = tracktion::getAudioTracks (*edit).getFirst();

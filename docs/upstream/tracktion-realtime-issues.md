@@ -56,3 +56,22 @@ Separately, `CoreAudioIODevice::getCurrentSampleRate()` and `getCurrentBufferSiz
 `DeviceSetup` (with `BigInteger` members) through `DeviceConfigurator::getCurrentSetup()`, so calling
 them from the audio thread allocates. Hosts (Tracktion Engine among them) do call them from the audio
 callback. Returning cached values would make them safe there.
+
+---
+
+## 3. Tracktion Engine: relative clip paths are written and read differently
+
+**Title:** Relative source paths resolve one folder too high (SourceFileReference vs filePathResolver)
+
+At `develop` c6293127, `SourceFileReference::findPathFromFile` writes a relative path with
+`newFile.getRelativePathFrom (editFile)`. `File::getRelativePathFrom` takes a directory, so for an
+audio file beside the edit (`/proj/Song.tracktionedit`, `/proj/take.wav`) it stores `../take.wav`.
+The default `Edit::filePathResolver` (Edit.cpp, no project) resolves a relative path with
+`editFile.getSiblingFile (path)`, giving `/take.wav`, which does not exist. The fallback without a
+resolver, `getEditFileFromProjectManager (edit).getChildFile (path)`, would be consistent.
+
+Repro: `createEmptyEdit (engine, dir.getChildFile ("Test.tracktionedit"))`, `insertWaveClip` a
+file from `dir`; the clip's `source` is `../tone.wav` and `getAudioFile().getFile()` is
+`dir.getParentDirectory().getChildFile ("tone.wav")`. Either writing relative to the edit's folder
+(`getRelativePathFrom (editFile.getParentDirectory())`) or resolving with `getChildFile` would fix
+it; the first keeps already-saved sibling paths working.
