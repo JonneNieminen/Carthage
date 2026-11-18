@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Controls.h"
+#include "PluginBrowser.h"
 #include "SettingsPanel.h"
 #include "TakeLane.h"
 #include "UpdateBanner.h"
@@ -17,7 +18,8 @@ namespace carthage::ui
 
         Animates only from the display's frame callback (VBlankAttachment): meters, the playhead,
         the load figure. Nothing else moves. */
-    class MainComponent final : public juce::Component, public juce::ApplicationCommandTarget
+    class MainComponent final : public juce::Component, public juce::ApplicationCommandTarget,
+                                public juce::DragAndDropContainer
     {
     public:
         MainComponent (engine::Session&, juce::ApplicationCommandManager&);
@@ -44,6 +46,7 @@ namespace carthage::ui
         void showUpdate (std::optional<UpdateBanner::Model>);
         UpdateBanner& getUpdateBanner() noexcept    { return updateBanner; }
         SettingsPanel& getSettings() noexcept       { return settings; }
+        PluginBrowser& getPluginBrowser() noexcept  { return browser; }
 
     private:
         class SignalRow;
@@ -63,6 +66,8 @@ namespace carthage::ui
         SettingsPanel settings;
         bool settingsOpen = false;
         UpdateBanner updateBanner;
+        PluginBrowser browser;
+        bool browserOpen = true;
 
         std::unique_ptr<PluginWindow> pluginWindow;
         std::optional<double> recordingFrom;
@@ -77,7 +82,8 @@ namespace carthage::ui
         void updateTransportButtons();
         void updateFigures();
         void choosePlugin();
-        void scanAndInsert (const engine::PluginCandidate&);
+        void insertPlugin (const juce::PluginDescription&);
+        void toggleBrowser();
         void openPluginWindow();
         void closePluginWindow();
         void setStatus (const juce::String&, juce::Colour = theme::muted);

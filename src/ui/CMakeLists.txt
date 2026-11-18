@@ -2,6 +2,7 @@
 add_library(carthage_ui STATIC
     Controls.cpp Controls.h
     MainComponent.cpp MainComponent.h
+    PluginBrowser.cpp PluginBrowser.h
     SettingsPanel.cpp SettingsPanel.h
     TakeLane.cpp TakeLane.h
     UpdateBanner.cpp UpdateBanner.h

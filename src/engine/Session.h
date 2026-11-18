@@ -2,6 +2,7 @@
 
 #include "AudioCallback.h"
 #include "LatencyProbe.h"
+#include "PluginLibrary.h"
 #include "PluginScan.h"
 #include "TakePlacement.h"
 #include "TakeRecorder.h"
@@ -47,6 +48,12 @@ namespace carthage::engine
         TakeRecorder& getRecorder() noexcept                    { return recorder; }
         LatencyProbe& getProbe() noexcept                       { return probe; }
         PluginCatalogue& getPlugins() noexcept                  { return *plugins; }
+        PluginScanner& getPluginScanner() noexcept              { return *pluginScanner; }
+        PluginLibrary& getPluginLibrary() noexcept              { return *library; }
+
+        /** After the scanner confirmed or blocked a plugin, and after a scan: the library is
+            already up to date when this is called. */
+        std::function<void()> onPluginsChanged;
         const Folders& getFolders() const noexcept              { return folders; }
         const juce::File& getScanner() const noexcept           { return scanner; }
 
@@ -134,6 +141,8 @@ namespace carthage::engine
         juce::File scanner;
         PluginCatalogue* loadGate = nullptr;   // read by the engine's plugin load gate
         std::unique_ptr<PluginCatalogue> plugins;
+        std::unique_ptr<PluginLibrary> library;
+        std::unique_ptr<PluginScanner> pluginScanner;   // after the catalogue: destroyed first
         std::unique_ptr<tracktion::Engine> engine;
         TakeRecorder recorder;
         LatencyProbe probe;

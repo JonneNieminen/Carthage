@@ -15,6 +15,20 @@ namespace carthage::engine
         if (t.startsWith (q))
             return 1000 + q.length() * 10 - (t.length() - q.length());   // exact prefix wins
 
+        // The query as one piece: at the start of a word ("amp" in "Neural Amp Modeler") it beats
+        // letters scattered over several words; anywhere else it still ranks well.
+        for (int at = t.indexOf (q); at >= 0; at = t.indexOf (at + 1, q))
+        {
+            const bool wordStart = ! juce::CharacterFunctions::isLetterOrDigit (t[at - 1])
+                                   || (juce::CharacterFunctions::isUpperCase (text[at]) && juce::CharacterFunctions::isLowerCase (text[at - 1]));
+
+            if (wordStart)
+                return 800 + q.length() * 10 - at;
+        }
+
+        if (const auto at = t.indexOf (q); at > 0)
+            return 500 + q.length() * 10 - at;
+
         // Walk the text once, matching the query's letters in order.
         int score = 0, qi = 0, run = 0, lastMatch = -2;
         const auto qn = q.length(), tn = t.length();

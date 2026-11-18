@@ -36,7 +36,7 @@ namespace carthage::ui
     //==============================================================================================
     /** The signal path on one line: input, plugin, output, joined by a cable that lights when the
         input is audible. The plugin is the one raised thing on it. */
-    class MainComponent::SignalRow final : public Component
+    class MainComponent::SignalRow final : public Component, public DragAndDropTarget
     {
     public:
         SignalRow (engine::Session& s, ApplicationCommandManager& c) : session (s), commands (c)
@@ -205,6 +205,26 @@ namespace carthage::ui
 
         std::function<void()> onRemove;
 
+        /** A plugin dragged from the browser onto the card: its library key. */
+        std::function<void (const String&)> onPluginDropped;
+
+        bool isInterestedInDragSource (const SourceDetails& d) override
+        {
+            return d.description.toString().startsWith (PluginBrowser::dragPrefix);
+        }
+
+        void itemDragEnter (const SourceDetails&) override   { dropHover = true; repaint(); }
+        void itemDragExit (const SourceDetails&) override    { dropHover = false; repaint(); }
+
+        void itemDropped (const SourceDetails& d) override
+        {
+            dropHover = false;
+            repaint();
+
+            if (onPluginDropped)
+                onPluginDropped (d.description.toString().fromFirstOccurrenceOf (PluginBrowser::dragPrefix, false, false));
+        }
+
         void paint (Graphics& g) override
         {
             g.fillAll (theme::bg2);
@@ -229,6 +249,13 @@ namespace carthage::ui
             g.setColour (session.getInsertedPlugin() != nullptr && session.getInsertedPlugin()->isEnabled() && cableLive
                              ? theme::accent.withAlpha (0.6f) : theme::line);
             g.drawRoundedRectangle (r.reduced (0.5f), theme::radiusMd, theme::stroke);
+
+            if (dropHover)
+            {
+                // A plugin is being dragged over the row: the card is where it lands.
+                g.setColour (theme::accent);
+                g.drawRoundedRectangle (r.expanded (2.0f), theme::radiusMd + 2.0f, 2.0f);
+            }
         }
 
         void resized() override
@@ -292,6 +319,7 @@ namespace carthage::ui
         ToggleButton monitor { "Hear the input" };
         TextButton choose { "Choose a plugin" }, open { "Open" }, bypass { "Bypass" }, remove { "Remove" };
         Rectangle<int> cardBounds;
+        bool dropHover = false;
         int inputEdge = 0, outputEdge = 0;
         bool cableLive = false, messageIsWarning = false;
         String message, scanning;
@@ -304,7 +332,7 @@ namespace carthage::ui
 
     //==============================================================================================
     MainComponent::MainComponent (engine::Session& s, ApplicationCommandManager& c)
-        : session (s), commands (c), takeLane (s.getTrack()), settings (s)
+        : session (s), commands (c), takeLane (s.getTrack()), settings (s), browser (s)
     {
         signalRow = std::make_unique<SignalRow> (session, commands);
         signalRow->onRemove = [this] { closePluginWindow(); session.removePlugin(); signalRow->setMessage ({}, false); };
@@ -336,6 +364,14 @@ namespace carthage::ui
             addAndMakeVisible (comp);
 
         addChildComponent (settings);
+        addAndMakeVisible (browser);
+        browser.onInsert = [this] (const PluginDescription& d) { insertPlugin (d); };
+        signalRow->onPluginDropped = [this] (const String& key)
+        {
+            if (const auto* e = session.getPluginLibrary().findEntry (key))
+                insertPlugin (e->description);
+        };
+        session.onPluginsChanged = [this] { browser.refresh(); };
         addChildComponent (updateBanner);   // shown by the app's updater
         settings.onClose = [this] { toggleSettings(); };
 
@@ -365,6 +401,7 @@ namespace carthage::ui
         vblank.reset();
         session.onDeviceChanged = nullptr;
         session.onTakeEnded = nullptr;
+        session.onPluginsChanged = nullptr;
         closePluginWindow();
     }
 
@@ -387,6 +424,7 @@ namespace carthage::ui
                                          info.setTicked (hasPlugin && ! session.getInsertedPlugin()->isEnabled()); break;
             case cmd::record:            info.setTicked (session.isRecording()); break;
             case cmd::audioSettings:     info.setTicked (settingsOpen); break;
+            case cmd::pluginBrowser:     info.setTicked (browserOpen); break;
             case cmd::measureLatency:    info.setActive (! session.isRecording()); break;
             default: break;
         }
@@ -401,6 +439,7 @@ namespace carthage::ui
             case cmd::returnToStart:    if (! session.isRecording()) session.returnToStart(); return true;
             case cmd::toggleMonitoring: session.setMonitoring (! session.isMonitoring()); return true;
             case cmd::choosePlugin:     choosePlugin(); return true;
+            case cmd::pluginBrowser:    toggleBrowser(); return true;
             case cmd::openPluginEditor: openPluginWindow(); return true;
             case cmd::bypassPlugin:
                 if (auto* p = session.getInsertedPlugin())
@@ -492,85 +531,29 @@ namespace carthage::ui
     //==============================================================================================
     void MainComponent::choosePlugin()
     {
-        auto candidates = std::make_shared<std::vector<engine::PluginCandidate>> (session.getPlugins().findCandidates());
-        PopupMenu au, vst3;
+        // The browser is where plugins are chosen; this opens it with the search ready.
+        if (! browserOpen)
+            toggleBrowser();
 
-        for (size_t i = 0; i < candidates->size(); ++i)
-        {
-            const auto& c = (*candidates)[i];
-            const bool blocked = session.getPlugins().isBlocked (c.fileOrIdentifier);
-            auto& menu = c.formatName == "AudioUnit" ? au : vst3;
-            menu.addItem (static_cast<int> (i) + 1, blocked ? c.name + " (blocked)" : c.name, ! blocked);
-        }
-
-        PopupMenu menu;
-        menu.addSectionHeader ("Plugins on this computer");
-        menu.addSubMenu ("Audio Units", au, au.getNumItems() > 0);
-        menu.addSubMenu ("VST3", vst3, vst3.getNumItems() > 0);
-
-        menu.showMenuAsync (PopupMenu::Options().withTargetComponent (signalRow.get()).withMaximumNumColumns (4),
-                            [this, candidates, safe = SafePointer<MainComponent> (this)] (int result)
-                            {
-                                if (safe != nullptr && result > 0)
-                                    scanAndInsert ((*candidates)[static_cast<size_t> (result - 1)]);
-                            });
+        browser.focusSearch();
     }
 
-    void MainComponent::scanAndInsert (const engine::PluginCandidate& candidate)
+    void MainComponent::toggleBrowser()
     {
-        auto& catalogue = session.getPlugins();
-        const auto known = catalogue.findScanned (candidate.fileOrIdentifier);
+        browserOpen = ! browserOpen;
+        browser.setVisible (browserOpen);
+        resized();
+        commands.commandStatusChanged();
+    }
 
-        const auto insert = [this] (const juce::PluginDescription& d)
-        {
-            closePluginWindow();
-            const auto r = session.insertPlugin (d);
-            signalRow->setMessage (r.failed() ? r.getErrorMessage() : String(), r.failed());
-            commands.commandStatusChanged();
-        };
-
-        if (! known.isEmpty())
-        {
-            insert (known.getFirst());
-            return;
-        }
-
-        // Not seen before: carthage-scan loads it in its own process first (F9). Off the message thread.
-        signalRow->setScanning (candidate.name);
-        setStatus ("Checking " + candidate.name + " in a separate process");
-
-        Thread::launch ([candidate, insert, safe = SafePointer<MainComponent> (this), scanner = session.getScanner()]
-        {
-            auto outcome = engine::scan::runScanner (scanner, candidate.formatName, candidate.fileOrIdentifier, 60000);
-
-            MessageManager::callAsync ([safe, outcome, candidate, insert]
-            {
-                if (safe == nullptr)
-                    return;
-
-                auto& self = *safe;
-                self.signalRow->setScanning ({});
-
-                if (outcome.shouldBlock())
-                {
-                    self.session.getPlugins().block (candidate.fileOrIdentifier, outcome.detail, outcome.blockKind());
-                    self.signalRow->setMessage (candidate.name + " was blocked: " + outcome.detail.toLowerCase(), true);
-                    self.setStatus (candidate.name + " was blocked", theme::warn);
-                    return;
-                }
-
-                if (outcome.kind != engine::scan::Outcome::Kind::found)
-                {
-                    self.signalRow->setMessage (outcome.detail, true);
-                    self.setStatus (outcome.detail, theme::warn);
-                    return;
-                }
-
-                self.session.getPlugins().addScanned (outcome.descriptions);
-                insert (outcome.descriptions.getFirst());
-                self.setStatus (candidate.name + " passed the check and is in the path");
-            });
-        });
+    void MainComponent::insertPlugin (const PluginDescription& d)
+    {
+        closePluginWindow();
+        const auto r = session.insertPlugin (d);
+        signalRow->setMessage (r.failed() ? r.getErrorMessage() : String(), r.failed());
+        setStatus (r.failed() ? d.name + " could not be loaded" : d.name + " is in the path", r.failed() ? theme::warn : theme::muted);
+        browser.refresh();   // Recent
+        commands.commandStatusChanged();
     }
 
     void MainComponent::openPluginWindow()
@@ -698,6 +681,7 @@ namespace carthage::ui
                 updateTransportButtons();
 
             updateBanner.setBusy (session.isPlaying() || session.isRecording());
+            browser.frame();
         }
     }
 
@@ -727,6 +711,9 @@ namespace carthage::ui
         latencyLabel.setBounds (top.removeFromRight (72));
         top.removeFromRight (theme::space6);
         loadMeter.setBounds (top.removeFromRight (140).withSizeKeepingCentre (140, 20));
+
+        // The browser docks on the left, under the transport; the rest of the window shifts over.
+        browser.setBounds (r.removeFromLeft (browserOpen ? PluginBrowser::preferredWidth : 0));
 
         signalRow->setBounds (r.removeFromTop (132));
 

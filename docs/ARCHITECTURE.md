@@ -49,7 +49,7 @@ src/
     platform/        the only place for OS-specific APIs (MicrophoneAccess_*, Updater_mac.mm
                      on Sparkle, Updater_win.cpp on WinSparkle, Updater_other.cpp)
   ui/                carthage_ui: MainComponent (transport, signal row, take lane), SettingsPanel,
-                     UpdateBanner,
+                     UpdateBanner, PluginBrowser,
     theme/           Theme.h (mirror of design/tokens.css) and the LookAndFeel
   scan/              carthage-scan
 tools/bench/         carthage-bench: latency, soak, align, takes, wgprobe, devices, plugins;

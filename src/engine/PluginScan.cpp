@@ -213,7 +213,12 @@ namespace carthage::engine
                 continue;
 
             for (const auto& id : format->searchPathsForPlugins (format->getDefaultLocationsToSearch(), true, false))
-                result.push_back ({ format->getNameOfPluginFromIdentifier (id), name, id });
+            {
+                // VST3 identifiers are paths: name them by the bundle, as the plugin's maker does.
+                const auto display = name == "VST3" ? juce::File (id).getFileNameWithoutExtension()
+                                                    : format->getNameOfPluginFromIdentifier (id);
+                result.push_back ({ display, name, id });
+            }
         }
 
         std::sort (result.begin(), result.end(), [] (const auto& a, const auto& b)

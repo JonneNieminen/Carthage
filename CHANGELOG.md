@@ -10,6 +10,14 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 
 ## Unreleased
 
+### Added
+- A plugin browser on the left (F8): search by any part of a name or maker, filter by
+  instruments or effects, format and maker, star favourites, and find recently used plugins at the
+  top. Double-click a plugin, press Enter, or drag it onto the plugin card to use it.
+- Carthage checks new and updated plugins in the background when it opens, several at a time, and
+  Rescan checks them all again. Plugins that can not be used are listed with the reason, such as
+  "Built for Intel Macs only", and can be tried again.
+
 ## 0.1.2-beta.2 - 2026-11-18
 
 ### Added

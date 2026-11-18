@@ -169,6 +169,9 @@ namespace carthage::app
                                           "Privacy & Security, Microphone, then restart Carthage.");
 
             startUpdater (content);
+
+            // Plugins installed or updated since the last run are checked in the background.
+            session->getPluginScanner().start (false);
         }
 
         /** Updates (docs/RELEASING.md): the banner, the beta toggle, a quiet check on launch. */

@@ -74,6 +74,19 @@ namespace carthage::engine
         plugins = std::make_unique<PluginCatalogue> (pm.knownPluginList, pm.pluginFormatManager, folders.pluginCache);
         loadGate = plugins.get();
 
+        // The browser's list, kept in step with the catalogue. Nothing scans until the app asks
+        // (tools and tests never scan by themselves).
+        library = std::make_unique<PluginLibrary> (folders.pluginCache);
+        library->setPlugins (plugins->getScanned());
+        pluginScanner = std::make_unique<PluginScanner> (*plugins, scanner);
+        pluginScanner->onChange = [this]
+        {
+            library->setPlugins (plugins->getScanned());
+
+            if (onPluginsChanged)
+                onPluginsChanged();
+        };
+
         // Engine render threads join the device's audio workgroup (F8). Must be set before the
         // playback context is created.
         tracktion::EditPlaybackContext::enableAudioWorkgroup (true);
@@ -102,6 +115,7 @@ namespace carthage::engine
 
     Session::~Session()
     {
+        pluginScanner.reset();   // stops a scan and waits for its scanners before anything else goes
         engine->getDeviceManager().removeChangeListener (this);
 
         if (isRecording())
@@ -241,6 +255,7 @@ namespace carthage::engine
 
         // Index 0: before the track's own volume/pan and meter, which are channel features.
         track->pluginList.insertPlugin (plugin, 0, nullptr);
+        library->markUsed (description.createIdentifierString());
 
         if (auto* external = dynamic_cast<tracktion::ExternalPlugin*> (plugin.get()))
             if (! external->getLoadError().isEmpty())

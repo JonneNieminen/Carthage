@@ -3,7 +3,7 @@
 // and for README screenshots. It works in a temporary folder and never touches the user's settings.
 //
 //   carthage-snapshot OUTPUT_FOLDER [--device NAME] [--output-device NAME]
-//                     [--plugin-format VST3 --plugin FILE_OR_ID] [--record-seconds 3]
+//                     [--plugin-format VST3 --plugin FILE_OR_ID] [--record-seconds 3] [--scan]
 //
 // Writes main.png, settings.png, settings-updates.png, update*.png (the update banner with sample text), plugin.png
 // (with --plugin) and take.png (after recording).
@@ -130,8 +130,28 @@ namespace
                 content->setVisible (true);
             });
 
+            if (args.contains ("--scan"))
+            {
+                // A real scan of this computer's plugins, so the browser shows them.
+                onMessageThreadVoid ([this] { session->getPluginScanner().start (true); });
+                Thread::sleep (2000);
+                capture (outDir.getChildFile ("browser-scanning.png"));
+
+                while (onMessageThread ([this] { return session->getPluginScanner().getProgress().running; }))
+                    Thread::sleep (250);
+
+                onMessageThreadVoid ([this] { content->getPluginBrowser().refresh(); });
+            }
+
             Thread::sleep (1500);
             capture (outDir.getChildFile ("main.png"));
+
+            onMessageThreadVoid ([this] { content->getPluginBrowser().setSearch ("amp"); });
+            capture (outDir.getChildFile ("browser-search.png"));
+            onMessageThreadVoid ([this] { content->getPluginBrowser().setSearch ({});
+                                          content->getPluginBrowser().setShowUnavailable (true); });
+            capture (outDir.getChildFile ("browser-unavailable.png"));
+            onMessageThreadVoid ([this] { content->getPluginBrowser().setShowUnavailable (false); });
 
             onMessageThreadVoid ([this] { content->toggleSettings(); });
             Thread::sleep (300);

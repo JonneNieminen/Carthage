@@ -24,12 +24,13 @@ namespace carthage::app
             audioSettings,
             measureLatency,
             checkForUpdates,   // handled by the application, not the window (app menu)
+            pluginBrowser,
         };
 
         inline juce::Array<juce::CommandID> all()
         {
             return { record, playStop, returnToStart, toggleMonitoring, choosePlugin,
-                     openPluginEditor, bypassPlugin, audioSettings, measureLatency };
+                     openPluginEditor, bypassPlugin, audioSettings, measureLatency, pluginBrowser };
         }
 
         /** Commands the application itself performs, whatever window is in front. */
@@ -64,7 +65,7 @@ namespace carthage::app
                     info.addDefaultKeypress ('m', 0);
                     break;
                 case choosePlugin:
-                    info.setInfo ("Choose a plugin", "Choose the plugin the input plays through", "Plugin", 0);
+                    info.setInfo ("Choose a plugin", "Search the plugin browser for the plugin the input plays through", "Plugin", 0);
                     info.addDefaultKeypress ('i', primary);
                     break;
                 case openPluginEditor:
@@ -78,6 +79,10 @@ namespace carthage::app
                 case audioSettings:
                     info.setInfo ("Settings", "Audio interface, latency and updates", "Settings", 0);
                     info.addDefaultKeypress (',', primary);
+                    break;
+                case pluginBrowser:
+                    info.setInfo ("Show plugins", "Show or hide the plugin browser", "Plugin", 0);
+                    info.addDefaultKeypress (KP::F8Key, 0);
                     break;
                 case checkForUpdates:
                     info.setInfo (juce::String::fromUTF8 ("Check for updates\xe2\x80\xa6"), "See whether a newer Carthage is out", "Carthage", 0);

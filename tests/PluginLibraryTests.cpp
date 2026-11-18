@@ -44,6 +44,10 @@ public:
             expect (fuzzyScore ("amp", "AmpKnob - RevC") > fuzzyScore ("amp", "Neural Amp Modeler"), "prefix beats a later word");
             expect (fuzzyScore ("nam", "Neural Amp Modeler") > fuzzyScore ("nam", "Pianoteq Grand Manual"), "word starts beat scattered letters");
             expect (fuzzyScore ("proq", "Pro-Q 4") > 0, "punctuation is skipped");
+            expect (fuzzyScore ("amp", "Neural Amp Modeler") > fuzzyScore ("amp", "AUDynamicsProcessor"),
+                    "a whole word beats letters scattered over a name");
+            expect (fuzzyScore ("verb", "ValhallaVintageVerb") > fuzzyScore ("verb", "Valhalla Vintage Echo Room Bus"),
+                    "a camel-case word counts as a word");
             expect (fuzzyScore ("", "anything") == 0);
         }
 
