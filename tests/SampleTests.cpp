@@ -194,6 +194,7 @@ public:
             expectEquals (aMinor.key, juce::String ("A minor"));
             const auto cMajor = run (synth::chords ({ { 48, 52, 55 }, { 53, 57, 60 }, { 55, 59, 62 }, { 48, 52, 55 } }, 2.0));
             expectEquals (cMajor.key, juce::String ("C major"));
+            expect (! aMinor.bpm.has_value() && ! cMajor.bpm.has_value(), "held chords have no beat, so no tempo");
 
             // A bass line in E minor at 90 bpm, 16 beats.
             const auto bass = run (synth::line (90.0, { 40, 40, 43, 45, 47, 45, 43, 40, 40, 40, 43, 45, 47, 45, 43, 40 }));
@@ -205,6 +206,12 @@ public:
             expectWithinAbsoluteError (click.bpm.value_or (0.0), 120.0, 0.5, "clicks at 120 bpm");
             const auto fast = run (synth::clicks (174.0, 8.0));
             expectWithinAbsoluteError (fast.bpm.value_or (0.0), 174.0, 1.0, "clicks at 174 bpm");
+
+            // A short tuned hit has a note, not a key: a 0.5 s tone at A (220 Hz).
+            std::vector<float> hit;
+            for (int i = 0; i < static_cast<int> (0.5 * synth::rate); ++i)
+                hit.push_back (static_cast<float> (0.8 * std::exp (-i / 6000.0) * std::sin (2 * juce::MathConstants<double>::pi * 220.0 * i / synth::rate)));
+            expectEquals (run (hit).key, juce::String ("A"), "a one-shot shows its note");
 
             const auto snare = run (synth::noise (0.4));
             expect (snare.key.isEmpty() && ! snare.bpm.has_value(), "a noise burst: no key, no tempo");

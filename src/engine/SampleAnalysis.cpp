@@ -61,6 +61,8 @@ namespace carthage::engine
             }
         }
 
+        constexpr double beatClarity = 0.35;
+
         std::optional<double> tempoOf (const float* samples, int numSamples, double rate)
         {
             const auto seconds = numSamples / rate;
@@ -141,8 +143,9 @@ namespace carthage::engine
                 }
             }
 
-            // A beat that is barely there is not reported.
-            if (best < 0 || bestValue / zero < 0.15)
+            // A beat that is barely there is not reported (held chords that change now and then
+            // repeat weakly at many lags).
+            if (best < 0 || bestValue / zero < beatClarity)
                 return std::nullopt;
 
             // Clicks on every beat also repeat every two beats: when the faster tempo's repeat is
@@ -222,6 +225,13 @@ namespace carthage::engine
 
             if (total <= 0.0 || peak / (total / 12.0) < 1.6)
                 return {};   // flat: noise or drums, not a key
+
+            // A one-shot has a pitch, not a key: its strongest note, when that note clearly leads.
+            if (numSamples / rate < 1.5)
+            {
+                const auto top = static_cast<size_t> (std::distance (chroma.begin(), std::max_element (chroma.begin(), chroma.end())));
+                return peak / (total / 12.0) >= 4.0 ? juce::String (noteNames[top]) : juce::String();
+            }
 
             double best = -2.0, second = -2.0;
             juce::String name;

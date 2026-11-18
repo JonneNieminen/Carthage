@@ -165,6 +165,7 @@ namespace
                     library.indexNow();
                     content->getSampleBrowser().openAllFolders();
                 });
+                Thread::sleep (3000);   // the analyser finds keys and tempos
                 capture (outDir.getChildFile ("samples.png"));
 
                 onMessageThreadVoid ([this]

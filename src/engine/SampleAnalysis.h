@@ -17,8 +17,10 @@ namespace carthage::engine
 
         Key: a chromagram (the energy of each of the twelve notes, 55 Hz to 5 kHz) correlated with
         the Krumhansl-Kessler major and minor profiles. Reported only when the best key clearly
-        beats the others and the sound is tonal; drums and noise have none. A relative major and
-        minor share their notes, so a sound that never leans on either can come out as the other. */
+        beats the others and the sound is tonal; drums and noise have none. A one-shot (under a
+        second and a half) has a pitch, not a key: its strongest note, when that note clearly
+        leads. A relative major and minor share their notes, so a sound that never leans on
+        either can come out as the other. */
     namespace analysis
     {
         /** Mono audio at `rate`. */
