@@ -35,6 +35,11 @@ namespace carthage::engine
                 if (thread != nullptr && thread->threadShouldExit())
                     return;
 
+                // Dot files are hidden on every system here, Windows too: macOS leaves "._Kick.wav"
+                // companions on some drives, and they are not sounds.
+                if (child.getFileName().startsWithChar ('.'))
+                    continue;
+
                 if (child.isDirectory())
                 {
                     walk (index, root, child, self, depth + 1, extensions, thread);
