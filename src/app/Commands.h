@@ -36,6 +36,9 @@ namespace carthage::app
 
             // Projects (handled by the application: they can replace the window's edit)
             newProject, openProject, saveProject, saveProjectAs,
+
+            // Added later, so they go last: the saved shortcuts file names commands by id.
+            closeProject, minimiseWindow, toggleFullScreen,
         };
 
         /** The tool commands, in Timeline::Tool order. */
@@ -56,7 +59,8 @@ namespace carthage::app
         /** Commands the application itself performs, whatever window is in front. */
         inline juce::Array<juce::CommandID> application()
         {
-            return { checkForUpdates, newProject, openProject, saveProject, saveProjectAs };
+            return { checkForUpdates, newProject, openProject, saveProject, saveProjectAs, closeProject,
+                     minimiseWindow, toggleFullScreen };
         }
 
         /** Name, description, category and default keys. Flags (enabled, ticked) are added by the
@@ -79,6 +83,7 @@ namespace carthage::app
                 case returnToStart:
                     info.setInfo ("Return to start", "Move the playhead to the start", "Transport", 0);
                     info.addDefaultKeypress (KP::homeKey, 0);
+                    info.addDefaultKeypress (KP::returnKey, 0);   // Mac laptops have no Home key
                     break;
                 case toggleMonitoring:
                     info.setInfo ("Hear the input", "Hear the input through the plugin while you play", "Input", 0);
@@ -130,6 +135,26 @@ namespace carthage::app
                     info.setInfo ("Show plugins", "Show or hide the plugin browser", "Plugin", 0);
                     info.addDefaultKeypress (KP::F8Key, 0);
                     break;
+                // ⌘W closes the project; with no other project open the window goes too, which in
+                // Carthage's one window quits (DECISIONS W34). Tabs (phase 4b) close the front one.
+                case closeProject:
+                    info.setInfo ("Close project", "Close the project, asking to save it first", "File", 0);
+                    info.addDefaultKeypress ('w', primary);
+                    break;
+                case minimiseWindow:
+                    info.setInfo ("Minimise", "Put the window in the Dock", "Window", 0);
+                   #if JUCE_MAC
+                    info.addDefaultKeypress ('m', primary);   // Windows keeps Win+Down for itself
+                   #endif
+                    break;
+                case toggleFullScreen:
+                    info.setInfo ("Full screen", "Fill the screen with the window, or leave full screen", "Window", 0);
+                   #if JUCE_MAC
+                    info.addDefaultKeypress ('f', primary | juce::ModifierKeys::ctrlModifier);
+                   #else
+                    info.addDefaultKeypress (KP::F11Key, 0);
+                   #endif
+                    break;
                 case checkForUpdates:
                     info.setInfo (juce::String::fromUTF8 ("Check for updates\xe2\x80\xa6"), "See whether a newer Carthage is out", "Carthage", 0);
                     break;
@@ -150,7 +175,7 @@ namespace carthage::app
             auto ids = all();
             ids.addArray (application());
 
-            const juce::StringArray order { "File", "Transport", "Input", "Plugin", "Edit", "Tools", "Settings", "Carthage" };
+            const juce::StringArray order { "File", "Transport", "Input", "Plugin", "Edit", "Tools", "Window", "Settings", "Carthage" };
             const auto rank = [&] (juce::CommandID id)
             {
                 juce::ApplicationCommandInfo info (id);

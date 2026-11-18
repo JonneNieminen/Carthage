@@ -70,7 +70,8 @@ The app reads the beta feed when "Receive beta updates" is on (Settings, Updates
 | Secret | Purpose | Status |
 | --- | --- | --- |
 | `SPARKLE_ED_PRIVATE_KEY` | Signs the update downloads for Sparkle and WinSparkle | Set by the owner, 2026-11-17 (keychain account `carthage`) |
-| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | Developer ID signing | Not available; the steps exist and are skipped |
+| `CARTHAGE_SIGNING_CERTIFICATE`, `CARTHAGE_SIGNING_CERTIFICATE_PASSWORD` | Carthage's self-signed certificate (base64 `.p12`, its identity named "Carthage self-signed"), so macOS keeps the microphone permission across updates (DECISIONS W35) | Not set yet; the owner makes and sets it ("Making the signing certificate" below) |
+| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | Developer ID signing; wins over the self-signed certificate | Not available; the steps exist and are skipped |
 | `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` | Notarisation with `notarytool` | Not available; skipped |
 
 The private key lives only in the GitHub secret and the owner's login keychain. It is never
@@ -149,10 +150,30 @@ prints the public key again at any time.
 - Updates after the first install go through Sparkle without that step: 0.1.0 updated to 0.1.1 on a
   real install and opened directly (DECISIONS W28).
 - An ad-hoc signature changes with every build, so macOS asks again for microphone access after every
-  update (seen with 0.1.1). A stable signing certificate would fix it (W28).
+  update (seen with 0.1.1, W28). Releases are therefore signed with Carthage's self-signed
+  certificate when its secrets exist (W35): the signature is stable, so the permission is asked for
+  once more after the first such update and then kept. No hardened runtime, as with ad-hoc, so
+  plugins load the same. The run's summary says which signature it used.
 - Developer ID signing and notarisation are written into `release.yml` and switch on when the
   `APPLE_*` secrets exist.
 - Windows builds are unsigned; SmartScreen warns on first install (the release notes say what to do).
+
+### Making the signing certificate
+
+The owner does this once, on their Mac; the agent never sees the certificate or its password.
+
+1. Keychain Access > Certificate Assistant > Create a Certificate. Name: `Carthage self-signed`
+   (exactly; the workflow signs with this name). Identity type: Self-Signed Root. Certificate type:
+   Code Signing. Tick "Let me override defaults", set the validity to 3650 days, and accept the
+   rest.
+2. In the login keychain's My Certificates, right-click "Carthage self-signed" > Export, as a
+   `.p12`, with a new password.
+3. Store both as secrets, from the folder holding the file:
+   `base64 -i Carthage.p12 | gh secret set CARTHAGE_SIGNING_CERTIFICATE --repo JonneNieminen/Carthage`
+   and `gh secret set CARTHAGE_SIGNING_CERTIFICATE_PASSWORD --repo JonneNieminen/Carthage` (it asks
+   for the password). Then delete the `.p12`; the certificate stays in the keychain as the backup.
+
+A new certificate later means one more permission prompt; updates keep working (W35).
 
 ## Update behaviour in the app
 

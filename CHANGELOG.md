@@ -11,6 +11,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- The usual Mac keys: Cmd+W closes the project (asking to save first), Cmd+M minimises, Ctrl+Cmd+F
+  goes full screen (F11 on Windows), in File and a new Window menu. Return also goes back to the
+  start, for keyboards without a Home key.
 - Projects: File > New, Open, Save and Save as (Cmd/Ctrl+N, O, S, Shift+S). A project is a folder
   holding its file and its recordings; Save as copies the recordings along. Zoom, scroll and the
   grid are saved with it. Carthage asks before closing a project with unsaved changes.
@@ -35,6 +38,10 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 - Carthage checks new and updated plugins in the background when it opens, several at a time, and
   Rescan checks them all again. Plugins that can not be used are listed with the reason, such as
   "Built for Intel Macs only", and can be tried again.
+
+### Changed
+- macOS no longer asks for microphone access after every update. It asks once more after the
+  first update signed this way, then keeps your answer.
 
 ## 0.1.2-beta.2 - 2026-11-18
 

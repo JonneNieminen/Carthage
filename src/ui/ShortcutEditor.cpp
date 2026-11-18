@@ -26,7 +26,7 @@ namespace carthage::ui
         {
            #if JUCE_MAC
             const auto cmd = ModifierKeys::commandModifier;
-            for (auto c : { 'q', 'h', 'm' })
+            for (auto c : { 'q', 'h' })
                 if (k == KeyPress (c, cmd, 0))
                     return true;
             return k == KeyPress (KeyPress::tabKey, cmd, 0) || k == KeyPress ('`', cmd, 0);

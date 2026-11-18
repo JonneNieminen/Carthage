@@ -23,9 +23,9 @@ namespace carthage::app
         StringArray getMenuBarNames() override
         {
            #if JUCE_MAC
-            return { "File", "Transport", "Input", "Plugin", "Edit", "Tools" };
+            return { "File", "Transport", "Input", "Plugin", "Edit", "Tools", "Window" };
            #else
-            return { "File", "Transport", "Input", "Plugin", "Edit", "Tools", "Help" };   // macOS has the app menu for this
+            return { "File", "Transport", "Input", "Plugin", "Edit", "Tools", "Window", "Help" };   // macOS has the app menu for Help's item
            #endif
         }
 
@@ -39,6 +39,7 @@ namespace carthage::app
                     m.addCommandItem (&commands, commands::newProject);
                     m.addCommandItem (&commands, commands::openProject);
                     m.addSeparator();
+                    m.addCommandItem (&commands, commands::closeProject);
                     m.addCommandItem (&commands, commands::saveProject);
                     m.addCommandItem (&commands, commands::saveProjectAs);
                    #if ! JUCE_MAC
@@ -78,6 +79,14 @@ namespace carthage::app
                         m.addCommandItem (&commands, id);
                     break;
                 case 6:
+                   #if JUCE_MAC
+                    m.addCommandItem (&commands, commands::minimiseWindow);
+                    m.addCommandItem (&commands, commands::toggleFullScreen);
+                   #else
+                    m.addCommandItem (&commands, commands::toggleFullScreen);
+                   #endif
+                    break;
+                case 7:
                     m.addCommandItem (&commands, commands::checkForUpdates);
                     break;
                 default:
@@ -288,8 +297,15 @@ namespace carthage::app
             if (commands::application().contains (id))
             {
                 commands::describe (id, info);
-                info.setActive (id == commands::checkForUpdates ? updater != nullptr
-                                                                : session != nullptr && ! session->isRecording());
+                if (id == commands::checkForUpdates)
+                    info.setActive (updater != nullptr);
+                else if (id == commands::minimiseWindow || id == commands::toggleFullScreen)
+                    info.setActive (window != nullptr);
+                else
+                    info.setActive (session != nullptr && ! session->isRecording());
+
+                if (id == commands::toggleFullScreen && window != nullptr)
+                    info.setTicked (window->isFullScreen());
                 return;
             }
 
@@ -308,6 +324,11 @@ namespace carthage::app
                 case commands::openProject:     openProject(); return true;
                 case commands::saveProject:     save ({}); return true;
                 case commands::saveProjectAs:   saveAs ({}); return true;
+                case commands::closeProject:    systemRequestedQuit(); return true;   // the only project: the window, so the app (W34)
+                case commands::minimiseWindow:  if (window != nullptr) window->setMinimised (true); return true;
+                case commands::toggleFullScreen:
+                    if (window != nullptr) window->setFullScreen (! window->isFullScreen());
+                    return true;
                 default:                        return JUCEApplication::perform (info);
             }
         }

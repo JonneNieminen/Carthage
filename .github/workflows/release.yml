@@ -10,7 +10,8 @@
 #
 # Without the SPARKLE_ED_PRIVATE_KEY secret the release is still built and published, without
 # signatures or feeds, and the run says so. Developer ID signing and notarisation run only when the
-# APPLE_* secrets exist; until then the app is ad-hoc signed. Builds reuse CI's compiler cache
+# APPLE_* secrets exist; until then the app is signed with Carthage's self-signed certificate when
+# the CARTHAGE_SIGNING_* secrets exist, else ad-hoc. Builds reuse CI's compiler cache
 # (ccache; the version only reaches Carthage's own files, so the libraries stay cached).
 name: Release
 
@@ -78,6 +79,11 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      # Carthage's self-signed certificate (DECISIONS W35): a stable signature, so macOS keeps the
+      # microphone permission across updates. Used when there is no Developer ID.
+      CARTHAGE_SIGNING_CERTIFICATE: ${{ secrets.CARTHAGE_SIGNING_CERTIFICATE }}
+      CARTHAGE_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.CARTHAGE_SIGNING_CERTIFICATE_PASSWORD }}
+      CARTHAGE_SIGNING_IDENTITY: Carthage self-signed
     steps:
       - uses: actions/checkout@v7
         with:
@@ -98,24 +104,31 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache
           cmake --build --preset release --target Carthage
 
-      - name: Developer ID certificate (off until the APPLE_* secrets exist)
-        if: env.APPLE_CERTIFICATE != ''
+      - name: Signing certificate (Developer ID, else Carthage's self-signed one, else ad-hoc)
+        if: env.APPLE_CERTIFICATE != '' || env.CARTHAGE_SIGNING_CERTIFICATE != ''
         run: |
           set -euo pipefail
+          if [[ -n "$APPLE_CERTIFICATE" ]]; then
+            certificate="$APPLE_CERTIFICATE"; certificate_password="$APPLE_CERTIFICATE_PASSWORD"; identity="$APPLE_SIGNING_IDENTITY"
+          else
+            certificate="$CARTHAGE_SIGNING_CERTIFICATE"; certificate_password="$CARTHAGE_SIGNING_CERTIFICATE_PASSWORD"; identity="$CARTHAGE_SIGNING_IDENTITY"
+          fi
           keychain="$RUNNER_TEMP/signing.keychain-db"
           password="$(uuidgen)"
-          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          echo "$certificate" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
           security create-keychain -p "$password" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$password" "$keychain"
-          security import "$RUNNER_TEMP/certificate.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$certificate_password" -A -t cert -f pkcs12 -k "$keychain"
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
           rm "$RUNNER_TEMP/certificate.p12"
+          echo "SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
 
       - name: Sign
         run: |
           app=build/release/src/app/Carthage_artefacts/Release/Carthage.app
-          packaging/macos/sign.sh "$app" "${APPLE_SIGNING_IDENTITY:--}"
+          packaging/macos/sign.sh "$app" "${SIGNING_IDENTITY:--}"
+          echo "Signed as: ${SIGNING_IDENTITY:-ad-hoc}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Package
         run: packaging/macos/make-dmg.sh build/release/src/app/Carthage_artefacts/Release/Carthage.app "$VERSION" dist
