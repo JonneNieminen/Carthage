@@ -3,6 +3,7 @@ add_library(carthage_engine STATIC
     AudioCallback.cpp AudioCallback.h
     LatencyProbe.cpp LatencyProbe.h
     PluginLibrary.cpp PluginLibrary.h
+    time/Grid.cpp time/Grid.h
     PluginScan.cpp PluginScan.h
     RealtimeCheck.h
     Session.cpp Session.h

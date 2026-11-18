@@ -43,6 +43,7 @@ src/
     PluginScan       carthage-scan protocol, the known-plugin list, the blocklist (with why: incompatible,
                      crashed, hung, unusable), PluginScanner (background scan, several processes)
     PluginLibrary    the plugin browser's data: fuzzy search, filters, favourites, last used
+    time/Grid        the one grid and snap resolver (beats; divisions, triplet, dotted, adaptive)
     RealtimeCheck.h  RealTimeSanitizer scope and CARTHAGE_NONBLOCKING
   app/               Carthage.app: application, window, menu bar, command table, path provider,
                      Updater (in-app updates behind one interface)
@@ -85,6 +86,27 @@ packaging/           macos/ (sign.sh, make-dmg.sh, read-me), windows/ (Carthage.
   Menus, the shortcut editor, tooltips and the help page all read that table. Tool keys support
   hold-to-switch (F7). Keys are written platform-neutrally (primary modifier = Cmd on macOS, Ctrl on
   Windows) and never hard-coded in UI text.
+
+### Phase 4a: the timeline, its edits and the project file
+
+- **Lanes.** In 4a each lane is a Tracktion `AudioTrack` that holds clips and no plugins; the phase 1
+  input chain stays on its own track. Phase 5 routes each lane's clips to a mixer channel (F5) and
+  writes the mapping here; until then a lane plays to the master output.
+- **Time.** Positions are beats in the edit's tempo sequence; seconds are derived. The grid and the
+  snap resolver (`engine/time/Grid.h`) work in beats, know nothing about drawing, and are tested on
+  their own; the timeline and, in phase 6, the piano roll both call them.
+- **Edits.** Each user action opens one transaction on `Edit::getUndoManager()` with a name
+  ("Move clip", "Trim 3 clips"); a drag opens it on mouse-down and every change until mouse-up joins
+  it. Undo and Redo are commands in the command table.
+- **Project file.** A project is a folder: `<Name>.carthage` (the edit's XML, with a `CARTHAGE` child
+  holding `formatVersion` and view state such as zoom and grid), `Recordings/` and, in 4b, `Samples/`.
+  Saving writes a temporary file beside the old one and renames it over, so a crash mid-save never
+  leaves a half-written project. An older format version always opens (AGENTS.md).
+- **Autosave and recovery.** After an edit, once the user pauses for 2 s and at most every 2 minutes
+  (W30), the edit's state is copied on the message thread and written by a worker to
+  `<settings>/Autosave/<project id>/`, keeping the last 10. A `running` marker there is removed on a
+  clean quit; finding one at launch means Carthage did not quit cleanly, and it offers the newest
+  autosave.
 
 ## Threads
 
