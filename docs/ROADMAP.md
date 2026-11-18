@@ -14,7 +14,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
 | 3. Plugin manager and scanning | Verified (2026-11-18) |
-| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b 2026-11-19) |
+| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b 2026-11-19); 4c (view windows, layouts) in progress |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
 | 7. Help page, icon and polish | Not started |
@@ -404,6 +404,30 @@ Not done:     - The preview plays loops as recorded; only a dropped loop is fitt
               - Tabs reopen as one project after a quit; the open tabs are not restored.
 Decisions:    W34 (Cmd/Ctrl+W), W35 (self-signed releases), W36 (Signalsmith), W37 (value controls).
 Needs owner:  The go-ahead for phase 5 (mixer, insert Lines, per-channel I/O).
+### Phase 4c — views in their own windows, window layouts
+
+Deliver (F21):
+- [ ] A view manager: each view (sample browser, plugin browser, timeline, signal path, Settings;
+      later mixer, piano roll, tuner, big clock, meters, help) docked in the main window or in a
+      window of its own; detach and reattach by a button on the view and a shortcut each; "Back to
+      the default layout" in the menu bar and by shortcut
+- [ ] Layout slots (how many in Settings): save and recall from a Layouts menu in the menu bar, by
+      shortcut too; app-wide; windows on a missing display come back to the main one
+- [ ] Plugin windows in layouts, kept above Carthage's windows, with a pin per window
+- [ ] Reopen the last session at launch (its tabs and layout), a setting beside the start screen
+- [ ] A command palette (Cmd/Ctrl+K): find and run any command, with its shortcut
+
+Exit checks:
+- [ ] Every view detached to a second display and back, by button and by shortcut; the default
+      layout restores everything
+- [ ] Two layouts saved and recalled across two displays; recalling one with a display unplugged
+      brings its windows to the main display
+- [ ] Frame time with views in separate windows on a 120 Hz display reported; playback and
+      recording unaffected (RTSan unchanged)
+- [ ] Quit and relaunch reopens the tabs and the layout; the palette finds and runs commands
+
+Report: _not written yet_
+
 ## Phase 5 — Mixer, insert Lines, per-channel I/O
 
 Brief features: 3, 4, 5.

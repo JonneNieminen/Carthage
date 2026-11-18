@@ -7,8 +7,9 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 
 ## Now (2026-11-19)
 
-- **Phases 1 to 4 are verified** (4b report in ROADMAP). **Next: phase 5** (mixer, insert Lines,
-  per-channel I/O), once the owner says go.
+- **Phases 1 to 4b are verified** (4b report in ROADMAP). **In progress: phase 4c** (F21): views in
+  their own windows, layout slots, a Layouts menu, reopen last session, command palette, plugin
+  windows on top. Then phase 5 (mixer), after the owner's go-ahead.
 - **In hand, not finished:**
   - The owner's `~/Library/Application Support/Carthage/Samples.xml` points at the generated test
     pack `build/samples-test` (six sounds of known key and tempo) for the 4b checks. Remove that
@@ -59,3 +60,6 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - **2026-11-19.** Owner checked 4b in the app: all fine; clicks now retrigger samples. Value
   controls reset on double-click and follow the wheel (W37, a rule in AGENTS.md). Phase 4b verified
   and reported. This journal started.
+- **2026-11-19 (later).** Owner asked for detachable views and window layouts across displays;
+  decided as F21, phase 4c, now (before the mixer), app-wide layouts, plus reopen last session,
+  command palette and plugin windows on top. Plan written into ROADMAP 4c.
