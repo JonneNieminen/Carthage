@@ -13,8 +13,8 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 0. Brand, theme and docs | Done (2026-11-16) |
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
-| 3. Plugin manager and scanning | Exit checks met; report written, waiting for the owner |
-| 4. Timeline, grid, snapping, tools, shortcuts | Not started |
+| 3. Plugin manager and scanning | Verified (2026-11-18) |
+| 4. Timeline, grid, snapping, tools, shortcuts | 4a in progress; 4b after it |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
 | 7. Help page, icon and polish | Not started |
@@ -280,7 +280,10 @@ Needs owner:  1. Try dragging a plugin from the browser onto the plugin card, if
 
 ## Phase 4 — Timeline, grid, snapping, tools, shortcuts
 
-Brief feature: 2, and fixed decisions F5–F7.
+Brief feature: 2, and fixed decisions F5–F7. Built in two parts, each verified and reported on its
+own (owner, 2026-11-18, W31).
+
+### Phase 4a — the timeline and editing
 
 Deliver:
 - [ ] Lanes that hold any clips; zoom and scroll at display refresh rate
@@ -289,14 +292,29 @@ Deliver:
 - [ ] Tools E P B C D T Z S with hold-to-switch; edge drag trims, Option/Alt stretches, Cmd/Ctrl slips
 - [ ] Split at playhead or cursor, duplicate, nudge, crossfades, loop range, markers, cached waveform thumbnails
 - [ ] Shortcut editor; every shortcut rebindable
-- [ ] **Proposed here, owner to confirm (O5):** undo/redo for everything so far, project save and load, autosave and crash recovery
-- [ ] **Owner's additions (F19, W30):** edit-driven autosave (2 s pause, at most every 2 min, last 10 kept); projects as folders, several open as tabs (only the front one plays); "Collect samples into project", and always-copy as a setting; the sample browser (WAV, AIFF, FLAC, MP3, OGG; preview to the main output; click plays the whole sound by default; search and favourites; key and tempo detection; optional stretch to project tempo), with its size and text-size settings; a start screen with recent projects and templates, switchable (F20)
+- [ ] Undo/redo for everything so far, project save and load, autosave and crash recovery (O5, confirmed W31); autosave edit-driven: after a 2 s pause, at most every 2 minutes, the last 10 kept (W30)
 
 Exit checks:
 - [ ] Frame time while zooming and scrolling a project with a few hundred clips, measured on a 120 Hz display and reported
 - [ ] Each tool key, its hold-to-switch behaviour, and each edge-drag modifier exercised in the running app
 - [ ] Each snap target and the bypass key exercised
 - [ ] Every edit undoes and redoes; a saved project reopens identical; killing the app mid-session offers recovery on next launch
+
+Report: _not written yet_
+
+### Phase 4b — projects as tabs, the sample browser, the start screen
+
+Deliver (F19, F20, W30):
+- [ ] Projects as folders, several open as tabs; only the front one plays, the others pause with plugins loaded; copy and paste between tabs
+- [ ] "Collect samples into project", and always-copy as a setting
+- [ ] The sample browser on the left with the plugin browser: built from the user's own folders ("Add folder"), deep folders, WAV, AIFF, FLAC, MP3, OGG; a click plays the whole sound by default, or plays while held (setting); preview to the main output with its own volume; search and favourites; key and tempo detection; optional stretch to project tempo; panel width and text size in Settings; drag onto lanes
+- [ ] A start screen with recent projects and templates, on by default, switchable in Settings
+
+Exit checks:
+- [ ] Two projects open as tabs; switching is instant and only the front one plays; a clip copied from one pastes into the other
+- [ ] A sample folder of a few thousand files browses, searches and previews without stalling (frame time reported); a dragged sample lands on a lane in time
+- [ ] Key and tempo detection checked on samples with known key and tempo; results reported
+- [ ] The start screen opens recent projects and templates; switching it off works
 
 Report: _not written yet_
 
