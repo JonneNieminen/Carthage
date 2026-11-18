@@ -332,7 +332,7 @@ namespace carthage::ui
 
     //==============================================================================================
     MainComponent::MainComponent (engine::Session& s, ApplicationCommandManager& c)
-        : session (s), commands (c), takeLane (s.getTrack()), settings (s), browser (s)
+        : session (s), commands (c), timeline (s), settings (s), browser (s)
     {
         signalRow = std::make_unique<SignalRow> (session, commands);
         signalRow->onRemove = [this] { closePluginWindow(); session.removePlugin(); signalRow->setMessage ({}, false); };
@@ -360,7 +360,7 @@ namespace carthage::ui
 
         for (auto* comp : std::initializer_list<Component*> { &recordButton, &playButton, &toStartButton, &timeLabel,
                                                               &loadMeter, &latencyLabel, &latencyWords, &settingsButton,
-                                                              signalRow.get(), &takeLane, &statusLabel })
+                                                              signalRow.get(), &timeline, &statusLabel })
             addAndMakeVisible (comp);
 
         addChildComponent (settings);
@@ -638,7 +638,7 @@ namespace carthage::ui
         signalRow->frame (callback.takeInputPeaks(), dt);
 
         const auto position = session.getPositionSeconds();
-        takeLane.setPlayhead (position, recordingFrom);
+        timeline.setPlayhead (position, recordingFrom);
 
         const auto whole = static_cast<int> (position);
         const auto ms = static_cast<int> ((position - whole) * 1000.0);
@@ -754,7 +754,7 @@ namespace carthage::ui
         signalRow->setBounds (r.removeFromTop (132));
 
         statusLabel.setBounds (r.removeFromBottom (28).reduced (theme::space4, 0));
-        takeLane.setBounds (r.reduced (theme::space4, theme::space3));
+        timeline.setBounds (r);
 
         layoutSettings (false);
         layoutUpdateBanner();

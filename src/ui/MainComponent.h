@@ -3,7 +3,7 @@
 #include "Controls.h"
 #include "PluginBrowser.h"
 #include "SettingsPanel.h"
-#include "TakeLane.h"
+#include "Timeline.h"
 #include "UpdateBanner.h"
 
 #include <app/Commands.h>
@@ -62,7 +62,7 @@ namespace carthage::ui
         LoadMeter loadMeter;
 
         std::unique_ptr<SignalRow> signalRow;
-        TakeLane takeLane;
+        Timeline timeline;
         SettingsPanel settings;
         bool settingsOpen = false;
         UpdateBanner updateBanner;
