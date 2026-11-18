@@ -80,7 +80,13 @@ namespace carthage::ui
         betaUpdates.setTooltip ("Also get test versions before they are released. You can switch back at any time.");
         checkNow.setTooltip ("See whether a newer Carthage is out");
         checkNow.onClick = [this] { if (onCheckForUpdates) onCheckForUpdates(); };
-        betaUpdates.onClick = [this] { if (onBetaUpdatesChanged) onBetaUpdatesChanged (betaUpdates.getToggleState()); };
+        betaUpdates.onClick = [this]
+        {
+            if (onBetaUpdatesChanged)
+                onBetaUpdatesChanged (betaUpdates.getToggleState());
+
+            showUpdatesHint();
+        };
 
         format.addItem ("16-bit", 1);
         format.addItem ("24-bit", 2);
@@ -321,7 +327,17 @@ namespace carthage::ui
         betaUpdates.setToggleState (on, dontSendNotification);
         betaUpdates.setEnabled (available);
         checkNow.setEnabled (available);
-        updatesHint.setText (note, dontSendNotification);
+        unavailableNote = note;
+        showUpdatesHint();
+    }
+
+    void SettingsPanel::showUpdatesHint()
+    {
+        // Why updates are off, or which feed this copy follows when it is the beta one.
+        updatesHint.setText (unavailableNote.isNotEmpty() ? unavailableNote
+                             : betaUpdates.getToggleState() ? "You get test versions before they are released. Switch this off to get released versions only."
+                                                            : String(),
+                             dontSendNotification);
         resized();
     }
 

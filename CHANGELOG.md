@@ -10,6 +10,11 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 
 ## Unreleased
 
+## 0.1.2-beta.2 - 2026-11-18
+
+### Added
+- With beta updates on, Settings says so under the switch.
+
 ## 0.1.2-beta.1 - 2026-11-18
 
 ### Added

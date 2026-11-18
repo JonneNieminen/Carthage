@@ -48,6 +48,8 @@ namespace carthage::ui
         juce::ToggleButton betaUpdates { "Receive beta updates" };
         juce::Label versionLabel, versionValue;
         juce::TextButton checkNow { "Check now" };
+        juce::String unavailableNote;
+        void showUpdatesHint();
         IconButton closeButton { IconButton::Glyph::close };
 
         juce::Label inputDeviceLabel, outputDeviceLabel, rateLabel, bufferLabel, formatLabel;

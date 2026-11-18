@@ -136,7 +136,8 @@ namespace
             onMessageThreadVoid ([this] { content->toggleSettings(); });
             Thread::sleep (300);
             capture (outDir.getChildFile ("settings.png"));
-            onMessageThreadVoid ([this] { content->getSettings().showUpdatesSection(); });
+            onMessageThreadVoid ([this] { content->getSettings().setBetaUpdates (true, true, {});
+                                          content->getSettings().showUpdatesSection(); });
             capture (outDir.getChildFile ("settings-updates.png"));
             onMessageThreadVoid ([this] { content->toggleSettings(); });
 
