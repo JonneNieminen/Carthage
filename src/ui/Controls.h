@@ -44,6 +44,35 @@ namespace carthage::ui
     };
 
     /** The audio-thread load: a thin bar and a figure. Turns warn above 70 %, clip above 90 %. */
+    /** Every control that adjusts a value is one of these (DECISIONS W37): a double-click puts it
+        back to its default, and the scroll wheel over it adjusts it, with Shift for fine steps (a
+        tenth). Switches and menus are not, and ignore the wheel, so scrolling a panel never
+        changes a choice by accident. */
+    class ValueSlider final : public juce::Slider
+    {
+    public:
+        explicit ValueSlider (double defaultValue)
+        {
+            setDefault (defaultValue);
+            setScrollWheelEnabled (true);
+        }
+
+        void setDefault (double v)   { setDoubleClickReturnValue (true, v); }
+
+        void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override
+        {
+            auto w = wheel;
+
+            if (e.mods.isShiftDown())
+            {
+                w.deltaX *= 0.1f;
+                w.deltaY *= 0.1f;
+            }
+
+            juce::Slider::mouseWheelMove (e, w);
+        }
+    };
+
     class LoadMeter final : public juce::Component, public juce::SettableTooltipClient
     {
     public:

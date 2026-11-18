@@ -87,7 +87,7 @@ namespace carthage::ui
         panelWidth.setTextBoxStyle (Slider::NoTextBox, true, 0, 0);
         panelWidth.setRange (240.0, 520.0, 10.0);
         panelWidth.setValue (props.getIntValue ("panelWidth", 300), dontSendNotification);
-        panelWidth.setTooltip ("How wide the samples and plugins panel is");
+        panelWidth.setTooltip ("How wide the samples and plugins panel is. Double-click for the default; scroll to adjust, Shift for fine steps.");
         panelWidth.onValueChange = [this] { if (onPanelWidthChanged) onPanelWidthChanged (static_cast<int> (panelWidth.getValue())); };
 
         styleLabel (textSizeLabel, theme::textMd, theme::muted);

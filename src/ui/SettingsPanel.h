@@ -56,7 +56,7 @@ namespace carthage::ui
         juce::ToggleButton copySamples { "Copy samples into the project" };
         juce::ToggleButton showStart { "Show the start screen when Carthage opens" };
         juce::Label browserHeading, panelWidthLabel, textSizeLabel;
-        juce::Slider panelWidth;
+        ValueSlider panelWidth { 300.0 };   // px; double-click returns here
         juce::ComboBox textSize;
         juce::ToggleButton playWhileHeld { "Play sounds only while held" };
         juce::ToggleButton fitLoops { "Fit loops to the project tempo" };

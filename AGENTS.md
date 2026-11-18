@@ -149,6 +149,9 @@ build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench takes 
 - Colours, sizes and radii come from the app's theme header, which mirrors `design/tokens.css` value for value under the same names. No colour literals in components. A new colour is a new token: add it to `tokens.css` and `design/README.md` first.
 - The accent (sky) means **live**: playhead, selection, focus, active tool. Tracks use the eight `--lane-*` colours. `--ok`, `--warn`, `--clip` are for meters, record arm, warnings and destructive actions only.
 - Every control has a tooltip, including its shortcut, read from the command table.
+- Every control that adjusts a value (slider, fader, knob) is a `ui::ValueSlider` (`src/ui/Controls.h`):
+  double-click resets it to its default, the scroll wheel over it adjusts it, Shift for fine steps.
+  Give each one its default. Switches and menus are not, and ignore the wheel (DECISIONS W37).
 - Draw at display refresh rate. Cull to the viewport, paint from cached thumbnails, never decode audio or touch disk while painting. Nothing animates during playback except the playhead and the meters.
 - Heavy work never runs on the message thread: scanning, decoding, thumbnails, export, saving and update checks go to workers.
 - Text: sentence case, plain verbs, no all-caps labels. Name things the way a musician would, not the way the engine does.

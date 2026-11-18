@@ -68,7 +68,8 @@ namespace carthage::ui
         volume.setRange (-60.0, 6.0, 0.5);
         volume.setPopupDisplayEnabled (true, true, this);
         volume.setTextValueSuffix (" dB");
-        volume.setTooltip ("How loud sounds play while you browse; the project's own level is not changed");
+        volume.setTooltip ("How loud sounds play while you browse; the project's own level is not changed. "
+                           "Double-click for the default; scroll to adjust, Shift for fine steps.");
         volume.setValue (settingsOf (session).getDoubleValue ("previewVolumeDb", -6.0), dontSendNotification);
         session.getPreview().setVolumeDb (static_cast<float> (volume.getValue()));
         volume.onValueChange = [this]
@@ -295,11 +296,9 @@ namespace carthage::ui
             list.selectRow (row);
             selectingWithMouse = false;
 
-            // A second click on the sound playing stops it (whole-sound mode).
-            if (! playWhileHeld && playing == s->file && session.getPreview().isPlaying())
-                session.getPreview().stop();
-            else
-                play (row);
+            // Every click plays from the top, cutting whatever is playing: clicking again
+            // retriggers the sound, as fast as you click.
+            play (row);
         }
     }
 

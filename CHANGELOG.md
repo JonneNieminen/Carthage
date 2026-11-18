@@ -33,6 +33,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   its name. Settings > Browser can fit a dropped loop to the project's tempo.
 
 ### Changed
+- Clicking a sound in the sample browser always plays it from the top, even while it plays.
+- Sliders: double-click puts one back to its default; the scroll wheel over it adjusts it, Shift
+  for fine steps.
 - Stretching a clip (the S tool, or Option/Alt on an edge) keeps its pitch.
 
 

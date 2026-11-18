@@ -10,7 +10,8 @@ namespace carthage::ui
 {
     /** The sample browser (F19, W30), on the left with the plugin browser. It starts empty with
         "Add folder"; the folders added are listed as a tree, and a search lists matching sounds
-        from all of them. A click plays a sound to its end through the preview (or, with "Play
+        from all of them. A click plays a sound to its end through the preview, from the top each
+        time (a click while it plays starts it again) (or, with "Play
         while held" in Settings, while the mouse button, Enter or Space is held); the arrow keys
         move and play. Each sound shows its key and tempo once analysed, and a star. Sounds drag
         onto the timeline's lanes. It reads the session's SampleLibrary and keeps no copy. */
@@ -74,7 +75,7 @@ namespace carthage::ui
         juce::TextButton viewFolders { "Folders" }, viewFavourites { "Favourites" };
         juce::ListBox list;
         juce::Label volumeLabel;
-        juce::Slider volume;
+        ValueSlider volume { -6.0 };   // dB; double-click returns here
         std::unique_ptr<juce::FileChooser> chooser;
 
         const engine::SampleLibrary::Sample* sampleAt (int row) const;
