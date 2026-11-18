@@ -13,7 +13,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 0. Brand, theme and docs | Done (2026-11-16) |
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
-| 3. Plugin manager and scanning | In progress |
+| 3. Plugin manager and scanning | Exit checks met; report written, waiting for the owner |
 | 4. Timeline, grid, snapping, tools, shortcuts | Not started |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
@@ -228,18 +228,55 @@ Needs owner:  1. Accept the untested paths above (no-key publish, Developer ID s
 Brief feature: 6.
 
 Deliver:
-- [ ] Out-of-process scanner; a crashing or hanging plugin cannot take the app down; automatic blocklist; rescan; progress shown
-- [ ] Plugin list with fast fuzzy search, favourites, filters by vendor, format and type, last-used
-- [ ] Drag a plugin onto a channel or the timeline
+- [x] Out-of-process scanner; a crashing or hanging plugin cannot take the app down; automatic blocklist; rescan; progress shown
+- [x] Plugin list with fast fuzzy search, favourites, filters by vendor, format and type, last-used
+- [x] Drag a plugin onto a channel or the timeline — onto the plugin card, the one insert phase 1 has; channels and the timeline accept it when they exist (phases 4–5)
 - [x] O3 (CLAP) answered and recorded (W29: no native CLAP hosting in the pins; AU and VST3 only)
 
 Exit checks:
-- [ ] Full scan of the owner's real AU and VST3 folders completes; counts and time reported
-- [ ] A plugin that crashes on load (a deliberately broken one will do) ends up on the blocklist and the app keeps running
-- [ ] The UI stays responsive during a scan (frame time reported)
-- [ ] Search returns the expected plugin within a keystroke's time on the full list
+- [x] Full scan of the owner's real AU and VST3 folders completes; counts and time reported
+- [x] A plugin that crashes on load (a deliberately broken one will do) ends up on the blocklist and the app keeps running
+- [x] The UI stays responsive during a scan (frame time reported)
+- [x] Search returns the expected plugin within a keystroke's time on the full list
 
-Report: _not written yet_
+Report:
+
+### Report — phase 3 (2026-11-18, 490e83f)
+Works:        A plugin browser on the left (F8): search by any part of a name or maker (letters can be
+              spread out), filters for instruments or effects, format and maker, favourites (star),
+              and the five most recently used at the top. A plugin goes into the signal path by
+              double-click, Enter or a drag onto the plugin card. Carthage checks new and updated
+              plugins in the background at every launch, four scanner processes at a time, with the
+              progress in the panel; Rescan checks everything again. A plugin that crashes or hangs
+              its scanner, or loads nothing usable, is listed under "plugins Carthage can not use"
+              with the reason and Try again; Intel-only builds say "Built for Intel Macs only".
+Tested:       - Full scan (carthage-bench scanall, fresh cache): 227 plugin files on the owner's Mac,
+                34.9 s cold, 16.7 s warm, 4 scanners: 220 loaded (221 plugin types: 135 AU, 86 VST3,
+                18 instruments), 7 refused, all Intel-only builds (Nexus VST3 and AU, Pigments VST3,
+                ValhallaRoom and ValhallaVintageVerb VST3 and AU), confirmed with lipo.
+              - Crash and hang: two broken test VST3s (one aborts when loaded, one never returns).
+                Unit test: the scanner reports "crashed" and "hung" (2 s limit). Real background scan
+                with them among the 227 real plugins (10 s limit): both blocked with their reasons,
+                the other scanners carried on, 229 files done in 25.3 s, the process unharmed.
+              - Responsiveness: the app on the owner's 120 Hz display, full rescan at launch,
+                CARTHAGE_FRAME_LOG: 19 s of scanning, 2,275 frames, median 8.33 ms, 99th
+                percentile at most 16.7 ms, 11 late frames (0.5 %), worst one frame of 117 ms two
+                seconds in (the first list fill). Owner used the app during and after: "works nicely".
+              - Search: unit test over 2,000 plugins, worst query 1.1-1.3 ms; ranking tests ("amp"
+                puts Amped and AmpKnob, then Neural Amp Modeler, above names with scattered letters).
+Measured:     As above. Search 1.3 ms worst at 2,000 plugins; scan 16.7-34.9 s for 227 files.
+Not done:     - Drag onto channels and the timeline: they do not exist yet (phases 4-5); the drag
+                lands on the plugin card, the only insert so far. The owner has not reported trying
+                the drag itself.
+              - AU plugins that load nothing are labelled "may be built for Intel Macs only": AUs are
+                registered by ID, so their binary is not checked the way a VST3's is.
+              - Extra plugin folders exist in the engine (used by the tests) but not yet as a setting.
+              - Running chosen plugins in their own process during playback (F20) is phase 5.
+Decisions:    W29 (no CLAP: answers O3), W30 (owner's answers, O9), F20 (owner's ideas).
+Needs owner:  1. Try dragging a plugin from the browser onto the plugin card, if you have not.
+              2. The go-ahead for phase 4 (timeline, grid, tools, shortcuts; with autosave, projects
+                 and tabs, and the sample browser, as you placed them).
+
 
 ## Phase 4 — Timeline, grid, snapping, tools, shortcuts
 
