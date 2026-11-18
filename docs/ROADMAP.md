@@ -12,8 +12,8 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | --- | --- |
 | 0. Brand, theme and docs | Done (2026-11-16) |
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
-| 2. CI, releases and in-app updates | Exit checks met; waiting for the owner on two untested deliverable paths (report) |
-| 3. Plugin manager and scanning | Not started |
+| 2. CI, releases and in-app updates | Verified (2026-11-18) |
+| 3. Plugin manager and scanning | In progress |
 | 4. Timeline, grid, snapping, tools, shortcuts | Not started |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
@@ -158,7 +158,7 @@ Deliver:
 - [x] `ci.yml`: build and test on every push to `main` (macOS arm64, Windows x64)
 - [x] `release.yml`: tag-triggered; `.dmg` for macOS arm64, Inno Setup `.exe` for Windows x64; version injected from the tag into CMake, `Info.plist` and Windows resources
 - [x] Sparkle 2 and WinSparkle behind one interface; background check on launch; non-blocking banner with release notes, "Install on quit" (default) and "Restart now"; "Check for updates…" menu item; "Receive beta updates" setting
-- [ ] Stable and beta appcasts, EdDSA-signed; the workflow still builds and skips the feed when `SPARKLE_ED_PRIVATE_KEY` is missing — signed feeds published and verified; the no-key path is written but has not run
+- [x] Stable and beta appcasts, EdDSA-signed; the workflow still builds and skips the feed when `SPARKLE_ED_PRIVATE_KEY` is missing — signed feeds published and verified; the no-key path is written but has not run (accepted by the owner, 2026-11-18)
 - [x] Ad-hoc signing now; Developer ID + `notarytool` step present and switched off until `APPLE_*` secrets exist (the switched-off steps have not run)
 - [x] Release notes include the one-time Gatekeeper step
 - [x] The owner has the exact, tested steps to generate the key and add the secret (in RELEASING.md)
@@ -173,7 +173,7 @@ Exit checks:
 
 Report:
 
-### Report — phase 2 (2026-11-18, 3185793)
+### Report — phase 2 (2026-11-18, 3185793; verified, the owner accepted the untested paths below)
 Works:        Carthage is released from a tag. Pushing vX.Y.Z (or vX.Y.Z-beta.N) builds macOS arm64 and
               Windows x64, signs the DMG and the Inno Setup installer with the owner's EdDSA key,
               writes the stable and beta feeds and publishes the GitHub Release with install notes and
