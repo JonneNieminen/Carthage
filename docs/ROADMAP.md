@@ -14,7 +14,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
 | 3. Plugin manager and scanning | Verified (2026-11-18) |
-| 4. Timeline, grid, snapping, tools, shortcuts | 4a in progress (built; most in-app checks pass, the owner's hands-on checks next); 4b after it |
+| 4. Timeline, grid, snapping, tools, shortcuts | 4a verified (2026-11-18); 4b next, after the owner's go-ahead |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
 | 7. Help page, icon and polish | Not started |
@@ -286,21 +286,67 @@ own (owner, 2026-11-18, W31).
 ### Phase 4a — the timeline and editing
 
 Deliver:
-- [ ] Lanes that hold any clips; zoom and scroll at display refresh rate
-- [ ] Grid: default 1/4 beat with toggle (shortcut and toolbar button); bar, beat, 1/2–1/64, triplets, dotted, adaptive
-- [ ] Snap to grid, clip edges, markers and playhead; hold Cmd/Ctrl to bypass for one drag
-- [ ] Tools E P B C D T Z S with hold-to-switch; edge drag trims, Option/Alt stretches, Cmd/Ctrl slips
-- [ ] Split at playhead or cursor, duplicate, nudge, crossfades, loop range, markers, cached waveform thumbnails
-- [ ] Shortcut editor; every shortcut rebindable
-- [ ] Undo/redo for everything so far, project save and load, autosave and crash recovery (O5, confirmed W31); autosave edit-driven: after a 2 s pause, at most every 2 minutes, the last 10 kept (W30)
+- [x] Lanes that hold any clips; zoom and scroll at display refresh rate
+- [x] Grid: default 1/4 beat with toggle (shortcut and toolbar button); bar, beat, 1/2–1/64, triplets, dotted, adaptive
+- [x] Snap to grid, clip edges, markers and playhead; hold Cmd/Ctrl to bypass for one drag
+- [x] Tools E P B C D T Z S with hold-to-switch; edge drag trims, Option/Alt stretches, Cmd/Ctrl slips
+- [x] Split at playhead or cursor, duplicate, nudge, crossfades, loop range, markers, cached waveform thumbnails
+- [x] Shortcut editor; every shortcut rebindable
+- [x] Undo/redo for everything so far, project save and load, autosave and crash recovery (O5, confirmed W31); autosave edit-driven: after a 2 s pause, at most every 2 minutes, the last 10 kept (W30)
 
 Exit checks:
-- [ ] Frame time while zooming and scrolling a project with a few hundred clips, measured on a 120 Hz display and reported
-- [ ] Each tool key, its hold-to-switch behaviour, and each edge-drag modifier exercised in the running app
-- [ ] Each snap target and the bypass key exercised
-- [ ] Every edit undoes and redoes; a saved project reopens identical; killing the app mid-session offers recovery on next launch
+- [x] Frame time while zooming and scrolling a project with a few hundred clips, measured on a 120 Hz display and reported
+- [x] Each tool key, its hold-to-switch behaviour, and each edge-drag modifier exercised in the running app
+- [x] Each snap target and the bypass key exercised
+- [x] Every edit undoes and redoes; a saved project reopens identical; killing the app mid-session offers recovery on next launch
 
-Report: _not written yet_
+Report:
+
+### Report — phase 4a (2026-11-18, 35b3137)
+Works:        Eight lanes of clips with a bar and beat ruler; zoom (pinch, Cmd/Ctrl+scroll, the Zoom
+              tool) and scroll. A grid of 1/4 beat by default (bar to 1/64, triplet, dotted, adaptive),
+              toggled with G or Snap. Clips snap to the grid, other clips' edges, markers and the
+              playhead; Cmd/Ctrl bypasses for one drag. Tools E P B C D T Z S, tap or hold to switch;
+              edge drags trim, Option/Alt stretches, Cmd/Ctrl slips. Split at the playhead or with
+              Slice, duplicate, nudge, mute, markers, a loop range; overlapping clips crossfade. Every
+              edit is one named undo step. Projects as folders (New, Open, Save, Save as, Close with
+              Cmd/Ctrl+W), autosave after a 2 s pause at most every 2 minutes keeping 10, and recovery
+              after a crash. A shortcut editor in Settings: every command rebindable, with search and
+              Reset all; menus, the toolbar letters and tooltips follow. Mac window keys: Cmd+M,
+              Ctrl+Cmd+F; Return also returns to start.
+Tested:       - In the running app on the owner's Mac (120 Hz), with the generated 300-clip demo
+                (carthage-bench demo), partly by Claude through computer use, partly by the owner:
+                every tool (move, trim, Stretch, Slice, Mute, Delete, Draw, Paint, Zoom); hold-to-switch,
+                the Option and Cmd edge drags, every snap target and the bypass (owner: "everything
+                works great"); five mixed edits undone and redone back to the identical state; G and
+                Snap; a saved project reopened identical (zoom, scroll, moved clip); an edit autosaved
+                2 s later, the app killed with kill -9, recovery offered on the next launch and the
+                copy holding the edit; rebinding (Slice to X, saved to Shortcuts.xml), a key taken
+                from another command with the note, Reset all; Cmd+W asks to save, Cmd+M, Ctrl+Cmd+F,
+                Return to start. Playback heard by the owner.
+              - Headless (ctest): grid steps, adaptive lines and every snap target with the bypass;
+                move, trim, slip, stretch, split, duplicate, mute, markers, loop range, each as one
+                undo step; project save/reopen, Save as with recordings, format refusals, autosave
+                timing, keep-10 pruning, recovery markers. carthage-bench projects: PASSED.
+Measured:     Frame time (CARTHAGE_FRAME_LOG, 120 Hz display, 300 clips): the owner's 13-minute
+              session of zooming, scrolling, editing and playing: 766 s, 92,175 frames, 722 s with no
+              late frame, 144 late frames in all. Zoom and scroll alone: 0-2 late frames a second,
+              worst 16.7 ms, also zoomed out with every clip in view. Playback had 6-19 late frames a
+              second (worst 41.7 ms) until 35b3137 took the disk out of painting; now 1-4 (worst
+              16.7 ms), with one second of 11 late frames (33 ms) as playback starts. Launch: one
+              1.2 s first frame and a second of up to 83 ms frames while 300 waveforms load.
+Not done:     - Crossfades are made (Tracktion's auto-crossfade on overlaps) but not drawn on the
+                clips, and not checked by ear.
+              - The view does not follow the playhead during playback.
+              - Which clip sits on top of an overlap follows start time; there is no "bring to front".
+              - Recovery offers only the newest unclosed project; autosave folders of discarded
+                untitled projects stay behind; a device change can leave an unnamed undo step.
+              - The frame log has no timestamps, so the owner session's few slow seconds are counted,
+                not tied to what was happening.
+Decisions:    W32 (clip paths), W33 (opening is not an edit), W34 (Cmd/Ctrl+W, window keys),
+              W35 (self-signed releases; amends F11).
+Needs owner:  1. Make the signing certificate (docs/RELEASING.md, "Making the signing certificate").
+              2. The go-ahead for phase 4b (tabs, the sample browser, the start screen).
 
 ### Phase 4b — projects as tabs, the sample browser, the start screen
 
