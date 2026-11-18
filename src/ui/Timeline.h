@@ -105,6 +105,7 @@ namespace carthage::ui
         juce::AudioFormatManager formats;
         juce::AudioThumbnailCache thumbnailCache { 64 };
         std::map<juce::String, std::unique_ptr<juce::AudioThumbnail>> thumbnails;   // by file path
+        std::map<juce::String, juce::File> resolvedFiles;   // see fileOf
 
         std::unique_ptr<Ruler> ruler;
         std::unique_ptr<Headers> headers;
@@ -117,6 +118,11 @@ namespace carthage::ui
         std::optional<double> lastRecordingFrom;
 
         juce::AudioThumbnail& thumbnailFor (const juce::File&);
+
+        /** A clip's audio file. Resolving a path looks at the disk (editing::consistentFilePaths),
+            which painting never does, so each source path is resolved once per project file and
+            kept; a Save as changes the project file, so it resolves afresh. */
+        juce::File fileOf (tracktion::WaveAudioClip&);
         juce::Array<tracktion::AudioTrack*> laneTracks() const;
         juce::Colour laneColour (int laneIndex) const;
         double secondsToBeats (double seconds) const;

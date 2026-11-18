@@ -217,7 +217,7 @@ namespace carthage::ui
 
             if (auto* wave = dynamic_cast<tracktion::WaveAudioClip*> (&c))
             {
-                auto& thumb = timeline.thumbnailFor (wave->getOriginalFile());
+                auto& thumb = timeline.thumbnailFor (timeline.fileOf (*wave));
 
                 if (! watched.contains (&thumb))
                 {
@@ -229,8 +229,11 @@ namespace carthage::ui
                 const auto from = pos.getOffset().inSeconds() * wave->getSpeedRatio();
                 const auto to = from + pos.getLength().inSeconds() * wave->getSpeedRatio();
 
-                // Only the visible part of a long clip is drawn.
-                const auto visible = waveArea.getIntersection (Rectangle<float> (0.0f, waveArea.getY(), static_cast<float> (getWidth()), waveArea.getHeight()));
+                // Only the part being repainted is drawn: a moving playhead repaints a narrow strip,
+                // and a long clip's whole waveform would otherwise be traced for it every frame.
+                const auto repainted = g.getClipBounds().toFloat();
+                const auto visible = waveArea.getIntersection (Rectangle<float> (std::floor (repainted.getX()) - 1.0f, waveArea.getY(),
+                                                                                 repainted.getWidth() + 2.0f, waveArea.getHeight()));
 
                 if (thumb.getTotalLength() > 0.0 && ! visible.isEmpty())
                 {
@@ -704,6 +707,7 @@ namespace carthage::ui
         brush = {};
         thumbnails.clear();
         thumbnailCache.clear();
+        resolvedFiles.clear();
         lastPlayheadSeconds = -1.0;
         lastRecordingFrom.reset();
         setViewState (session.getOpenedView());
@@ -786,6 +790,20 @@ namespace carthage::ui
     float Timeline::xAtBeat (double beat) const noexcept
     {
         return static_cast<float> (headerWidth + (beat - scrollBeat) * pixelsPerBeat);
+    }
+
+    File Timeline::fileOf (tracktion::WaveAudioClip& clip)
+    {
+        if (clip.hasAnyTakes())
+            return clip.getOriginalFile();   // a comp's file; takes are not made yet (phase 5)
+
+        const auto key = session.getProjectFile().getFullPathName() + "\n" + clip.getSourceFileReference().source.get();
+        auto found = resolvedFiles.find (key);
+
+        if (found == resolvedFiles.end())
+            found = resolvedFiles.emplace (key, clip.getOriginalFile()).first;
+
+        return found->second;
     }
 
     AudioThumbnail& Timeline::thumbnailFor (const File& file)
