@@ -1,0 +1,40 @@
+# Checks the self-signed certificate without releasing anything (DECISIONS W35): imports the
+# CARTHAGE_SIGNING_* secrets the way release.yml does, signs a copy of a small system program as
+# "Carthage self-signed" and verifies it. Run it by hand after setting or renewing the secrets.
+name: Signing check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Sign a test program
+    runs-on: macos-26
+    timeout-minutes: 10
+    env:
+      CARTHAGE_SIGNING_CERTIFICATE: ${{ secrets.CARTHAGE_SIGNING_CERTIFICATE }}
+      CARTHAGE_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.CARTHAGE_SIGNING_CERTIFICATE_PASSWORD }}
+      CARTHAGE_SIGNING_IDENTITY: Carthage self-signed
+    steps:
+      - name: Import and sign
+        run: |
+          set -euo pipefail
+          [[ -n "$CARTHAGE_SIGNING_CERTIFICATE" ]] || { echo "::error::CARTHAGE_SIGNING_CERTIFICATE is not set."; exit 1; }
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(uuidgen)"
+          echo "$CARTHAGE_SIGNING_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$CARTHAGE_SIGNING_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          rm "$RUNNER_TEMP/certificate.p12"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+
+          cp /usr/bin/true "$RUNNER_TEMP/carthage-signing-check"
+          codesign --force --sign "$CARTHAGE_SIGNING_IDENTITY" "$RUNNER_TEMP/carthage-signing-check"
+          codesign --verify --strict --verbose=1 "$RUNNER_TEMP/carthage-signing-check"
+          requirement="$(codesign -d -r- "$RUNNER_TEMP/carthage-signing-check" 2>&1 | grep designated)"
+          echo "$requirement"
+          { echo "### Signing check passed"; echo; echo "Signed as \"$CARTHAGE_SIGNING_IDENTITY\"."; echo; echo "\`$requirement\`"; } >> "$GITHUB_STEP_SUMMARY"

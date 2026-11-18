@@ -70,7 +70,7 @@ The app reads the beta feed when "Receive beta updates" is on (Settings, Updates
 | Secret | Purpose | Status |
 | --- | --- | --- |
 | `SPARKLE_ED_PRIVATE_KEY` | Signs the update downloads for Sparkle and WinSparkle | Set by the owner, 2026-11-17 (keychain account `carthage`) |
-| `CARTHAGE_SIGNING_CERTIFICATE`, `CARTHAGE_SIGNING_CERTIFICATE_PASSWORD` | Carthage's self-signed certificate (base64 `.p12`, its identity named "Carthage self-signed"), so macOS keeps the microphone permission across updates (DECISIONS W35) | Not set yet; the owner makes and sets it ("Making the signing certificate" below) |
+| `CARTHAGE_SIGNING_CERTIFICATE`, `CARTHAGE_SIGNING_CERTIFICATE_PASSWORD` | Carthage's self-signed certificate (base64 `.p12`, its identity named "Carthage self-signed"), so macOS keeps the microphone permission across updates (DECISIONS W35) | Set by the owner, 2026-11-18 (certificate in their login keychain, valid 20 years) |
 | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | Developer ID signing; wins over the self-signed certificate | Not available; the steps exist and are skipped |
 | `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` | Notarisation with `notarytool` | Not available; skipped |
 
@@ -173,7 +173,9 @@ The owner does this once, on their Mac; the agent never sees the certificate or 
    and `gh secret set CARTHAGE_SIGNING_CERTIFICATE_PASSWORD --repo JonneNieminen/Carthage` (it asks
    for the password). Then delete the `.p12`; the certificate stays in the keychain as the backup.
 
-A new certificate later means one more permission prompt; updates keep working (W35).
+To check the secrets without releasing, run the **Signing check** workflow (Actions tab, or
+`gh workflow run signing-check.yml`): it signs a small test program with the certificate and
+verifies it. A new certificate later means one more permission prompt; updates keep working (W35).
 
 ## Update behaviour in the app
 
