@@ -2,6 +2,7 @@
 
 #include "Controls.h"
 #include "PluginBrowser.h"
+#include "ProjectTabs.h"
 #include "SettingsPanel.h"
 #include "Timeline.h"
 #include "UpdateBanner.h"
@@ -36,6 +37,9 @@ namespace carthage::ui
 
         void toggleSettings();
 
+        /** The open projects changed (name, unsaved state, order): the tab strip follows. */
+        void projectStateChanged()   { tabs.refresh(); }
+
         /** Shows a problem the user has to fix outside Carthage, in the status line. */
         void showProblem (const juce::String& text)    { setStatus (text, theme::warn); }
 
@@ -53,6 +57,7 @@ namespace carthage::ui
 
         engine::Session& session;
         juce::ApplicationCommandManager& commands;
+        ProjectTabs tabs { session };
 
         IconButton recordButton { IconButton::Glyph::record };
         IconButton playButton { IconButton::Glyph::play };

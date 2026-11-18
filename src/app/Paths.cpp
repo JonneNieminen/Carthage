@@ -21,11 +21,11 @@ namespace carthage::app
         return juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("Carthage");
     }
 
-    juce::File Paths::newUntitledProject()
+    juce::File Paths::newUntitledProject (const juce::Array<juce::File>& inUse)
     {
         auto folder = projects().getChildFile ("Untitled");
 
-        for (int n = 2; folder.exists(); ++n)
+        for (int n = 2; folder.exists() || inUse.contains (folder); ++n)
             folder = projects().getChildFile ("Untitled " + juce::String (n));
 
         return folder;

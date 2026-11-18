@@ -23,7 +23,7 @@ namespace carthage::app
 
         /** A folder for a new, untitled project: <projects>/Untitled, or Untitled 2, 3… if taken.
             It is created when something is recorded into it. */
-        static juce::File newUntitledProject();
+        static juce::File newUntitledProject (const juce::Array<juce::File>& inUse = {});   // folders of open tabs: theirs are made only when recording
 
         /** Shortcuts the user changed (only the changes). <settings>/Shortcuts.xml */
         static juce::File shortcuts();

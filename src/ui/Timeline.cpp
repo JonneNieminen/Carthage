@@ -705,9 +705,9 @@ namespace carthage::ui
         editState.addListener (this);
         selected.clearQuick();
         brush = {};
-        thumbnails.clear();
-        thumbnailCache.clear();
-        resolvedFiles.clear();
+        // Thumbnails are kept: they belong to audio files, not projects, so a tab coming back
+        // draws at once and a sample used in two projects is read once. Resolved paths belong to
+        // a project file and are keyed by it (fileOf).
         lastPlayheadSeconds = -1.0;
         lastRecordingFrom.reset();
         setViewState (session.getOpenedView());

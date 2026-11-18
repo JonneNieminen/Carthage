@@ -81,10 +81,11 @@ namespace carthage::app
                 case 6:
                    #if JUCE_MAC
                     m.addCommandItem (&commands, commands::minimiseWindow);
-                    m.addCommandItem (&commands, commands::toggleFullScreen);
-                   #else
-                    m.addCommandItem (&commands, commands::toggleFullScreen);
                    #endif
+                    m.addCommandItem (&commands, commands::toggleFullScreen);
+                    m.addSeparator();
+                    m.addCommandItem (&commands, commands::nextProject);
+                    m.addCommandItem (&commands, commands::previousProject);
                     break;
                 case 7:
                     m.addCommandItem (&commands, commands::checkForUpdates);
@@ -197,7 +198,15 @@ namespace carthage::app
             const auto unclosed = carthage::autosave::Store (folders.autosave).findUnclosed();
 
             session = std::make_unique<engine::Session> (folders, Paths::scanner());
-            session->onProjectStateChanged = [this] { updateTitle(); };
+            session->onProjectStateChanged = [this]
+            {
+                updateTitle();
+
+                if (auto* c = content())
+                    c->projectStateChanged();
+
+                commands.commandStatusChanged();   // next/previous project follow the tab count
+            };
 
             menuBar = std::make_unique<MenuBar> (commands);
             auto& content = window->showSession (*session, commands);
@@ -243,8 +252,12 @@ namespace carthage::app
                 if (session == nullptr)
                     return true;
 
-                if (session->isRecording() || session->hasUnsavedChanges())
+                if (session->isRecording())
                     return false;
+
+                for (int i = 0; i < session->getNumProjects(); ++i)
+                    if (session->describeProject (i).unsaved)
+                        return false;   // any tab: the update waits until they are saved
 
                 session->close();
                 return true;
@@ -301,6 +314,8 @@ namespace carthage::app
                     info.setActive (updater != nullptr);
                 else if (id == commands::minimiseWindow || id == commands::toggleFullScreen)
                     info.setActive (window != nullptr);
+                else if (id == commands::nextProject || id == commands::previousProject)
+                    info.setActive (session != nullptr && ! session->isRecording() && session->getNumProjects() > 1);
                 else
                     info.setActive (session != nullptr && ! session->isRecording());
 
@@ -324,7 +339,15 @@ namespace carthage::app
                 case commands::openProject:     openProject(); return true;
                 case commands::saveProject:     save ({}); return true;
                 case commands::saveProjectAs:   saveAs ({}); return true;
-                case commands::closeProject:    systemRequestedQuit(); return true;   // the only project: the window, so the app (W34)
+                case commands::closeProject:    closeProject(); return true;
+                case commands::nextProject:
+                case commands::previousProject:
+                {
+                    const auto n = session->getNumProjects();
+                    const auto step = info.commandID == commands::nextProject ? 1 : n - 1;
+                    report (session->showProject ((session->getFrontIndex() + step) % n));
+                    return true;
+                }
                 case commands::minimiseWindow:  if (window != nullptr) window->setMinimised (true); return true;
                 case commands::toggleFullScreen:
                     if (window != nullptr) window->setFullScreen (! window->isFullScreen());
@@ -427,23 +450,78 @@ namespace carthage::app
             });
         }
 
-        void newProject()
+        /** The folders of the open tabs: a new untitled one must not share a name with them. */
+        Array<File> openFolders() const
         {
-            whenClosable ([this] { report (session->newProject (Paths::newUntitledProject())); });
+            Array<File> folders;
+
+            for (int i = 0; i < session->getNumProjects(); ++i)
+                folders.add (session->describeProject (i).file.getParentDirectory());
+
+            return folders;
+        }
+
+        /** A new tab (it takes the place of an untouched untitled one). */
+        void newProject (const File& templateFile = {})
+        {
+            report (session->newProject (Paths::newUntitledProject (openFolders()), templateFile));
         }
 
         void openProject()
         {
-            whenClosable ([this]
+            chooser = std::make_unique<FileChooser> ("Open a project", Paths::projects(), "*.carthage");
+            chooser->launchAsync (FileBrowserComponent::openMode | FileBrowserComponent::canSelectFiles,
+                                  [this] (const FileChooser& fc)
+                                  {
+                                      if (const auto file = fc.getResult(); file != File())
+                                          report (session->openProject (file));
+                                  });
+        }
+
+        /** Cmd/Ctrl+W (W34): closes the front tab after asking; the last one closes the window. */
+        void closeProject()
+        {
+            if (session->getNumProjects() < 2)
             {
-                chooser = std::make_unique<FileChooser> ("Open a project", Paths::projects(), "*.carthage");
-                chooser->launchAsync (FileBrowserComponent::openMode | FileBrowserComponent::canSelectFiles,
-                                      [this] (const FileChooser& fc)
-                                      {
-                                          if (const auto file = fc.getResult(); file != File())
-                                              report (session->openProject (file));
-                                      });
-            });
+                systemRequestedQuit();
+                return;
+            }
+
+            if (session->isRecording())
+                session->stopRecording();
+
+            whenClosable ([this] { session->closeProject(); });
+        }
+
+        /** Quitting: each tab with unsaved changes comes forward in turn and is asked about; a
+            Cancel stops the quit with the rest still open. */
+        void closeEveryProjectThenQuit()
+        {
+            for (int i = 0; i < session->getNumProjects(); ++i)
+            {
+                if (! session->describeProject (i).unsaved)
+                    continue;
+
+                [[maybe_unused]] auto r = session->showProject (i);
+
+                whenClosable ([this]
+                {
+                    if (session->getNumProjects() > 1)
+                    {
+                        session->closeProject();
+                        closeEveryProjectThenQuit();
+                    }
+                    else
+                    {
+                        session->close();
+                        quit();
+                    }
+                });
+                return;
+            }
+
+            session->close();
+            quit();
         }
 
         /** Saves; asks where first if the project was never saved. `then` gets whether it was. */
@@ -555,13 +633,13 @@ namespace carthage::app
             if (session != nullptr && session->isRecording())
                 session->stopRecording();
 
-            whenClosable ([this]
+            if (session == nullptr)
             {
-                if (session != nullptr)
-                    session->close();
-
                 quit();
-            });
+                return;
+            }
+
+            closeEveryProjectThenQuit();
         }
 
     private:

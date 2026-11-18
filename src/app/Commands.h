@@ -39,6 +39,7 @@ namespace carthage::app
 
             // Added later, so they go last: the saved shortcuts file names commands by id.
             closeProject, minimiseWindow, toggleFullScreen,
+            nextProject, previousProject,
         };
 
         /** The tool commands, in Timeline::Tool order. */
@@ -60,7 +61,7 @@ namespace carthage::app
         inline juce::Array<juce::CommandID> application()
         {
             return { checkForUpdates, newProject, openProject, saveProject, saveProjectAs, closeProject,
-                     minimiseWindow, toggleFullScreen };
+                     minimiseWindow, toggleFullScreen, nextProject, previousProject };
         }
 
         /** Name, description, category and default keys. Flags (enabled, ticked) are added by the
@@ -154,6 +155,14 @@ namespace carthage::app
                    #else
                     info.addDefaultKeypress (KP::F11Key, 0);
                    #endif
+                    break;
+                case nextProject:
+                    info.setInfo ("Next project", "Bring the next tab to the front", "Window", 0);
+                    info.addDefaultKeypress (KP::tabKey, juce::ModifierKeys::ctrlModifier);
+                    break;
+                case previousProject:
+                    info.setInfo ("Previous project", "Bring the previous tab to the front", "Window", 0);
+                    info.addDefaultKeypress (KP::tabKey, juce::ModifierKeys::ctrlModifier | juce::ModifierKeys::shiftModifier);
                     break;
                 case checkForUpdates:
                     info.setInfo (juce::String::fromUTF8 ("Check for updates\xe2\x80\xa6"), "See whether a newer Carthage is out", "Carthage", 0);

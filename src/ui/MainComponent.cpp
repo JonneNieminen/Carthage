@@ -367,6 +367,20 @@ namespace carthage::ui
 
         addChildComponent (settings);
         addAndMakeVisible (browser);
+
+        // Tabs: a click brings a project forward; closing asks to save, as Cmd/Ctrl+W does.
+        addAndMakeVisible (tabs);
+        tabs.onSelect = [this] (int index)
+        {
+            if (auto r = session.showProject (index); r.failed())
+                setStatus (r.getErrorMessage(), theme::warn);
+        };
+        tabs.onClose = [this] (int index)
+        {
+            if (session.showProject (index).wasOk())
+                commands.invokeDirectly (cmd::closeProject, false);
+        };
+        tabs.onNew = [this] { commands.invokeDirectly (cmd::newProject, false); };
         browser.onInsert = [this] (const PluginDescription& d) { insertPlugin (d); };
         signalRow->onPluginDropped = [this] (const String& key)
         {
@@ -409,6 +423,7 @@ namespace carthage::ui
         session.onProjectClosing = [this] { closePluginWindow(); };
         session.onProjectChanged = [this]
         {
+            tabs.refresh();
             timeline.projectChanged();
             refreshToolbar();
             signalRow->refreshPlugin();
@@ -909,6 +924,7 @@ namespace carthage::ui
     void MainComponent::resized()
     {
         auto r = getLocalBounds();
+        tabs.setBounds (r.removeFromTop (ProjectTabs::height));
 
         auto top = r.removeFromTop (56).reduced (theme::space4, theme::space2 + 2);
         recordButton.setBounds (top.removeFromLeft (36));

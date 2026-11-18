@@ -10,6 +10,12 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 
 ## Unreleased
 
+### Added
+- Projects open as tabs across the top of the window. Click a tab, or press Ctrl+Tab and
+  Ctrl+Shift+Tab, to switch; only the front project plays, the others wait with their plugins
+  loaded. File > New and Open add a tab; Cmd/Ctrl+W, the tab's cross or a middle click closes one,
+  asking to save first. Drag tabs to reorder them.
+
 ## 0.1.2-beta.4 - 2026-11-18
 
 ### Changed

@@ -123,6 +123,23 @@ packaging/           macos/ (sign.sh, make-dmg.sh, read-me), windows/ (Carthage.
   the project file means Carthage did not quit cleanly, and the newest such autosave is offered. A
   recovered project counts as unsaved until it is saved.
 
+### Phase 4b: tabs, samples, the start screen
+
+- **Several projects, one front.** `Session` holds the open projects in tab order
+  (`Session::Project`: the edit, its first lane, file, view and autosave state) and an index of the
+  front one. Everything that speaks of "the edit", the transport or the input means the front
+  project. Bringing a tab forward (`showProject`) puts the old front one back first: its view is
+  kept, its transport stops, its input targets are removed and its playback context is freed, so a
+  background project costs no audio time while its plugins stay loaded (W30). The new front one
+  allocates its context and takes the input (`applyInputRouting`); then `onProjectChanged` lets the
+  UI follow. Switching the 300-clip demo and an empty project takes under 25 ms (carthage-bench
+  projects). New and Open add a tab after the front one; an untitled, untouched front tab gives its
+  place instead. Closing a tab asks to save (the app), then `closeProject` drops it; the last tab is
+  never closed this way: closing it closes the window (W34). Quitting brings each unsaved tab
+  forward in turn and asks. Every open project has its own autosave folder and `running` marker.
+- **The timeline across tabs.** Waveform thumbnails belong to audio files, not projects, so they are
+  kept when the front project changes; resolved clip paths are keyed by project file.
+
 ## Threads
 
 | Thread | Does | Must never |

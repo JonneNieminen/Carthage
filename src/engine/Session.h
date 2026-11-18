@@ -33,9 +33,14 @@ namespace carthage::engine
         allocates on the audio thread (docs/ARCHITECTURE.md, "Recording"). A finished take becomes
         a clip on the track at the position it was played, corrected for the interface's latency.
 
-        The edit is the open project (phase 4a, engine/Project.h). New, Open and recovery replace
-        it, and onProjectChanged tells the UI to let go of the old one. Saves and autosaves are
-        written by a worker; the edit is copied on the message thread first.
+        Several projects can be open at once, as tabs (phase 4b, W30). Each has its own edit; only
+        the front one is attached to the audio device, plays and hears the input. The others keep
+        their plugins loaded but have no playback graph, so they cost no audio time. Everything
+        below that speaks of "the project", "the edit" or the transport means the front one. New
+        and Open add a tab (taking the place of an untouched untitled one); switching or closing
+        the front tab calls onProjectClosing and then onProjectChanged, so the UI lets go of the old
+        edit and takes up the new one. Saves and autosaves are written by a worker; the edit is
+        copied on the message thread first.
 
         All methods: message thread.
     */
@@ -48,8 +53,8 @@ namespace carthage::engine
 
         tracktion::Engine& getEngine() noexcept                 { return *engine; }
         juce::AudioDeviceManager& getDeviceManager() noexcept   { return engine->getDeviceManager().deviceManager; }
-        tracktion::Edit& getEdit() noexcept                     { return *edit; }
-        tracktion::AudioTrack& getTrack() noexcept              { return *track; }
+        tracktion::Edit& getEdit() noexcept                     { return *front().edit; }
+        tracktion::AudioTrack& getTrack() noexcept              { return *front().track; }
         AudioCallback& getCallback() noexcept                   { return *callback; }
         TakeRecorder& getRecorder() noexcept                    { return recorder; }
         LatencyProbe& getProbe() noexcept                       { return probe; }
@@ -64,17 +69,42 @@ namespace carthage::engine
         const juce::File& getScanner() const noexcept           { return scanner; }
 
         //==========================================================================================
-        // The project
-        const juce::File& getProjectFile() const noexcept   { return projectFile; }
-        juce::File getProjectFolder() const                 { return projectFile.getParentDirectory(); }
+        // The front project
+        const juce::File& getProjectFile() const noexcept   { return front().file; }
+        juce::File getProjectFolder() const                 { return getProjectFile().getParentDirectory(); }
         juce::String getProjectName() const                 { return getProjectFolder().getFileName(); }
 
         /** Never saved: Save has to ask where. */
-        bool isUntitled() const noexcept                    { return untitled; }
-        bool hasUnsavedChanges() const;
+        bool isUntitled() const noexcept                    { return front().untitled; }
+        bool hasUnsavedChanges() const                      { return front().hasUnsavedChanges(); }
 
-        /** The view state the project was opened with (the UI's own; may be invalid). */
-        const juce::ValueTree& getOpenedView() const noexcept   { return info.view; }
+        /** The view state the project was opened with, or had when it last went to the back (the
+            UI's own; may be invalid). */
+        const juce::ValueTree& getOpenedView() const noexcept   { return front().info.view; }
+
+        //==========================================================================================
+        // The open projects (tabs), in tab order
+        struct ProjectSummary
+        {
+            juce::String name;
+            juce::File file;
+            bool unsaved = false, untitled = false;
+        };
+
+        int getNumProjects() const noexcept                 { return static_cast<int> (projects.size()); }
+        int getFrontIndex() const noexcept                  { return frontIndex; }
+        ProjectSummary describeProject (int index) const;
+
+        /** Brings a tab to the front: it plays and hears the input from now on. Refused while
+            recording. */
+        juce::Result showProject (int index);
+
+        /** Closes the front project without asking (the app asks first) and brings its neighbour
+            forward. The last project is never closed this way: closing it closes the window. */
+        void closeProject();
+
+        /** Moves a tab (dragged in the tab strip). */
+        void moveProject (int from, int to);
 
         /** The UI's view state, asked for whenever the project is written. */
         std::function<juce::ValueTree()> getViewState;
@@ -88,15 +118,16 @@ namespace carthage::engine
         /** The name, the unsaved state or the folder changed (the window title follows). */
         std::function<void()> onProjectStateChanged;
 
-        /** A new, empty, untitled project whose folder (created when something is recorded) is
-            `folder`. */
-        juce::Result newProject (const juce::File& folder);
+        /** A new, empty, untitled project in a new tab, whose folder (created when something is
+            recorded) is `folder`. `templateFile`, if given, is a project to start from. */
+        juce::Result newProject (const juce::File& folder, const juce::File& templateFile = {});
 
-        /** Opens a `.carthage` file (or a project folder holding one). */
+        /** Opens a `.carthage` file (or a project folder holding one) in a new tab, or brings it to
+            the front if it is open already. */
         juce::Result openProject (const juce::File&);
 
-        /** Opens the autosave of a project Carthage did not close cleanly. The project counts as
-            unsaved until it is saved. */
+        /** Opens the autosave of a project Carthage did not close cleanly, in a new tab. The
+            project counts as unsaved until it is saved. */
         juce::Result recover (const autosave::Store::Recovery&);
 
         /** Writes the project to its file in the background; `done` runs on the message thread. */
@@ -106,7 +137,7 @@ namespace carthage::engine
             copying its recordings along, and carries on there. */
         void saveAs (const juce::File& folder, std::function<void (juce::Result)> done);
 
-        /** Quitting: waits for writes in hand and records that the project closed cleanly. */
+        /** Quitting: waits for writes in hand and records that every project closed cleanly. */
         void close();
 
         /** Null when the session was made without an autosave folder. */
@@ -206,28 +237,54 @@ namespace carthage::engine
         TakeRecorder recorder;
         LatencyProbe probe;
         std::unique_ptr<AudioCallback> callback;
-        std::unique_ptr<tracktion::Edit> edit;
-        tracktion::AudioTrack* track = nullptr;
 
-        // The project
-        juce::File projectFile, recordings;
-        project::Info info;
-        bool untitled = true, recovered = false;
+        /** One open project: its edit and everything that follows it around. */
+        struct Project final : public juce::ChangeListener   // its own undo manager
+        {
+            Project (Session&, std::unique_ptr<tracktion::Edit>, const juce::File&, project::Info, bool isUntitled);
+            ~Project() override;
+
+            Session& session;
+            std::unique_ptr<tracktion::Edit> edit;
+            tracktion::AudioTrack* track = nullptr;   // the first lane: the input and its takes
+            juce::File file, recordings;
+            project::Info info;
+            bool untitled = true, recovered = false;
+
+            // Autosave (W30): after an edit, once the user pauses.
+            bool changedSinceAutosave = false;
+            double lastChange = 0.0;
+            std::optional<double> lastAutosave;
+            juce::uint64 changeCount = 0;
+            bool namedChangeSinceAdopt = false;
+            juce::TimedCallback settleTimer { [this] { settle(); } };
+
+            bool hasUnsavedChanges() const   { return recovered || edit->hasChangedSinceSaved(); }
+
+            /** Untitled and never touched: New and Open take its place instead of adding a tab. */
+            bool isPristine() const;
+
+            void settle();
+            void changeListenerCallback (juce::ChangeBroadcaster*) override;
+        };
+
+        std::vector<std::unique_ptr<Project>> projects;
+        int frontIndex = -1;
+
+        Project& front() const noexcept                 { return *projects[static_cast<size_t> (frontIndex)]; }
+
         std::optional<autosave::Store> autosaves;
         autosave::Policy autosavePolicy;
         project::Writer writer;
         juce::TimedCallback autosaveTimer { [this] { autosaveIfDue(); } };
-        bool changedSinceAutosave = false;
-        double lastChange = 0.0;
-        std::optional<double> lastAutosave;
-        juce::uint64 changeCount = 0;
-        bool namedChangeSinceAdopt = false;
-        juce::TimedCallback settleTimer { [this] { settle(); } };
 
-        void adopt (std::unique_ptr<tracktion::Edit>, const juce::File& file, project::Info, bool isUntitled, bool isNew);
-        void savedAt (const juce::File& file, juce::uint64 changesWhenTaken);
+        /** Sets up a new or opened edit and puts it in a tab (replacing a pristine front one). */
+        void add (std::unique_ptr<tracktion::Edit>, const juce::File& file, project::Info, bool isUntitled, bool isNew);
+        void putToBack();            // the front project lets go of the device and the input
+        void bringForward (int);     // and another takes them up
+        void savedAt (Project&, juce::uint64 changesWhenTaken);
+        bool isOpen (const Project*) const;   // a tab may close while its file is being written
         void projectStateChanged();
-        void settle();
         juce::ValueTree currentView() const;
 
         int inputChannel = 0;

@@ -288,8 +288,51 @@ namespace
 
             say ("Open it again: the clip comes back");
             onMessageThreadVoid ([this] { session->newProject (folder.getChildFile ("Projects/Untitled")); });
+            check (onMessageThread ([this] { return session->getNumProjects(); }) == 2, "a new project opens in a second tab");
             check (clipCount() == 0, "a new project is empty");
+            check (onMessageThread ([&] { return session->openProject (song).wasOk() && session->getFrontIndex() == 0; }),
+                   "opening Song again brings its tab forward");
+            onMessageThreadVoid ([this] { session->closeProject(); });
+            say ("Tabs: switching is quick and is not an edit; only the front one has a graph");
+            waitMs (600);
+            onMessageThreadVoid ([&] { session->openProject (song); });
+            waitMs (600);
+            onMessageThreadVoid ([this] { session->newProject (folder.getChildFile ("Projects/Other")); });
+            waitMs (600);
+            check (onMessageThread ([this] { return session->getNumProjects() == 2 && session->getFrontIndex() == 1; }),
+                   "Song and a new project, side by side");
+            double slowest = 0.0;
+
+            for (int i = 0; i < 10; ++i)
+            {
+                const auto ms = onMessageThread ([this, i]
+                {
+                    const auto t0 = Time::getMillisecondCounterHiRes();
+                    session->showProject (i % 2);
+                    return Time::getMillisecondCounterHiRes() - t0;
+                });
+                slowest = std::max (slowest, ms);
+            }
+
+            say ("  slowest of 10 switches: " + String (slowest, 1) + " ms");
+            check (slowest < 100.0, "each switch under 100 ms");
+            waitMs (600);
+            check (onMessageThread ([this]
+                   {
+                       auto background = [this] (int i) { return session->describeProject (i); };
+                       auto& front = session->getEdit();
+                       return ! background (0).unsaved && ! background (1).unsaved && ! front.getUndoManager().canUndo()
+                               && front.getTransport().getCurrentPlaybackContext() != nullptr;
+                   }),
+                   "nothing unsaved or undoable after switching; the front one has a graph");
+            onMessageThreadVoid ([this] { session->showProject (1); session->closeProject(); });   // Other
+            onMessageThreadVoid ([this] { session->newProject (folder.getChildFile ("Projects/Untitled 2")); });
+            onMessageThreadVoid ([this] { session->showProject (0); session->closeProject(); });   // Song
+            check (onMessageThread ([this] { return session->getNumProjects() == 1 && session->isUntitled(); }),
+                   "closing Song leaves the new project");
+            waitMs (600);
             check (onMessageThread ([&] { return session->openProject (song).wasOk(); }), "open the folder");
+            check (onMessageThread ([this] { return session->getNumProjects(); }) == 1, "it takes the untouched new tab's place");
             check (clipCount() == 1, "one clip");
             waitMs (600);   // as a person would: Tracktion settles the new edit first
             check (! onMessageThread ([this] { return session->hasUnsavedChanges() || session->getEdit().getUndoManager().canUndo(); }),
