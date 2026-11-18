@@ -62,7 +62,8 @@ public:
         beginTest ("A clip beside the edit finds its audio (W32)");
         {
             auto* c = newClip (0.0);
-            expectEquals (c->state.getProperty (tracktion::IDs::source).toString(), juce::String ("../tone.wav"), "Tracktion writes it relative to the edit file");
+            expectEquals (c->state.getProperty (tracktion::IDs::source).toString().replaceCharacter ('\\', '/'), juce::String ("../tone.wav"),
+                          "Tracktion writes it relative to the edit file");
             expect (dynamic_cast<tracktion::AudioClipBase*> (c)->getAudioFile().getFile() == audio, "and Carthage resolves it to the real file");
             editing::remove ({ c });
         }

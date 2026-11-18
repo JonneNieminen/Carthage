@@ -32,7 +32,8 @@ namespace
         return c.get();
     }
 
-    juce::String sourceOf (const tracktion::Clip& c)   { return c.state[tracktion::IDs::source].toString(); }
+    /** With '/' on every platform (Windows writes relative paths with '\\'). */
+    juce::String sourceOf (const tracktion::Clip& c)   { return c.state[tracktion::IDs::source].toString().replaceCharacter ('\\', '/'); }
 }
 
 class ProjectTests final : public juce::UnitTest
@@ -100,7 +101,7 @@ public:
 
             // Recordings inside the folder are written relative to the file (W32); outside, absolute.
             expectEquals (sourceOf (*lanes[0]->getClips()[0]), juce::String ("../Recordings/Take 1.wav"));
-            expectEquals (sourceOf (*lanes[2]->getClips()[0]), sample.getFullPathName());
+            expectEquals (sourceOf (*lanes[2]->getClips()[0]), sample.getFullPathName().replaceCharacter ('\\', '/'));
 
             auto* audio = dynamic_cast<tracktion::AudioClipBase*> (lanes[0]->getClips()[0]);
             expect (audio != nullptr && audio->getAudioFile().getFile() == take, "the take's audio is found");
