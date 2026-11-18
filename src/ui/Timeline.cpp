@@ -201,7 +201,9 @@ namespace carthage::ui
             const Rectangle<float> body (x0, static_cast<float> (laneY + 3), std::max (2.0f, x1 - x0), static_cast<float> (laneHeight - 7));
 
             const bool muted = c.disabled.get();
-            g.setColour (colour.withAlpha (muted ? 0.06f : 0.16f));
+            // Solid, so a clip laid over another hides it (its name and waveform would read
+            // through a see-through body); the same tint the lane's well would show through it.
+            g.setColour (theme::well.interpolatedWith (colour, muted ? 0.06f : 0.16f));
             g.fillRoundedRectangle (body, theme::radiusXs);
             g.setColour (colour.withAlpha (muted ? 0.3f : 0.55f));
             g.drawRoundedRectangle (body.reduced (0.5f), theme::radiusXs, theme::stroke);

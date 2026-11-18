@@ -79,6 +79,7 @@ namespace carthage::ui
             body.addAndMakeVisible (c);
 
         shortcuts.onHeightChanged = [this] { resized(); };
+        shortcuts.onSearchChanged = [this] { showShortcutsSection(); };   // the box and its results stay in view
 
         styleLabel (updatesHint, theme::textSm, theme::muted);
         updatesHint.setJustificationType (Justification::topLeft);
@@ -420,6 +421,9 @@ namespace carthage::ui
         shortcuts.setBounds (r.withHeight (shortcuts.getIdealHeight()));   // it reports a new height if it needs one
         r.removeFromTop (shortcuts.getIdealHeight());
 
-        body.setSize (bodyWidth, r.getY() - startY + theme::space4);
+        // At least tall enough to scroll the shortcuts to the top: a search that leaves few rows
+        // would otherwise shrink the body, and the viewport would slide the search box down.
+        body.setSize (bodyWidth, std::max (r.getY() - startY + theme::space4,
+                                           shortcutsHeading.getY() - 8 + viewport.getHeight()));
     }
 }

@@ -35,6 +35,23 @@ namespace carthage::ui
                 || k == KeyPress (KeyPress::tabKey, ModifierKeys::altModifier, 0);
            #endif
         }
+
+        /** Hands the keyboard back to the window's own keys (the first parent that takes focus),
+            so a key just set can be tried at once. Left alone, JUCE would pass focus on to the
+            search box beside the keycap, and the key would type there instead. */
+        void returnKeyboardFocus (Component& c)
+        {
+            for (auto* p = c.getParentComponent(); p != nullptr; p = p->getParentComponent())
+            {
+                if (p->getWantsKeyboardFocus())
+                {
+                    p->grabKeyboardFocus();
+                    return;
+                }
+            }
+
+            c.giveAwayKeyboardFocus();
+        }
     }
 
     //==============================================================================================
@@ -100,6 +117,7 @@ namespace carthage::ui
                 return false;
 
             stopCapture();
+            returnKeyboardFocus (*this);
 
             if (k != KeyPress (KeyPress::escapeKey) && onCaptured)
                 onCaptured (k);   // the editor rebuilds its rows later, not inside this call
@@ -194,8 +212,8 @@ namespace carthage::ui
     {
         search.setTextToShowWhenEmpty ("Find a command or key", theme::faint);
         search.setFont (theme::uiFont (theme::textMd));
-        search.onTextChange = [this] { layout(); };
-        search.onEscapeKey = [this] { search.clear(); layout(); };
+        search.onTextChange = [this] { layout(); if (onSearchChanged) onSearchChanged(); };
+        search.onEscapeKey = [this] { search.clear(); layout(); if (onSearchChanged) onSearchChanged(); };
         addAndMakeVisible (search);
 
         resetAll.setTooltip ("Put every shortcut back to how Carthage came");

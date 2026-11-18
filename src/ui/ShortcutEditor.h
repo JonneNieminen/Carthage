@@ -23,6 +23,9 @@ namespace carthage::ui
         int getIdealHeight() const noexcept   { return idealHeight; }
         std::function<void()> onHeightChanged;
 
+        /** The search text changed (after the rows were laid out again). */
+        std::function<void()> onSearchChanged;
+
         void resized() override;
 
     private:
