@@ -7,9 +7,20 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 
 ## Now (2026-11-19)
 
-- **Phases 1 to 4c are verified** (reports in ROADMAP). **Next: phase 4d** (polish, workflow,
-  tooling), then 4e (sample editor), 4f (design pass), then phase 5 (mixer); the owner's list is F22,
-  the answers W38, the C++ rules W39 (AGENTS.md "C++ practices"). Wait for the owner's go-ahead.
+- **Phases 1 to 4c are verified** (reports in ROADMAP). **Phase 4d is in progress** (the owner said
+  "Start phase 4d"); then 4e (sample editor), 4f (design pass), phase 5 (mixer). The owner's list is
+  F22, the answers W38, the C++ rules W39 (AGENTS.md "C++ practices").
+- **4d done so far:** clang-tidy with zero findings and CI jobs for clang-tidy, ASan/UBSan
+  (`asan` preset) and RTSan tests; dependabot for Actions; toolbar tool icons with keys, master
+  level, load meter hidden by default (Settings > Load); lanes rename/add/delete/mute/solo; rename a
+  project from its tab; tempo figure with tap tempo.
+- **4d still to do, in this order:** the tempo-change question (stretch / move with the beat / leave
+  in time, with Remember); wheel scroll and zoom on both axes plus lane height (W38 keys); panels
+  resizable by their border; UI size 75-150 % (Cmd+= / - / 0); Cmd+W on a view window; rename
+  layouts; copyable tooltips; FL-style paste and right-click delete switches; plugin check at first
+  launch only; metronome; export logs, crash report, project versions, undo list, project notes;
+  fuzzing the readers, signposts, waveform overviews cached on disk; then the owner's checks and the
+  4d report. The toolbar is full at 1280 pt (min window 960): the UI-size work should make it fold.
 - **In hand, not finished:**
   - The owner's `~/Library/Application Support/Carthage/Samples.xml` points at the generated test
     pack `build/samples-test` (six sounds of known key and tempo) for the 4b checks. Remove that
@@ -92,3 +103,14 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   volume takes a typed value; the sample editor's waveform plays on click). Recorded as F22, W38;
   ROADMAP 4d, 4e, 4f and additions to 5, 6 and after 7. Owner asked for C++ best practices fitting
   this project: AGENTS.md "C++ practices", W39, enforced by clang-tidy, sanitizers and RTSan in CI (4d).
+
+### 2026-11-19 (phase 4d, part 1)
+
+- clang-tidy: fixed to zero findings across src/tools/tests (.cpp; .mm is left out because the
+  tool misreads Objective-C). ASan found a real use-after-free in `editing::remove`, now fixed.
+  Tracktion keeps mute and solo out of undo, so ours do the same.
+- Toolbar, lanes, tab rename and tap tempo committed, with tests (EditingTests lanes,
+  TapTempo) and a bench check (`carthage-bench projects`: rename). Renaming moves the old folder to
+  the bin, and the bench run puts two temp folders there too.
+- Not yet checked by the owner in the app.
+
