@@ -90,6 +90,14 @@ namespace carthage::ui
         juce::ValueTree getLayout() const;
         void applyLayout (const juce::ValueTree&);
 
+        /** Cmd/Ctrl+W in a view's own window sends the view back, and in the plugin window closes
+            it (W38). True when the window in front was one of those, so the key was used. */
+        bool closeFrontWindow();
+
+        /** Layout slot `n` (1..9) by its name: "Layout n" until the person names it (W38). */
+        juce::String layoutName (int n);
+        void askToRenameLayout (int n);
+
         /** Settings: the left panel's width and the sample browser's text size (F19). */
         void setPanelWidth (int);
 

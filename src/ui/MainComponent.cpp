@@ -736,7 +736,7 @@ namespace carthage::ui
             case cmd::windowSignal:      info.setTicked (isDetached (View::signal)); break;
             case cmd::windowSettings:    info.setTicked (isDetached (View::settings)); break;
             case cmd::keepPluginOnTop:   info.setTicked (keepPluginOnTop()); break;
-            case cmd::copyClips:
+            case cmd::copyClips:         info.setActive (! timeline.getSelectedClips().isEmpty() || showingTooltip().isNotEmpty()); break;
             case cmd::cutClips:
             case cmd::duplicateClips:
             case cmd::deleteClips:
@@ -754,12 +754,38 @@ namespace carthage::ui
                     const auto n = id - (save ? cmd::saveLayoutFirst : cmd::recallLayoutFirst) + 1;
                     const auto saved = props().getValue ("layout" + String (n)).isNotEmpty();
                     info.setActive (n <= layoutSlots() && (save || saved));
+                    info.shortName = save ? "Save as " + layoutName (n) : layoutName (n);
 
                     if (! save && ! saved)
                         info.shortName << " (empty)";
                 }
                 break;
         }
+    }
+
+    String MainComponent::layoutName (int n)
+    {
+        const auto name = props().getValue ("layoutName" + String (n)).trim();
+        return name.isNotEmpty() ? name : "Layout " + String (n);
+    }
+
+    void MainComponent::askToRenameLayout (int n)
+    {
+        auto* w = new AlertWindow ("Rename layout " + String (n), "A name for the menu and the palette. Leave it empty for \"Layout " + String (n) + "\".",
+                                   MessageBoxIconType::NoIcon, this);
+        w->addTextEditor ("name", props().getValue ("layoutName" + String (n)), "Name");
+        w->addButton ("Rename", 1, KeyPress (KeyPress::returnKey));
+        w->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
+
+        w->enterModalState (true, ModalCallbackFunction::create ([this, w, n] (int choice)
+        {
+            if (choice != 1)
+                return;
+
+            props().setValue ("layoutName" + String (n), w->getTextEditorContents ("name").trim());
+            commands.commandStatusChanged();
+            setStatus ("Layout " + String (n) + " is now " + layoutName (n));
+        }), true);
     }
 
     int MainComponent::layoutSlots()
@@ -796,7 +822,18 @@ namespace carthage::ui
             case cmd::toggleGrid:       timeline.getGrid().enabled = ! timeline.getGrid().enabled; timeline.gridChanged(); refreshToolbar(); return true;
             case cmd::splitAtPlayhead:  timeline.splitAtPlayhead(); return true;
             case cmd::duplicateClips:   timeline.duplicateSelection(); return true;
-            case cmd::copyClips:        timeline.copySelection(); commands.commandStatusChanged(); return true;
+            case cmd::copyClips:
+                // Cmd+C while a tooltip shows copies the tooltip (W38).
+                if (const auto tip = showingTooltip(); tip.isNotEmpty())
+                {
+                    copyToClipboard (tip);
+                    setStatus ("Tooltip copied");
+                    return true;
+                }
+
+                timeline.copySelection();
+                commands.commandStatusChanged();
+                return true;
             case cmd::cutClips:         timeline.copySelection(); timeline.deleteSelection(true); commands.commandStatusChanged(); return true;
             case cmd::pasteClips:       timeline.paste(); return true;
             case cmd::windowSamples:    toggleDetached (View::samples); return true;
@@ -845,7 +882,7 @@ namespace carthage::ui
                     if (auto xml = getLayout().createXml())
                         props().setValue ("layout" + String (n), xml->toString (XmlElement::TextFormat().singleLine()));
 
-                    setStatus ("Saved as layout " + String (n));
+                    setStatus ("Saved as " + layoutName (n));
                     commands.commandStatusChanged();
                     return true;
                 }
@@ -857,7 +894,7 @@ namespace carthage::ui
                     if (auto xml = parseXML (props().getValue ("layout" + String (n))))
                     {
                         applyLayout (ValueTree::fromXml (*xml));
-                        setStatus ("Layout " + String (n));
+                        setStatus (layoutName (n));
                     }
 
                     return true;
@@ -1248,6 +1285,31 @@ namespace carthage::ui
 
         if (pluginWindowBounds)
             pluginWindow->setTopLeftPosition (pluginWindowBounds->getPosition());
+    }
+
+    bool MainComponent::closeFrontWindow()
+    {
+        auto* front = TopLevelWindow::getActiveTopLevelWindow();
+
+        if (front == nullptr)
+            return false;
+
+        for (auto& [view, window] : viewWindows)
+        {
+            if (window.get() == front)
+            {
+                window->back();
+                return true;
+            }
+        }
+
+        if (pluginWindow != nullptr && static_cast<Component*> (pluginWindow.get()) == front)
+        {
+            closePluginWindow();
+            return true;
+        }
+
+        return false;
     }
 
     void MainComponent::closePluginWindow()

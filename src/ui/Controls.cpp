@@ -11,6 +11,50 @@ namespace carthage::ui
         const PathStrokeType roundStroke (1.75f, PathStrokeType::curved, PathStrokeType::rounded);
     }
 
+    String showingTooltip()
+    {
+        auto& desktop = Desktop::getInstance();
+        auto* under = desktop.getMainMouseSource().getComponentUnderMouse();
+
+        if (under == nullptr)
+            return {};
+
+        for (int i = 0; i < desktop.getNumComponents(); ++i)
+            if (auto* tips = dynamic_cast<TooltipWindow*> (desktop.getComponent (i)); tips != nullptr && tips->isVisible())
+                return tips->getTipFor (*under);
+
+        return {};
+    }
+
+    void copyToClipboard (const String& text)
+    {
+        SystemClipboard::copyTextToClipboard (text);
+    }
+
+    void TooltipMenu::mouseDown (const MouseEvent& e)
+    {
+        if (! e.mods.isPopupMenu() || e.eventComponent == nullptr)
+            return;
+
+        // Only plain controls: anything with a right-click menu of its own keeps it, and JUCE's
+        // own buttons are left out because a right-click presses them.
+        auto* c = e.eventComponent;
+
+        if (dynamic_cast<IconButton*> (c) == nullptr && dynamic_cast<ToolButton*> (c) == nullptr && dynamic_cast<Slider*> (c) == nullptr
+             && dynamic_cast<ComboBox*> (c) == nullptr && dynamic_cast<Label*> (c) == nullptr)
+            return;
+
+        auto* client = dynamic_cast<TooltipClient*> (c);
+        const auto text = client != nullptr ? client->getTooltip() : String();
+
+        if (text.isEmpty())
+            return;
+
+        PopupMenu m;
+        m.addItem ("Copy tooltip", [text] { copyToClipboard (text); });
+        m.showMenuAsync (PopupMenu::Options().withTargetComponent (c).withMousePosition());
+    }
+
     float toDecibels (float linear) noexcept
     {
         return Decibels::gainToDecibels (linear, -60.0f);

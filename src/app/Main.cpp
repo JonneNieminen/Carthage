@@ -105,6 +105,12 @@ namespace carthage::app
                         save.addCommandItem (&commands, commands::saveLayoutFirst + i);
 
                     m.addSubMenu ("Save layout as", save);
+
+                    PopupMenu rename;
+                    for (int i = 0; i < count; ++i)
+                        rename.addItem (juce::String::fromUTF8 ("Layout ") + juce::String (i + 1) + juce::String::fromUTF8 ("\xe2\x80\xa6"),
+                                        [this, n = i + 1] { if (renameLayout) renameLayout (n); });
+                    m.addSubMenu ("Rename layout", rename);
                     m.addSeparator();
                     m.addCommandItem (&commands, commands::defaultLayout);
                     m.addSeparator();
@@ -142,6 +148,7 @@ namespace carthage::app
 
         /** How many layout slots Settings offers (F21). */
         std::function<int()> slots;
+        std::function<void (int)> renameLayout;   // slot 1..9
 
         /** The app menu on macOS: settings live there, as on every Mac app. */
         PopupMenu appleMenu()
@@ -223,6 +230,7 @@ namespace carthage::app
 
             LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
             tooltips = std::make_unique<TooltipWindow> (nullptr, 600);
+            Desktop::getInstance().addGlobalMouseListener (&tooltipMenu);
             window = std::make_unique<MainWindow>();
 
             // Ask for input access before the engine opens the device: on macOS an unanswered
@@ -255,6 +263,7 @@ namespace carthage::app
             menuBar = std::make_unique<MenuBar> (commands);
             auto& content = window->showSession (*session, commands);
             menuBar->slots = [this] { auto* c = this->content(); return c != nullptr ? c->layoutSlots() : 4; };
+            menuBar->renameLayout = [this] (int n) { if (auto* c = this->content()) c->askToRenameLayout (n); };
             commands.registerAllCommandsForTarget (this);   // check for updates, quit
             restoreShortcuts();
 
@@ -604,6 +613,9 @@ namespace carthage::app
         /** Cmd/Ctrl+W (W34): closes the front tab after asking; the last one closes the window. */
         void closeProject()
         {
+            if (auto* m = content(); m != nullptr && m->closeFrontWindow())
+                return;   // a view's window or the plugin window was in front
+
             if (session->getNumProjects() < 2)
             {
                 systemRequestedQuit();
@@ -746,6 +758,7 @@ namespace carthage::app
             shortcutSaver.reset();
             updater.reset();     // its hooks point at the window and the engine
             window.reset();      // components go before the engine they show
+            Desktop::getInstance().removeGlobalMouseListener (&tooltipMenu);
             tooltips.reset();
             menuBar.reset();
             session.reset();
@@ -816,6 +829,7 @@ namespace carthage::app
         std::unique_ptr<MenuBar> menuBar;
         std::unique_ptr<MainWindow> window;
         std::unique_ptr<TooltipWindow> tooltips;
+        carthage::ui::TooltipMenu tooltipMenu;   // right-click > Copy tooltip (W38)
         std::unique_ptr<Updater> updater;
         std::unique_ptr<FileChooser> chooser;
         std::unique_ptr<ShortcutSaver> shortcutSaver;

@@ -16,6 +16,11 @@ namespace carthage::ui
         explicit IconButton (Glyph);
 
         void setGlyph (Glyph g)                 { glyph = g; repaint(); }
+        // A right-click is for the "Copy tooltip" menu, never a press.
+        void mouseDown (const juce::MouseEvent& e) override   { if (! e.mods.isPopupMenu()) juce::Button::mouseDown (e); }
+        void mouseUp (const juce::MouseEvent& e) override     { if (! e.mods.isPopupMenu()) juce::Button::mouseUp (e); }
+        void mouseDrag (const juce::MouseEvent& e) override   { if (! e.mods.isPopupMenu()) juce::Button::mouseDrag (e); }
+
         void setLit (juce::Colour c, bool on)   { litColour = c; lit = on; repaint(); }
 
         void paintButton (juce::Graphics&, bool highlighted, bool down) override;
@@ -41,6 +46,11 @@ namespace carthage::ui
 
         /** In a narrow toolbar the key is left to the tooltip. */
         void setShowsKey (bool on)               { showsKey = on; repaint(); }
+        // A right-click is for the "Copy tooltip" menu, never a press.
+        void mouseDown (const juce::MouseEvent& e) override   { if (! e.mods.isPopupMenu()) juce::Button::mouseDown (e); }
+        void mouseUp (const juce::MouseEvent& e) override     { if (! e.mods.isPopupMenu()) juce::Button::mouseUp (e); }
+        void mouseDrag (const juce::MouseEvent& e) override   { if (! e.mods.isPopupMenu()) juce::Button::mouseDrag (e); }
+
 
         static constexpr int width = 38, narrowWidth = 28, height = 28;
 
@@ -133,6 +143,17 @@ namespace carthage::ui
 
     private:
         float average = 0.0f, peak = 0.0f, shownPeak = 0.0f;
+    };
+
+    /** Copyable tooltips (W38): the text of the tooltip showing now (empty if none), and the
+        right-click "Copy tooltip" offered on controls that have no menu of their own. */
+    juce::String showingTooltip();
+    void copyToClipboard (const juce::String&);
+
+    class TooltipMenu final : public juce::MouseListener
+    {
+    public:
+        void mouseDown (const juce::MouseEvent&) override;
     };
 
     /** Small helpers so every label is set the same way. */
