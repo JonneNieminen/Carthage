@@ -187,6 +187,10 @@ namespace carthage::ui
         static juce::String shortFacts (const engine::SampleLibrary::Analysis&);
         juce::Array<tracktion::AudioTrack*> laneTracks() const;
         juce::Colour laneColour (int laneIndex) const;
+
+        /** A lane's colour (owner): one of the theme's lane colours, or none for the colour its
+            place gives it. One undo step; kept in the project. */
+        void setLaneColour (tracktion::AudioTrack&, std::optional<juce::Colour>);
         double secondsToBeats (double seconds) const;
         double beatsToSeconds (double beats) const;
         double playheadBeat() const;

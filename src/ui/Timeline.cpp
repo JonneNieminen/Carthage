@@ -11,6 +11,8 @@ namespace carthage::ui
 
     namespace
     {
+        const Identifier laneColourProp ("carthageColour");   // a lane's chosen colour (owner)
+
         const Colour* laneColours[] = { &theme::laneSky, &theme::laneTide, &theme::laneKelp, &theme::laneSand,
                                         &theme::laneCoral, &theme::laneMurex, &theme::laneRose, &theme::laneSlate };
     }
@@ -410,6 +412,25 @@ namespace carthage::ui
             m.addItem ("Rename", [this, held] { startRename (*held); });
             m.addItem (lane.isMuted (false) ? "Unmute" : "Mute", [held] { editing::setLaneMuted (*held, ! held->isMuted (false)); });
             m.addItem (lane.isSolo (false) ? "Stop soloing" : "Solo", [held] { editing::setLaneSoloed (*held, ! held->isSolo (false)); });
+            // Colours: the theme's own, each named and shown in itself.
+            PopupMenu colours;
+            const std::pair<const char*, const Colour*> named[] = { { "Sky", &theme::laneSky }, { "Tide", &theme::laneTide }, { "Kelp", &theme::laneKelp },
+                                                                    { "Sand", &theme::laneSand }, { "Coral", &theme::laneCoral }, { "Murex", &theme::laneMurex },
+                                                                    { "Rose", &theme::laneRose }, { "Slate", &theme::laneSlate } };
+            const auto current = lane.state[laneColourProp].toString();
+            colours.addItem ("Automatic (by its place)", true, current.isEmpty(), [this, held] { timeline.setLaneColour (*held, std::nullopt); });
+            colours.addSeparator();
+
+            for (const auto& [label, colour] : named)
+            {
+                PopupMenu::Item item (label);
+                item.colour = *colour;
+                item.isTicked = current == colour->toString();
+                item.action = [this, held, c = *colour] { timeline.setLaneColour (*held, c); };
+                colours.addItem (item);
+            }
+
+            m.addSubMenu ("Colour", colours);
             m.addSeparator();
             PopupMenu add;
             for (int n : { 1, 2, 4, 8 })
@@ -1417,7 +1438,23 @@ namespace carthage::ui
 
     Colour Timeline::laneColour (int laneIndex) const
     {
+        // The lane's own choice, else the palette by position.
+        if (const auto tracks = laneTracks(); laneIndex >= 0 && laneIndex < tracks.size())
+            if (const auto chosen = tracks[laneIndex]->state[laneColourProp].toString(); chosen.isNotEmpty())
+                return Colour::fromString (chosen);
+
         return *laneColours[static_cast<size_t> (laneIndex) % std::size (laneColours)];
+    }
+
+    void Timeline::setLaneColour (tracktion::AudioTrack& lane, std::optional<Colour> colour)
+    {
+        auto& um = lane.edit.getUndoManager();
+        um.beginNewTransaction ("Lane colour");
+
+        if (colour)
+            lane.state.setProperty (laneColourProp, colour->toString(), &um);
+        else
+            lane.state.removeProperty (laneColourProp, &um);
     }
 
     double Timeline::secondsToBeats (double seconds) const

@@ -458,7 +458,16 @@ namespace carthage::app
                     report (session->showProject ((session->getFrontIndex() + step) % n));
                     return true;
                 }
-                case commands::minimiseWindow:  if (window != nullptr) window->setMinimised (true); return true;
+                case commands::minimiseWindow:
+                {
+                    // The window in front: a view's own window, the notes, the versions; else the
+                    // main window (owner).
+                    if (auto* front = dynamic_cast<DocumentWindow*> (TopLevelWindow::getActiveTopLevelWindow()); front != nullptr && front->isVisible())
+                        front->setMinimised (true);
+                    else if (window != nullptr)
+                        window->setMinimised (true);
+                    return true;
+                }
                 case commands::toggleFullScreen:
                     if (window != nullptr) window->setFullScreen (! window->isFullScreen());
                     return true;
