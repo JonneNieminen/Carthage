@@ -59,6 +59,8 @@ public:
             s.reversed = true;
             s.pitch = 3.0f;
             s.fadeIn = 0.1;
+            s.fadeInShape = tracktion::AudioFadeCurve::sCurve;
+            s.fadeOutShape = tracktion::AudioFadeCurve::convex;
             s.start = 0.25;
             s.length = 1.0;
             editing::begin (*edit, "Edit sample");
@@ -71,6 +73,7 @@ public:
                 expect (got.reversed);
                 expectWithinAbsoluteError (got.pitch, 3.0f, 1.0e-4f);
                 expectWithinAbsoluteError (got.fadeIn, 0.1, 1.0e-6);
+                expect (got.fadeInShape == tracktion::AudioFadeCurve::sCurve && got.fadeOutShape == tracktion::AudioFadeCurve::convex, "the shapes too");
                 expectWithinAbsoluteError (got.start, 0.25, 1.0e-6);
                 expectWithinAbsoluteError (got.length, 1.0, 1.0e-6);
             }

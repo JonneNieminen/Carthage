@@ -76,6 +76,8 @@ namespace carthage::editing
             s.gainDb = audio->getGainDB();
             s.fadeIn = audio->getFadeIn().inSeconds();
             s.fadeOut = audio->getFadeOut().inSeconds();
+            s.fadeInShape = audio->getFadeInType();
+            s.fadeOutShape = audio->getFadeOutType();
             s.reversed = audio->getIsReversed();
             s.pitch = audio->getPitchChange();
         }
@@ -109,6 +111,8 @@ namespace carthage::editing
 
             audio->setFadeIn (TimeDuration::fromSeconds (std::clamp (s.fadeIn, 0.0, length)));
             audio->setFadeOut (TimeDuration::fromSeconds (std::clamp (s.fadeOut, 0.0, length)));
+            audio->setFadeInType (s.fadeInShape);
+            audio->setFadeOutType (s.fadeOutShape);
         }
     }
 

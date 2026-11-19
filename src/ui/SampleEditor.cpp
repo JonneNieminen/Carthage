@@ -9,7 +9,7 @@ namespace carthage::ui
 
     namespace
     {
-        constexpr int rowHeight = 28, labelWidth = 72, controlsWidth = 300;
+        constexpr int rowHeight = 28, labelWidth = 64, controlsWidth = 380;
     }
 
     SampleEditor::SampleEditor (engine::Session& s) : session (s)
@@ -46,6 +46,22 @@ namespace carthage::ui
         pitch.onValueChange = [this] { apply ([this] (auto& s2) { s2.pitch = static_cast<float> (pitch.getValue()); }); };
         fadeIn.onValueChange = [this] { apply ([this] (auto& s2) { s2.fadeIn = fadeIn.getValue() / 1000.0; }); };
         fadeOut.onValueChange = [this] { apply ([this] (auto& s2) { s2.fadeOut = fadeOut.getValue() / 1000.0; }); };
+
+        for (auto [box, isIn] : { std::pair { &fadeInShape, true }, { &fadeOutShape, false } })
+        {
+            box->addItem ("Linear", tracktion::AudioFadeCurve::linear);
+            box->addItem ("Convex", tracktion::AudioFadeCurve::convex);
+            box->addItem ("Concave", tracktion::AudioFadeCurve::concave);
+            box->addItem ("S-curve", tracktion::AudioFadeCurve::sCurve);
+            box->setTooltip (String ("The shape of the fade ") + (isIn ? "in" : "out") + ": convex sounds fuller, concave quicker, S-curve smooth at both ends.");
+            box->onChange = [this, box, isIn]
+            {
+                beginGesture ("Fade shape");
+                const auto shape = static_cast<tracktion::AudioFadeCurve::Type> (box->getSelectedId());
+                apply ([shape, isIn] (auto& s2) { (isIn ? s2.fadeInShape : s2.fadeOutShape) = shape; });
+            };
+            addAndMakeVisible (box);
+        }
 
         reverse.setTooltip ("Play the sample backwards. Every clip of it follows.");
         reverse.onClick = [this]
@@ -190,6 +206,8 @@ namespace carthage::ui
         fadeIn.setValue (s.fadeIn * 1000.0, dontSendNotification);
         fadeOut.setValue (s.fadeOut * 1000.0, dontSendNotification);
         reverse.setToggleState (s.reversed, dontSendNotification);
+        fadeInShape.setSelectedId (s.fadeInShape, dontSendNotification);
+        fadeOutShape.setSelectedId (s.fadeOutShape, dontSendNotification);
     }
 
     void SampleEditor::beginGesture (const String& what)
@@ -336,12 +354,25 @@ namespace carthage::ui
             g.fillRect (playing.withWidth (2.0f));
             g.fillRect (playing.withX (x1 - 2.0f).withWidth (2.0f));
 
+            // The fades in their own shapes, from silence (bottom) to full (top).
             Path fades;
             const auto top = playing.getY() + 2.0f, bottom = playing.getBottom() - 2.0f;
-            fades.startNewSubPath (x0, bottom);
-            fades.lineTo (xAt (s.start + s.fadeIn), top);
-            fades.startNewSubPath (xAt (s.start + s.length - s.fadeOut), top);
-            fades.lineTo (x1, bottom);
+            const auto curve = [&] (double from, double length, tracktion::AudioFadeCurve::Type shape, bool rising)
+            {
+                constexpr int steps = 24;
+
+                for (int i = 0; i <= steps; ++i)
+                {
+                    const auto alpha = static_cast<double> (i) / steps;
+                    const auto level = tracktion::AudioFadeCurve::alphaToGainForType (shape, static_cast<float> (rising ? alpha : 1.0 - alpha));
+                    const Point<float> p (xAt (from + alpha * length), bottom - level * (bottom - top));
+
+                    if (i == 0) fades.startNewSubPath (p); else fades.lineTo (p);
+                }
+            };
+
+            if (s.fadeIn > 0.0)  curve (s.start, s.fadeIn, s.fadeInShape, true);
+            if (s.fadeOut > 0.0) curve (s.start + s.length - s.fadeOut, s.fadeOut, s.fadeOutShape, false);
             g.setColour (theme::accent.withAlpha (0.6f));
             g.strokePath (fades, PathStrokeType (1.25f));
 
@@ -382,10 +413,18 @@ namespace carthage::ui
         r.removeFromRight (theme::space4);
         waveArea = r;
 
-        for (auto [label, slider] : { std::pair<Label*, Slider*> { &gainLabel, &gain }, { &pitchLabel, &pitch }, { &fadeInLabel, &fadeIn }, { &fadeOutLabel, &fadeOut } })
+        for (auto [label, slider, shape] : { std::tuple<Label*, Slider*, ComboBox*> { &gainLabel, &gain, nullptr }, { &pitchLabel, &pitch, nullptr },
+                                                                                        { &fadeInLabel, &fadeIn, &fadeInShape }, { &fadeOutLabel, &fadeOut, &fadeOutShape } })
         {
             auto line = controls.removeFromTop (rowHeight);
             label->setBounds (line.removeFromLeft (labelWidth));
+
+            if (shape != nullptr)
+            {
+                shape->setBounds (line.removeFromRight (92));
+                line.removeFromRight (theme::space1);
+            }
+
             slider->setBounds (line);
             controls.removeFromTop (theme::space1);
         }

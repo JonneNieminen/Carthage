@@ -28,6 +28,10 @@ namespace carthage::editing
     {
         float gainDb = 0.0f;
         double fadeIn = 0.0, fadeOut = 0.0;
+
+        /** The fades' shapes (owner, 4e): Tracktion's own curves. */
+        tracktion::AudioFadeCurve::Type fadeInShape = tracktion::AudioFadeCurve::linear,
+                                        fadeOutShape = tracktion::AudioFadeCurve::linear;
         bool reversed = false;
         float pitch = 0.0f;           ///< semitones, -24 to 24
         double start = 0.0;           ///< where in the file it starts playing
