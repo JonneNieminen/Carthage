@@ -138,3 +138,17 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   https://claude.ai/artifact/FbCnpQEk9EXD482AfH7Xcd (db `answers`, with metronome auditions).
   Done already: the tab menu's Rename text, Notes in the tab menu, Option/Alt wording by platform.
 
+### 2026-11-19 (phase 4d, the second list: W41)
+
+- Built and pushed, all items of W41: lanes (add 1/2/4/8, Option+Cmd+N, Cmd-click M/S, move by
+  drag and Cmd+Up/Down, per-lane height, name column border), free slice with a line, beat
+  shading, tick-tock metronome (accent on in new projects), Settings search, views palette
+  (Cmd+J), Cmd+1-9 tabs, settings test (first launch + Settings; bench `settings-test`),
+  version pictures with a Restore window. Fixes: Cmd++ (keyboards with + on its own key), undo
+  history and Restore opened from a key (menu key equivalents closed the popup), Settings
+  headings for Timeline/Metronome never showed.
+- Round 2 checks are on the same checks page (ids r2-*, plus `wheel`, still waiting for a mouse).
+  Next: read them, fix what fails, then write the 4d report and wait for the go-ahead (4e next).
+- Rule kept: commit only when the full clang-tidy pass is clean (one push slipped through;
+  fixed in the next commit).
+
