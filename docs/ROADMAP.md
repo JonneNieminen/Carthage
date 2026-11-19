@@ -474,7 +474,7 @@ Deliver (F22, W38, W39):
 - [x] FL-style paste-by-click and right-click delete as Settings switches (off)
 - [x] Metronome: built-in wooden click, hi-hat and cowbell, or your own sound
 - [x] Plugin check at the first launch only, then a Settings switch (off)
-- [ ] Export logs (file or clipboard, macOS and Windows), a local crash report offered after a crash,
+- [x] Export logs (file or clipboard, macOS and Windows), a local crash report offered after a crash,
       project versions, an undo history list, project notes
 - [ ] Tooling: `.clang-tidy` with no findings in Carthage's code, RTSan, AddressSanitizer and UBSan in
       CI, fuzzing the project and sample readers, signposts, waveform overviews cached on disk;

@@ -145,6 +145,11 @@ namespace carthage::engine
             copying its recordings along, and carries on there. */
         void saveAs (const juce::File& folder, const std::function<void (juce::Result)>& done);
 
+        /** Brings back an earlier version of the front project (one of project::versionsOf), in
+            its tab. The project as it is now is kept as a version first, so this can be undone by
+            restoring that one. The restored project is unsaved until saved. */
+        juce::Result restoreVersion (const juce::File& version);
+
         /** Renames the front project, saved before: writes it into a sibling folder named
             `newName`, as `<newName>.carthage`, keeping its identity, and moves the old folder to the
             bin (owner's list F22). Fails, changing nothing, when the name is empty or taken. */

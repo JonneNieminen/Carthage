@@ -856,7 +856,11 @@ namespace carthage::engine
         const auto taken = p.changeCount;
         auto* target = &p;
 
-        writer.post ([snapshot, file] { return project::write (snapshot, file); },
+        writer.post ([snapshot, file]
+                     {
+                         project::keepVersion (file);   // the file this save replaces (W38)
+                         return project::write (snapshot, file);
+                     },
                      [this, target, file, taken, done] (const juce::Result& r)
                      {
                          if (r.wasOk() && isOpen (target) && file == target->file)
@@ -867,6 +871,50 @@ namespace carthage::engine
 
                          if (done) done (r);
                      });
+    }
+
+    juce::Result Session::restoreVersion (const juce::File& version)
+    {
+        if (isRecording())
+            return juce::Result::fail ("Stop recording first");
+
+        auto& p = front();
+
+        if (p.untitled || ! version.existsAsFile())
+            return juce::Result::fail ("There is no such version");
+
+        // Opened as if it were the project file, so its clips find their audio.
+        auto opened = project::open (*engine, version, p.file);
+
+        if (opened.edit == nullptr)
+            return juce::Result::fail (opened.error);
+
+        // Now kept: the project as it is, unsaved changes and all, with paths as the project file
+        // has them. Written here, not on the writer: the tab is replaced next.
+        p.info.view = currentView();
+        const auto now = project::versionsIn (p.file.getParentDirectory())
+                             .getChildFile (p.file.getFileNameWithoutExtension() + " " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M-%S")
+                                            + " before restoring" + project::extension)
+                             .getNonexistentSibling();
+
+        if (auto r = project::write (project::snapshot (*p.edit, p.file, p.info), now); r.failed())
+            return r;
+
+        auto info = opened.info;
+        info.id = p.info.id;   // the same project
+        info.view = p.info.view;
+        const auto file = p.file;
+        const auto index = frontIndex;
+
+        putToBack();
+        projects.erase (projects.begin() + index);
+        frontIndex = -1;
+
+        add (std::move (opened.edit), file, std::move (info), false, false);
+        moveProject (frontIndex, index);
+        front().recovered = true;   // unsaved: the file on disk is still the newer one
+        projectStateChanged();
+        return juce::Result::ok();
     }
 
     void Session::saveAs (const juce::File& folder, const std::function<void (juce::Result)>& done)

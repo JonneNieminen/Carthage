@@ -32,6 +32,14 @@ namespace carthage::project
     /** The folder takes are recorded into. */
     juce::File recordingsIn (const juce::File& folder);
 
+    /** Project versions (W38): each save first keeps the file it replaces in `<folder>/Versions`,
+        named by when it was replaced; the newest `versionsKept` stay. A version keeps its paths
+        relative to the project file, so it is opened as if it were there (open's `editFile`). */
+    constexpr int versionsKept = 20;
+    juce::File versionsIn (const juce::File& folder);
+    void keepVersion (const juce::File& projectFile, const juce::String& note = {});
+    juce::Array<juce::File> versionsOf (const juce::File& projectFile);   // newest first
+
     /** The folder samples are collected into (W30, "Collect samples into project"). */
     juce::File samplesIn (const juce::File& folder);
 

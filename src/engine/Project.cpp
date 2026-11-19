@@ -1,6 +1,7 @@
 #include "Project.h"
 #include "Editing.h"
 
+#include <algorithm>
 #include <utility>
 
 namespace carthage::project
@@ -182,6 +183,45 @@ namespace carthage::project
     }
 
     juce::File samplesIn (const juce::File& folder)   { return folder.getChildFile ("Samples"); }
+
+    juce::File versionsIn (const juce::File& folder)  { return folder.getChildFile ("Versions"); }
+
+    juce::Array<juce::File> versionsOf (const juce::File& projectFile)
+    {
+        auto files = versionsIn (projectFile.getParentDirectory()).findChildFiles (juce::File::findFiles, false, "*" + juce::String (extension));
+
+        std::sort (files.begin(), files.end(), [] (const juce::File& a, const juce::File& b)
+        {
+            // Newest first; within one second, the numbered copy ("... (2)") is the newer.
+            if (a.getLastModificationTime() != b.getLastModificationTime())
+                return a.getLastModificationTime() > b.getLastModificationTime();
+
+            return a.getFileName() > b.getFileName();
+        });
+
+        return files;
+    }
+
+    void keepVersion (const juce::File& projectFile, const juce::String& note)
+    {
+        if (! projectFile.existsAsFile())
+            return;
+
+        const auto folder = versionsIn (projectFile.getParentDirectory());
+        folder.createDirectory();
+
+        const auto name = projectFile.getFileNameWithoutExtension() + " " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M-%S")
+                          + (note.isEmpty() ? juce::String() : " " + note);
+        const auto target = folder.getChildFile (name + extension).getNonexistentSibling();
+
+        if (projectFile.copyFileTo (target))
+            target.setLastModificationTime (juce::Time::getCurrentTime());   // when it was replaced, for the order
+
+        const auto all = versionsOf (projectFile);
+
+        for (int i = versionsKept; i < all.size(); ++i)
+            all[i].deleteFile();
+    }
 
     std::optional<Miniature> miniatureOf (const juce::File& projectFile)
     {

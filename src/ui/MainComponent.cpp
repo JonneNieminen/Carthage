@@ -789,6 +789,7 @@ namespace carthage::ui
             case cmd::windowSettings:    info.setTicked (isDetached (View::settings)); break;
             case cmd::keepPluginOnTop:   info.setTicked (keepPluginOnTop()); break;
             case cmd::toggleMetronome:   info.setTicked (session.isMetronomeOn()); break;
+            case cmd::restoreVersion:    info.setActive (! session.isUntitled() && ! session.isRecording()); break;
             case cmd::copyClips:         info.setActive (! timeline.getSelectedClips().isEmpty() || showingTooltip().isNotEmpty()); break;
             case cmd::cutClips:
             case cmd::duplicateClips:
@@ -828,6 +829,48 @@ namespace carthage::ui
             notesWindow->setVisible (false);
         else
             notesWindow->show();
+    }
+
+    void MainComponent::showVersions()
+    {
+        const auto versions = project::versionsOf (session.getProjectFile());
+
+        PopupMenu m;
+
+        if (versions.isEmpty())
+        {
+            m.addItem ("No versions yet: each save keeps the one before it", false, false, [] {});
+        }
+        else
+        {
+            m.addSectionHeader ("Saved before");
+
+            for (const auto& v : versions)
+            {
+                const auto when = v.getLastModificationTime();
+                const auto before = v.getFileNameWithoutExtension().endsWith ("before restoring") ? String (", before a restore") : String();
+                m.addItem (when.formatted ("%a %e %b, %H:%M") + before, [this, v, when]
+                {
+                    auto* w = new AlertWindow ("Restore the version from " + when.formatted ("%e %b %H:%M") + "?",
+                                               "The project as it is now is kept as a version too, so you can come back to it.",
+                                               MessageBoxIconType::NoIcon, this);
+                    w->addButton ("Restore", 1, KeyPress (KeyPress::returnKey));
+                    w->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
+                    w->enterModalState (true, ModalCallbackFunction::create ([this, v] (int choice)
+                    {
+                        if (choice != 1)
+                            return;
+
+                        if (auto r = session.restoreVersion (v); r.failed())
+                            setStatus ("Not restored: " + r.getErrorMessage(), theme::warn);
+                        else
+                            setStatus ("Restored. Save to keep it as the project.");
+                    }), true);
+                });
+            }
+        }
+
+        m.showMenuAsync (PopupMenu::Options().withTargetComponent (&timeline).withMinimumWidth (260));
     }
 
     void MainComponent::refreshNotes()
@@ -979,6 +1022,7 @@ namespace carthage::ui
             case cmd::undoHistory:      showUndoHistory(); return true;
             case cmd::exportLog:        exportLog(); return true;
             case cmd::projectNotes:     toggleNotes(); return true;
+            case cmd::restoreVersion:   showVersions(); return true;
             case cmd::toggleGrid:       timeline.getGrid().enabled = ! timeline.getGrid().enabled; timeline.gridChanged(); refreshToolbar(); return true;
             case cmd::splitAtPlayhead:  timeline.splitAtPlayhead(); return true;
             case cmd::duplicateClips:   timeline.duplicateSelection(); return true;

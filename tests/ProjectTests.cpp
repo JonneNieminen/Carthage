@@ -135,6 +135,26 @@ public:
             expect (live->getAudioFile().getFile() == project::recordingsIn (copyFolder).getChildFile ("Take 1.wav"));
         }
 
+        beginTest ("Versions: each save keeps the file it replaces; the newest 20 stay (W38)");
+        {
+            const auto folder = root.getChildFile ("Versioned");
+            const auto file = project::fileIn (folder);
+            folder.createDirectory();
+
+            for (int i = 0; i < project::versionsKept + 3; ++i)
+            {
+                file.replaceWithText ("save " + juce::String (i));
+                project::keepVersion (file);
+            }
+
+            const auto versions = project::versionsOf (file);
+            expectEquals (versions.size(), project::versionsKept);
+            expectEquals (versions.getFirst().loadFileAsString(), juce::String ("save ") + juce::String (project::versionsKept + 2), "newest first");
+            expect (versions.getFirst().getParentDirectory() == project::versionsIn (folder));
+            project::keepVersion (folder.getChildFile ("nothing.carthage"));   // no file, no version
+            expectEquals (project::versionsOf (file).size(), project::versionsKept);
+        }
+
         beginTest ("The start screen's miniature reads lanes and clips from the file");
         {
             const auto m = project::miniatureOf (songFile);

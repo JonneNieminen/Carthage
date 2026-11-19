@@ -116,6 +116,7 @@ namespace carthage::ui
         class NotesWindow;
         std::unique_ptr<NotesWindow> notesWindow;
         void toggleNotes();
+        void showVersions();
         void refreshNotes();
         class SignalRow;
 

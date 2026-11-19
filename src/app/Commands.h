@@ -55,7 +55,7 @@ namespace carthage::app
             // Added after the layouts, so the ids above stay as saved.
             lanesTaller = afterLayouts, lanesShorter,
             uiLarger, uiSmaller, uiActualSize,
-            toggleMetronome, undoHistory, exportLog, projectNotes,
+            toggleMetronome, undoHistory, exportLog, projectNotes, restoreVersion,
         };
 
         /** Layout slots there can be; Settings chooses how many are offered (F21). */
@@ -77,7 +77,7 @@ namespace carthage::app
                      copyClips, cutClips, pasteClips, sampleBrowser,
                      windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings,
                      defaultLayout, commandPalette, keepPluginOnTop, lanesTaller, lanesShorter,
-                     uiLarger, uiSmaller, uiActualSize, toggleMetronome, undoHistory, exportLog, projectNotes };
+                     uiLarger, uiSmaller, uiActualSize, toggleMetronome, undoHistory, exportLog, projectNotes, restoreVersion };
         }
 
         /** The layout commands, recall then save, slot 1 first. */
@@ -205,6 +205,7 @@ namespace carthage::app
                 case commandPalette:  info.setInfo (juce::String::fromUTF8 ("Find a command\xe2\x80\xa6"), "Type to find any command and run it", "Window", 0); info.addDefaultKeypress ('k', primary); break;
                 case lanesTaller:     info.setInfo ("Taller lanes", "Make every lane taller (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('=', primary | juce::ModifierKeys::altModifier); break;
                 case lanesShorter:    info.setInfo ("Shorter lanes", "Make every lane shorter (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('-', primary | juce::ModifierKeys::altModifier); break;
+                case restoreVersion:  info.setInfo (juce::String::fromUTF8 ("Restore a version\xe2\x80\xa6"), "Go back to how this project was at an earlier save", "File", 0); break;
                 case projectNotes:    info.setInfo ("Project notes", "Notes kept with this project: lyrics, settings you used, what to try next", "File", 0); info.addDefaultKeypress ('n', primary | juce::ModifierKeys::shiftModifier); break;
                 case exportLog:       info.setInfo (juce::String::fromUTF8 ("Export log\xe2\x80\xa6"), "Save or copy Carthage's log, to send with a problem report", "Help", 0); break;
                 case undoHistory:     info.setInfo (juce::String::fromUTF8 ("Undo history\xe2\x80\xa6"), "Every step you can undo, newest first: choose one to go back to before it", "Edit", 0); info.addDefaultKeypress ('z', primary | juce::ModifierKeys::altModifier); break;

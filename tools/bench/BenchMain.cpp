@@ -468,6 +468,40 @@ namespace
             auto back = await ([&] (auto done) { session->renameProject ("Song", done); });
             check (back.wasOk() && song.getChildFile ("Song.carthage").existsAsFile(), "renamed back to Song");
 
+            say ("Versions: a save keeps the file it replaces; restoring one brings it back in its tab");
+            const auto startOf = [this]
+            {
+                return onMessageThread ([this]
+                {
+                    auto* c = tracktion::getAudioTracks (session->getEdit())[2]->getClips().getFirst();
+                    return c != nullptr ? carthage::editing::startBeat (*c) : -1.0;
+                });
+            };
+            const auto before = startOf();
+            onMessageThreadVoid ([this]
+            {
+                auto& edit = session->getEdit();
+                carthage::editing::begin (edit, "Move clip");
+                carthage::editing::move ({ tracktion::getAudioTracks (edit)[2]->getClips().getFirst() }, 4.0, 0);
+            });
+            auto saved = await ([&] (auto done) { session->save (done); });
+            check (saved.wasOk() && std::abs (startOf() - before - 4.0) < 1.0e-6, "moved by 4 beats and saved");
+            const auto versions = onMessageThread ([this] { return carthage::project::versionsOf (session->getProjectFile()); });
+            check (! versions.isEmpty(), "a version was kept: " + String (versions.size()));
+            const auto tabsBefore = onMessageThread ([this] { return session->getNumProjects(); });
+            const auto restored = onMessageThread ([this, v = versions.getFirst()] { return session->restoreVersion (v); });
+            check (restored.wasOk(), "restore: " + (restored.wasOk() ? String ("done") : restored.getErrorMessage()));
+            waitMs (600);   // as a person would: Tracktion settles the newly loaded edit first
+            check (std::abs (startOf() - before) < 1.0e-6, "the clip is back where it was");
+            check (onMessageThread ([this] { return session->hasUnsavedChanges(); }), "unsaved until saved");
+            check (onMessageThread ([this] { return session->getNumProjects(); }) == tabsBefore, "in the same tab, no new one");
+            check (clipCount() == 1, "its clip finds its place and file");
+            const auto kept = onMessageThread ([this] { return carthage::project::versionsOf (session->getProjectFile()); });
+            check (kept.size() == versions.size() + 1 && kept.getFirst().getFileName().contains ("before restoring"),
+                   "the moved state was kept as a version first");
+            auto resaved = await ([&] (auto done) { session->save (done); });
+            check (resaved.wasOk() && ! onMessageThread ([this] { return session->hasUnsavedChanges(); }), "saved again");
+
             say ("Autosave: after a pause, written to the project's autosave folder");
             onMessageThreadVoid ([this] { session->setAutosavePolicy ({ 0.3, 0.0, 10 }); });
             onMessageThreadVoid ([this]
