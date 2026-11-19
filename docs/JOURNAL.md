@@ -179,3 +179,16 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   the track mask's indexing?) before building the envelope on clip-plugin automation; or check
   the time base without rendering, by reading the curve the ClipNode is given.
 
+### 2026-11-19 (phase 4e built)
+
+- Owner liked the editor and asked for fade shapes and an FL-style drawn shape: both built.
+  Fade shapes are Tracktion's four curves. The envelope is points in the clip's own state,
+  played by a marked VolumeAndPan plugin on the clip (PanLaw6dBCenter = unity), its curve in
+  timeline time, re-synced by the session after every change (SampleEdits::syncEnvelope).
+  Proven by `carthage-bench clip-envelope` (renders off the message thread; Tracktion's
+  useThread=true needs UI hooks Carthage leaves empty).
+- 4e checks are on the checks page (ids e-*). Next: read them, fix, write the 4e report; then
+  4f (design pass, plus the wheel check and the playback-start hitch carried from 4d), 4g (loop
+  region).
+- Not yet run: an RTSan soak with clip envelopes playing (the soak records; add a playback case).
+
