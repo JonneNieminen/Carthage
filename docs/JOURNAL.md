@@ -7,9 +7,9 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 
 ## Now (2026-11-19)
 
-- **Phases 1 to 4b are verified** (4b report in ROADMAP). **In progress: phase 4c** (F21): views in
-  their own windows, layout slots, a Layouts menu, reopen last session, command palette, plugin
-  windows on top. Then phase 5 (mixer), after the owner's go-ahead.
+- **Phases 1 to 4c are verified** (reports in ROADMAP). **Next:** the owner gives a long list of new
+  features; ask questions about it on a questions page (an artifact, as for F20 / W30), place the
+  answers on the roadmap (maybe a phase of their own), then phase 5 (mixer) after the go-ahead.
 - **In hand, not finished:**
   - The owner's `~/Library/Application Support/Carthage/Samples.xml` points at the generated test
     pack `build/samples-test` (six sounds of known key and tempo) for the 4b checks. Remove that
@@ -76,3 +76,5 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   display, quit and relaunch with "Reopen the last session", the palette), then the 4c report. Seen
   working already through menus: Layouts menu, detach timeline and plugins, save layout 1, default
   layout; recall was cut off by the screen locking.
+- **2026-11-19 (4c verified).** Owner: "4c checks pass with flying colors". Report written (frame
+  hitches up to ~0.1 s only when native windows open or move). Waiting for the owner's feature list.

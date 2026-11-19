@@ -14,7 +14,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
 | 3. Plugin manager and scanning | Verified (2026-11-18) |
-| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b 2026-11-19); 4c (view windows, layouts) in progress |
+| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19) |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
 | 7. Help page, icon and polish | Not started |
@@ -418,15 +418,44 @@ Deliver (F21):
 - [x] A command palette (Cmd/Ctrl+K): find and run any command, with its shortcut
 
 Exit checks:
-- [ ] Every view detached to a second display and back, by button and by shortcut; the default
+- [x] Every view detached to a second display and back, by button and by shortcut; the default
       layout restores everything
-- [ ] Two layouts saved and recalled across two displays; recalling one with a display unplugged
+- [x] Two layouts saved and recalled across two displays; recalling one with a display unplugged
       brings its windows to the main display
-- [ ] Frame time with views in separate windows on a 120 Hz display reported; playback and
+- [x] Frame time with views in separate windows on a 120 Hz display reported; playback and
       recording unaffected (RTSan unchanged)
-- [ ] Quit and relaunch reopens the tabs and the layout; the palette finds and runs commands
+- [x] Quit and relaunch reopens the tabs and the layout; the palette finds and runs commands
 
-Report: _not written yet_
+Report:
+
+### Report — phase 4c (2026-11-19, 7e121f8)
+Works:        Every view (samples, plugins, timeline, signal path, Settings) moves to a window of
+              its own and back: a pop-out button on the view, a pop-in button on its window (or
+              closing it), and Cmd+Opt+S, P, T, I and comma. A Layouts menu: slots (Settings >
+              Windows sets how many), Save layout as, Default layout, and a tick per view; Cmd+Opt+1
+              to 9 recall, with Shift save, Cmd+Opt+0 the default. Layouts are app-wide; a window
+              whose display is gone comes to the main one. Plugin windows stay on top (Plugin menu)
+              and take the layout's place. When it opens: start screen, last session (projects and
+              layout) or an empty project. Cmd+K finds and runs any command.
+Tested:       - Owner, in the running app across three displays (2026-11-19): every view detached
+                and back by button and shortcut, layouts saved and recalled, the default layout,
+                the last session reopened, the palette: "4c checks pass with flying colors".
+              - Before that, through the menus in the background: the Layouts menu, the timeline
+                and plugins in their own windows, save layout 1, the default layout.
+              - Snapshots: palette.png, views-away.png (carthage-snapshot). Unit tests and the
+                project and sample benches unchanged and passing; CI green on both platforms.
+Measured:     Frame log of the owner's session, 448 s on a 120 Hz display: 357 s with no late frame;
+              182 late frames in all, in about a dozen seconds, worst 117 ms, when native windows
+              are created, closed or moved (detaching, layouts), and the two launches (2.6 s and
+              1.2 s first frames). In between, 120 Hz. RTSan not rerun: no audio-thread code changed
+              in 4c (the last run, phase 4b, was clean).
+Not done:     - A window hitch of up to about 0.1 s when a view is detached or a layout is applied.
+              - Layouts are not covered by an automated test (they need real windows and displays).
+              - The mixer, piano roll, tuner, big clock, meters and help join the views as they are
+                built.
+Decisions:    F21.
+Needs owner:  The owner's next list of features (to be placed on the roadmap), then phase 5.
+
 
 ## Phase 5 — Mixer, insert Lines, per-channel I/O
 
