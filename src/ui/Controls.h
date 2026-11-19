@@ -2,6 +2,7 @@
 
 #include "theme/Theme.h"
 
+#include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
 namespace carthage::ui
@@ -154,6 +155,25 @@ namespace carthage::ui
     {
     public:
         void mouseDown (const juce::MouseEvent&) override;
+    };
+
+    /** Waveform overviews kept on disk (W38), so a project opened again draws at once instead of
+        reading every file anew. Keyed by the file's path and modification time (JUCE's hash for
+        a file source), so a changed file gets a new overview. The newest `maxFiles` are kept. */
+    class DiskThumbnailCache final : public juce::AudioThumbnailCache
+    {
+    public:
+        DiskThumbnailCache (int inMemory, juce::File folder);
+
+        static constexpr int maxFiles = 4000;
+
+    protected:
+        void saveNewlyFinishedThumbnail (const juce::AudioThumbnailBase&, juce::int64 hash) override;
+        bool loadNewThumb (juce::AudioThumbnailBase&, juce::int64 hash) override;
+
+    private:
+        juce::File folder;
+        juce::File fileFor (juce::int64 hash) const;
     };
 
     /** Small helpers so every label is set the same way. */

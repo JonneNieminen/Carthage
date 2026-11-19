@@ -1,5 +1,6 @@
 #include "Project.h"
 #include "Editing.h"
+#include "Trace.h"
 
 #include <algorithm>
 #include <utility>
@@ -88,6 +89,7 @@ namespace carthage::project
 
     juce::Result write (const juce::ValueTree& snapshot, const juce::File& file)
     {
+        const trace::Scope traced ("Write project");
         if (! file.getParentDirectory().createDirectory())
             return juce::Result::fail ("Carthage could not create the folder " + file.getParentDirectory().getFullPathName());
 

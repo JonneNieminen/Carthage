@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Controls.h"
 #include "theme/Theme.h"
 
 #include <engine/Editing.h>
@@ -120,7 +121,7 @@ namespace carthage::ui
         std::shared_ptr<const editing::Copied> copied;
 
         juce::AudioFormatManager formats;
-        juce::AudioThumbnailCache thumbnailCache { 64 };
+        DiskThumbnailCache thumbnailCache;   // overviews on disk (W38)
         std::map<juce::String, std::unique_ptr<juce::AudioThumbnail>> thumbnails;   // by file path
         std::map<juce::String, juce::File> resolvedFiles;   // see fileOf
 

@@ -1,5 +1,7 @@
 #include "MainComponent.h"
 
+#include <engine/Trace.h>
+
 namespace carthage::ui
 {
     using namespace juce;
@@ -1581,6 +1583,7 @@ namespace carthage::ui
     //==============================================================================================
     void MainComponent::frame (double t)
     {
+        const trace::Scope traced ("Frame");
         if (frameLog)
             logFrame (t);
 

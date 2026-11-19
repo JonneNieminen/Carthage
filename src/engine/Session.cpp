@@ -1,4 +1,5 @@
 #include "Session.h"
+#include "Trace.h"
 #include "Editing.h"
 
 #include <tracktion_graph/tracktion_graph.h>
@@ -276,6 +277,7 @@ namespace carthage::engine
     //==============================================================================================
     juce::Result Session::insertPlugin (const juce::PluginDescription& description)
     {
+        const trace::Scope traced ("Load plugin");
         if (! plugins->isScanned (description))
             return juce::Result::fail ("This plugin has not been checked by the scanner yet");
 
@@ -792,6 +794,7 @@ namespace carthage::engine
 
     juce::Result Session::openProject (const juce::File& chosen)
     {
+        const trace::Scope traced ("Open project");
         if (isRecording())
             return juce::Result::fail ("Stop recording first");
 

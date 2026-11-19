@@ -82,6 +82,11 @@ three on macOS on every push, and fails on any finding.
 
 ## Measuring
 
+- **Signposts.** `trace::Scope` marks frames, opening and writing projects, plugin loads and sample
+  analysis as intervals (subsystem `fi.carthage`, category `Work`). Record Carthage in Instruments
+  with the os_signpost or Points of Interest instrument to see where a slow moment went. They
+  cost nothing when nothing records, and never run on the audio thread.
+
 Numbers go in the phase report. An impression ("feels smooth", "low latency") is not a result.
 
 - **Round-trip latency.** Physical loopback: an output wired to an input. `carthage-bench latency`

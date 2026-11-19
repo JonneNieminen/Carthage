@@ -55,6 +55,56 @@ namespace carthage::ui
         m.showMenuAsync (PopupMenu::Options().withTargetComponent (c).withMousePosition());
     }
 
+    DiskThumbnailCache::DiskThumbnailCache (int inMemory, File f) : AudioThumbnailCache (inMemory), folder (std::move (f))
+    {
+        folder.createDirectory();
+
+        // Keep the newest; overviews of files long gone go first.
+        auto files = folder.findChildFiles (File::findFiles, false, "*.overview");
+
+        if (files.size() > maxFiles)
+        {
+            std::sort (files.begin(), files.end(), [] (const File& a, const File& b) { return a.getLastAccessTime() > b.getLastAccessTime(); });
+
+            for (int i = maxFiles; i < files.size(); ++i)
+                files[i].deleteFile();
+        }
+    }
+
+    File DiskThumbnailCache::fileFor (int64 hash) const
+    {
+        return folder.getChildFile (String::toHexString (hash) + ".overview");
+    }
+
+    void DiskThumbnailCache::saveNewlyFinishedThumbnail (const AudioThumbnailBase& thumb, int64 hash)
+    {
+        const auto file = fileFor (hash);
+        file.deleteFile();
+        FileOutputStream out (file);
+
+        if (out.openedOk())
+            thumb.saveTo (out);
+    }
+
+    bool DiskThumbnailCache::loadNewThumb (AudioThumbnailBase& thumb, int64 hash)
+    {
+        const auto file = fileFor (hash);
+
+        if (! file.existsAsFile())
+            return false;
+
+        FileInputStream in (file);
+
+        if (! in.openedOk() || ! thumb.loadFrom (in))
+        {
+            file.deleteFile();   // damaged: made again from the audio
+            return false;
+        }
+
+        file.setLastAccessTime (Time::getCurrentTime());
+        return true;
+    }
+
     float toDecibels (float linear) noexcept
     {
         return Decibels::gainToDecibels (linear, -60.0f);

@@ -1035,7 +1035,8 @@ namespace carthage::ui
 
     //==============================================================================================
     Timeline::Timeline (engine::Session& s)
-        : session (s), editState (s.getEdit().state)
+        : session (s), editState (s.getEdit().state),
+          thumbnailCache (64, s.getFolders().settings.getChildFile ("Overviews"))
     {
         formats.registerBasicFormats();
         ruler = std::make_unique<Ruler> (*this);

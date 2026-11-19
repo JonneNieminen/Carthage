@@ -1,4 +1,5 @@
 #include "SampleAnalysis.h"
+#include "Trace.h"
 
 #include <juce_dsp/juce_dsp.h>
 
@@ -294,6 +295,7 @@ namespace carthage::engine
 
             buffer.applyGain (0, 0, length, 1.0f / static_cast<float> (channels));
 
+            const trace::Scope traced ("Analyse sample");
             auto a = analyse (buffer.getReadPointer (0), length, reader->sampleRate);
             a.seconds = static_cast<double> (reader->lengthInSamples) / reader->sampleRate;   // the whole file
             return a;
