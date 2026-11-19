@@ -1,0 +1,107 @@
+#include <engine/SampleEdits.h>
+
+using namespace carthage;
+
+namespace
+{
+    struct Headless final : tracktion::EngineBehaviour
+    {
+        bool autoInitialiseDeviceManager() override   { return false; }
+    };
+
+    juce::File writeTone (const juce::File& file)
+    {
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::OutputStream> out = std::make_unique<juce::FileOutputStream> (file);
+        auto writer = wav.createWriterFor (out, juce::AudioFormatWriterOptions{}.withSampleRate (48000.0).withNumChannels (1).withBitsPerSample (24));
+        juce::AudioBuffer<float> b (1, 48000 * 2);
+        for (int i = 0; i < b.getNumSamples(); ++i)
+            b.setSample (0, i, 0.25f * std::sin (static_cast<float> (i) * 0.05f));
+        writer->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
+        return file;
+    }
+}
+
+class SampleEditTests final : public juce::UnitTest
+{
+public:
+    SampleEditTests() : juce::UnitTest ("Sample editor model", "engine") {}
+
+    void runTest() override
+    {
+        juce::TemporaryFile holder;
+        const auto& folder = holder.getFile();
+        folder.createDirectory();
+        const auto kick = writeTone (folder.getChildFile ("Kick.wav"));
+        const auto snare = writeTone (folder.getChildFile ("Snare.wav"));
+
+        tracktion::Engine engine ("CarthageTests", nullptr, std::make_unique<Headless>());
+        auto edit = tracktion::createEmptyEdit (engine, folder.getChildFile ("Test.tracktionedit"));
+        edit->ensureNumberOfAudioTracks (2);
+        const auto lanes = editing::lanes (*edit);
+        auto& um = edit->getUndoManager();
+
+        auto* a = editing::insertFile (*lanes[0], kick, 0.0);
+        auto* b = editing::insertFile (*lanes[1], kick, 8.0);
+        auto* other = editing::insertFile (*lanes[1], snare, 16.0);
+
+        beginTest ("Clips of one file are one sample, named after it");
+        {
+            expectEquals (editing::clipsOfSample (*a).size(), 2);
+            expect (editing::clipsOfSample (*a).contains (b) && ! editing::clipsOfSample (*a).contains (other));
+            expectEquals (editing::sampleName (*a), juce::String ("Kick"));
+        }
+
+        beginTest ("An edit reaches every clip of the sample, and undoes in one step");
+        {
+            auto s = editing::soundOf (*a);
+            s.gainDb = -6.0f;
+            s.reversed = true;
+            s.pitch = 3.0f;
+            s.fadeIn = 0.1;
+            s.start = 0.25;
+            s.length = 1.0;
+            editing::begin (*edit, "Edit sample");
+            editing::setSound (*a, s);
+
+            for (auto* c : { a, b })
+            {
+                const auto got = editing::soundOf (*c);
+                expectWithinAbsoluteError (got.gainDb, -6.0f, 1.0e-4f);
+                expect (got.reversed);
+                expectWithinAbsoluteError (got.pitch, 3.0f, 1.0e-4f);
+                expectWithinAbsoluteError (got.fadeIn, 0.1, 1.0e-6);
+                expectWithinAbsoluteError (got.start, 0.25, 1.0e-6);
+                expectWithinAbsoluteError (got.length, 1.0, 1.0e-6);
+            }
+
+            expectWithinAbsoluteError (editing::soundOf (*other).gainDb, 0.0f, 1.0e-4f, "another file is not touched");
+            um.undo();
+            expectWithinAbsoluteError (editing::soundOf (*b).gainDb, 0.0f, 1.0e-4f, "undone");
+            expect (! editing::soundOf (*a).reversed, "undone");
+        }
+
+        beginTest ("Make unique splits a clip off as Kick (2); its copies stay with it");
+        {
+            expectEquals (editing::makeUnique (*b), juce::String ("Kick (2)"));
+            expectEquals (editing::sampleName (*b), juce::String ("Kick (2)"));
+            expectEquals (editing::clipsOfSample (*a).size(), 1, "the original is alone now");
+
+            auto* copy = editing::placeCopy (*b, *lanes[0], 24.0);
+            expect (copy != nullptr && editing::clipsOfSample (*b).contains (copy), "a copy keeps the sample");
+
+            auto s = editing::soundOf (*b);
+            s.gainDb = -12.0f;
+            editing::begin (*edit, "Edit sample");
+            editing::setSound (*b, s);
+            expectWithinAbsoluteError (editing::soundOf (*copy).gainDb, -12.0f, 1.0e-4f);
+            expectWithinAbsoluteError (editing::soundOf (*a).gainDb, 0.0f, 1.0e-4f, "the original is left alone");
+
+            expectEquals (editing::makeUnique (*copy), juce::String ("Kick (3)"), "the next free number");
+            um.undo();
+            expectEquals (editing::sampleName (*copy), juce::String ("Kick (2)"), "Make unique undoes");
+        }
+    }
+};
+
+static SampleEditTests sampleEditTests;

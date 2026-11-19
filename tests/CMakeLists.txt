@@ -16,7 +16,8 @@ target_sources(carthage_tests PRIVATE
     MetronomeTests.cpp
     LogTests.cpp
     OverviewCacheTests.cpp
-    SettingsTestTests.cpp)
+    SettingsTestTests.cpp
+    SampleEditTests.cpp)
 target_include_directories(carthage_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_definitions(carthage_tests PRIVATE CARTHAGE_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     CARTHAGE_SCANNER_PATH="$<TARGET_FILE:carthage_scan>")
