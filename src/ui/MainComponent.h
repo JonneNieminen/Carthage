@@ -120,6 +120,7 @@ namespace carthage::ui
         juce::TextButton samplesTab { "Samples" }, pluginsTab { "Plugins" };
         int panelWidth = PluginBrowser::preferredWidth;
         juce::Rectangle<int> panelArea;
+        PanelEdge panelEdge;
 
 
 

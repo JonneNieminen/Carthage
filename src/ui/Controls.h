@@ -49,6 +49,32 @@ namespace carthage::ui
         bool chosen = false;
     };
 
+    /** The border of a panel, to drag (owner's list F22): resize it by dragging, double-click to
+        fit its contents. It draws nothing until the pointer is over it. */
+    class PanelEdge final : public juce::Component, public juce::SettableTooltipClient
+    {
+    public:
+        PanelEdge();
+
+        /** The panel's width now; a drag reports the width plus the distance dragged. */
+        std::function<int()> getCurrentWidth;
+        std::function<void (int newWidth)> onResize;
+        std::function<void()> onFit;
+
+        static constexpr int thickness = 6;
+
+        void paint (juce::Graphics&) override;
+        void mouseEnter (const juce::MouseEvent&) override   { repaint(); }
+        void mouseExit (const juce::MouseEvent&) override    { repaint(); }
+        void mouseDown (const juce::MouseEvent&) override;
+        void mouseDrag (const juce::MouseEvent&) override;
+        void mouseUp (const juce::MouseEvent&) override      { repaint(); }
+        void mouseDoubleClick (const juce::MouseEvent&) override;
+
+    private:
+        int widthAtStart = 0;
+    };
+
     /** Peak meter with a held peak, in a recessed well: ok below -18 dBFS, warn to -6, clip above. */
     class LevelMeter final : public juce::Component
     {

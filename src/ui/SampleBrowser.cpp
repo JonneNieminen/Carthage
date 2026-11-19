@@ -348,6 +348,30 @@ namespace carthage::ui
     //==============================================================================================
     int SampleBrowser::getNumRows()   { return static_cast<int> (rows.size()); }
 
+    int SampleBrowser::idealWidth() const
+    {
+        auto& library = session.getSampleLibrary();
+        int widest = 0;
+
+        for (const auto& r : rows)
+        {
+            if (r.type == Row::Type::folder)
+            {
+                const auto& f = library.getFolders()[static_cast<size_t> (r.index)];
+                widest = std::max (widest, r.depth * indent + 14 + theme::space1
+                                           + GlyphArrangement::getStringWidthInt (theme::uiFont (textSize, f.parent < 0), f.name) + 40);
+            }
+            else if (r.type == Row::Type::sample)
+            {
+                const auto& s = library.getSamples()[static_cast<size_t> (r.index)];
+                widest = std::max (widest, r.depth * indent + 14 + theme::space1
+                                           + GlyphArrangement::getStringWidthInt (theme::uiFont (textSize), s.name) + 24 + 64);
+            }
+        }
+
+        return widest + 2 * pad + theme::space4;   // the padding and the scroll bar
+    }
+
     void SampleBrowser::paintListBoxItem (int row, Graphics& g, int width, int height, bool selected)
     {
         if (row < 0 || row >= getNumRows())

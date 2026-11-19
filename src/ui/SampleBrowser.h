@@ -20,6 +20,9 @@ namespace carthage::ui
     {
     public:
         explicit SampleBrowser (engine::Session&);
+
+        /** The width that shows the longest name in the list whole (double-click on the edge). */
+        int idealWidth() const;
         ~SampleBrowser() override;
 
         /** The library changed (index, favourite, analysis). */

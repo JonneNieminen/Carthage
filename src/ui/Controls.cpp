@@ -33,6 +33,40 @@ namespace carthage::ui
     }
 
     //==============================================================================================
+    PanelEdge::PanelEdge()
+    {
+        setMouseCursor (MouseCursor::LeftRightResizeCursor);
+        setTooltip ("Drag to resize; double-click to fit the longest name");
+    }
+
+    void PanelEdge::paint (Graphics& g)
+    {
+        if (isMouseOverOrDragging())
+        {
+            g.setColour (isMouseButtonDown() ? theme::accent : theme::lineStrong);
+            g.fillRect (getLocalBounds().withSizeKeepingCentre (2, getHeight()));
+        }
+    }
+
+    void PanelEdge::mouseDown (const MouseEvent&)
+    {
+        widthAtStart = getCurrentWidth ? getCurrentWidth() : 0;
+        repaint();
+    }
+
+    void PanelEdge::mouseDrag (const MouseEvent& e)
+    {
+        if (onResize)
+            onResize (widthAtStart + e.getDistanceFromDragStartX());
+    }
+
+    void PanelEdge::mouseDoubleClick (const MouseEvent&)
+    {
+        if (onFit)
+            onFit();
+    }
+
+    //==============================================================================================
     ToolButton::ToolButton (Glyph g) : Button ({}), glyph (g)
     {
         setWantsKeyboardFocus (false);   // the tools have keys; focus stays on the time line

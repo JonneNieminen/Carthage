@@ -468,7 +468,8 @@ Deliver (F22, W38, W39):
 - [x] Lanes: Lane 1, 2… renamable; add, delete, mute and solo from the lane header
 - [x] Projects renamed from their tabs (asks first); tap tempo; a question when the tempo changes
       (stretch, move with the beat, leave in time; remember the choice)
-- [ ] Panels resizable by their border, double-click fits the longest text
+- [x] Panels resizable by their border, double-click fits the longest text (the browser panel; the
+      mixer's panels follow in phase 5)
 - [x] Wheel: scroll on both axes and zoom time and lane height in every grid; lane-height shortcut
 - [ ] FL-style paste-by-click and right-click delete as Settings switches (off)
 - [ ] Metronome: built-in wooden click, hi-hat and cowbell, or your own sound

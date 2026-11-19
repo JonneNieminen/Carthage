@@ -35,6 +35,9 @@ namespace carthage::ui
         std::function<void (const juce::PluginDescription&)> onInsert;
 
         static constexpr int preferredWidth = 300;
+
+        /** The width that shows the longest name in the list whole (double-click on the edge). */
+        int idealWidth() const;
         static constexpr const char* dragPrefix = "carthage-plugin:";
 
         void paint (juce::Graphics&) override;

@@ -470,6 +470,15 @@ namespace carthage::ui
         auto& props = session.getEngine().getPropertyStorage().getPropertiesFile();
         panelShowsSamples = props.getBoolValue ("panelShowsSamples", false);
         panelWidth = jlimit (240, 520, props.getIntValue ("panelWidth", PluginBrowser::preferredWidth));
+        panelEdge.getCurrentWidth = [this] { return panelWidth; };
+        panelEdge.onResize = [this] (int w) { setPanelWidth (w); settings.showPanelWidth (panelWidth); };
+        panelEdge.onFit = [this]
+        {
+            const auto showingSamples = samples.isVisible() && ! isDetached (View::samples);
+            setPanelWidth (showingSamples ? samples.idealWidth() : browser.idealWidth());
+            settings.showPanelWidth (panelWidth);
+        };
+        addChildComponent (panelEdge);
 
         for (auto [tab, isSamples] : { std::pair { &samplesTab, true }, { &pluginsTab, false } })
         {
@@ -1474,10 +1483,15 @@ namespace carthage::ui
 
             if (samplesHere && showingSamples)  samples.setBounds (panel);
             if (pluginsHere && ! showingSamples) browser.setBounds (panel);
+
+            panelEdge.setBounds (panelArea.getRight() - PanelEdge::thickness / 2, panelArea.getY(), PanelEdge::thickness, panelArea.getHeight());
+            panelEdge.setVisible (true);
+            panelEdge.toFront (false);
         }
         else
         {
             panelArea = {};
+            panelEdge.setVisible (false);
         }
 
         if (! isDetached (View::signal))

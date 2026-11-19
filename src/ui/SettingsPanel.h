@@ -34,6 +34,7 @@ namespace carthage::ui
 
         /** The browser's settings (F19); the window applies them. */
         std::function<void (int)> onPanelWidthChanged;
+        void showPanelWidth (int w)   { panelWidth.setValue (w, juce::dontSendNotification); }
         std::function<void (float)> onBrowserTextSizeChanged;
         std::function<void (bool)> onPlayWhileHeldChanged;
 

@@ -235,6 +235,31 @@ namespace carthage::ui
 
     int PluginBrowser::getNumRows()   { return static_cast<int> (rows.size()); }
 
+    int PluginBrowser::idealWidth() const
+    {
+        int widest = 0;
+
+        for (const auto& r : rows)
+        {
+            if (r.type == Row::Type::header)
+                continue;
+
+            if (r.type == Row::Type::unavailable)
+            {
+                widest = std::max (widest, GlyphArrangement::getStringWidthInt (theme::uiFont (theme::textMd, true), r.text) + 72);
+                continue;
+            }
+
+            const auto& d = session.getPluginLibrary().getEntries()[r.entry].description;
+            const auto maker = d.manufacturerName + (d.isInstrument ? ", instrument" : String());
+            widest = std::max ({ widest,
+                                 GlyphArrangement::getStringWidthInt (theme::uiFont (theme::textMd), d.name) + 36 + 24,
+                                 GlyphArrangement::getStringWidthInt (theme::uiFont (theme::textSm), maker) });
+        }
+
+        return widest + 2 * pad + theme::space4;
+    }
+
     void PluginBrowser::paintListBoxItem (int row, Graphics& g, int width, int height, bool selected)
     {
         if (row < 0 || row >= getNumRows())
