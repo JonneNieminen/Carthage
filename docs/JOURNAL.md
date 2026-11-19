@@ -63,3 +63,10 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - **2026-11-19 (later).** Owner asked for detachable views and window layouts across displays;
   decided as F21, phase 4c, now (before the mixer), app-wide layouts, plus reopen last session,
   command palette and plugin windows on top. Plan written into ROADMAP 4c.
+- **2026-11-19 (4c, in progress).** Built so far: `MainComponent::View` and `ViewWindow` (each view
+  docks or lives in its own window; pop-out buttons; closing a window brings the view back), layouts
+  (`getLayout`/`applyLayout`, slots in the engine's properties as `layout1`..`layout9`, the count as
+  `layoutSlots`), the Layouts menu, commands (Cmd+Opt+S/P/T/I/, for views, Cmd+Opt+0 default,
+  Cmd+Opt+1-9 recall, Cmd+Opt+Shift+1-9 save, Cmd+K palette, keep plugin windows on top), Settings >
+  Windows > Layout slots. Not yet: the command palette itself (`onCommandPalette` is unset), reopen
+  last session, tests and snapshots for 4c, docs (ARCHITECTURE, CHANGELOG), the owner's checks.

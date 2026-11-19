@@ -12,6 +12,9 @@
 #include <app/Commands.h>
 #include <engine/Session.h>
 
+#include <array>
+#include <map>
+
 namespace carthage::ui
 {
     class PluginWindow;
@@ -63,6 +66,29 @@ namespace carthage::ui
         /** Shows the left panel on samples or plugins; with `toggle`, the same view again hides it. */
         void showPanel (bool samplesView, bool toggle);
 
+        //==========================================================================================
+        // Views in their own windows (F21). Each view is docked in this window or shown in a
+        // window of its own; a layout is where every view and window is.
+        enum class View { samples, plugins, timeline, signal, settings };
+        static constexpr std::array<View, 5> views { View::samples, View::plugins, View::timeline, View::signal, View::settings };
+        static juce::String nameOf (View);
+
+        bool isDetached (View view) const   { return viewWindows.count (static_cast<int> (view)) > 0; }
+        void setDetached (View, bool detached, std::optional<juce::Rectangle<int>> bounds = {});
+        void toggleDetached (View);
+
+        /** Every view back in this window, the panel and settings as they start (the default). */
+        void defaultLayout();
+
+        /** Layout slots offered (Settings, 1 to 9) and the plugin windows' place (F21). */
+        int layoutSlots();
+        bool keepPluginOnTop();
+
+        /** Cmd/Ctrl+K: the app shows the command palette. */
+        std::function<void()> onCommandPalette;
+        juce::ValueTree getLayout() const;
+        void applyLayout (const juce::ValueTree&);
+
         /** Settings: the left panel's width and the sample browser's text size (F19). */
         void setPanelWidth (int);
 
@@ -111,6 +137,17 @@ namespace carthage::ui
         void toolCommand (const InvocationInfo&);
 
         std::unique_ptr<PluginWindow> pluginWindow;
+
+        class ViewWindow;
+        std::map<int, std::unique_ptr<ViewWindow>> viewWindows;   // by View
+        IconButton popPanel { IconButton::Glyph::popOut }, popTimeline { IconButton::Glyph::popOut },
+                   popSignal { IconButton::Glyph::popOut };
+        juce::Label timelineAway;
+        juce::TextButton timelineBack { "Bring it back" };
+        std::optional<juce::Rectangle<int>> pluginWindowBounds;   // from the last layout applied
+        juce::Component& componentOf (View);
+        void viewsChanged();
+        juce::PropertiesFile& props();
         std::optional<double> recordingFrom;
         double lastFrameTime = 0.0;
         int frameCount = 0;

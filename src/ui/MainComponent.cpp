@@ -7,6 +7,101 @@ namespace carthage::ui
 
     //==============================================================================================
     /** A plugin's own editor in a plain host window (docs/ARCHITECTURE.md, "Plugins"). */
+    namespace
+    {
+        /** A window brought back where its display no longer is (unplugged) comes to the main one. */
+        Rectangle<int> onScreen (Rectangle<int> r)
+        {
+            const auto& displays = Desktop::getInstance().getDisplays();
+
+            for (const auto& d : displays.displays)
+            {
+                const auto shared = d.userBounds.toNearestInt().getIntersection (r);
+
+                if (shared.getWidth() >= 120 && shared.getHeight() >= 60)
+                    return r;
+            }
+
+            const auto area = displays.getPrimaryDisplay()->userBounds.toNearestInt();
+            return r.withSize (std::min (r.getWidth(), area.getWidth()), std::min (r.getHeight(), area.getHeight()))
+                    .withCentre (area.getCentre());
+        }
+    }
+
+    //==============================================================================================
+    /** A view in a window of its own (F21): a slim strip with the way back, the view below.
+        Closing the window brings the view back too. Shortcuts work here as in the main window. */
+    class MainComponent::ViewWindow final : public DocumentWindow
+    {
+    public:
+        ViewWindow (MainComponent& m, View v, Component& content)
+            : DocumentWindow (nameOf (v) + String::fromUTF8 (" \xe2\x80\x94 Carthage"), theme::bg, DocumentWindow::allButtons),
+              owner (m), view (v), holder (*this, content, v != View::settings)
+        {
+            setUsingNativeTitleBar (true);
+            setContentNonOwned (&holder, false);
+            setResizable (true, false);
+            addKeyListener (owner.commands.getKeyMappings());
+        }
+
+        ~ViewWindow() override
+        {
+            removeKeyListener (owner.commands.getKeyMappings());
+            clearContentComponent();
+        }
+
+        void closeButtonPressed() override   { back(); }
+
+        /** Back into the main window, after this call returns (it deletes this window). */
+        void back()
+        {
+            MessageManager::callAsync ([safe = Component::SafePointer<MainComponent> (&owner), v = view]
+            {
+                if (safe != nullptr)
+                    safe->setDetached (v, false);
+            });
+        }
+
+        Component& getHolder() noexcept   { return holder; }
+
+    private:
+        struct Holder final : Component
+        {
+            Holder (ViewWindow& w, Component& c, bool withStrip) : content (c), strip (withStrip)
+            {
+                popIn.setTooltip ("Back into the main window");
+                popIn.onClick = [&w] { w.back(); };
+                addAndMakeVisible (popIn);
+                popIn.setVisible (strip);
+                addAndMakeVisible (content);
+            }
+
+            void paint (Graphics& g) override   { g.fillAll (theme::bg2); }
+
+            void resized() override
+            {
+                auto r = getLocalBounds();
+
+                if (strip)
+                {
+                    auto top = r.removeFromTop (28);
+                    popIn.setBounds (top.removeFromRight (28).reduced (2));
+                }
+
+                content.setBounds (r);
+            }
+
+            Component& content;
+            bool strip;
+            IconButton popIn { IconButton::Glyph::popIn };
+        };
+
+        MainComponent& owner;
+        View view;
+        Holder holder;
+    };
+
+    //==============================================================================================
     class PluginWindow final : public DocumentWindow
     {
     public:
@@ -390,6 +485,27 @@ namespace carthage::ui
         settings.onPlayWhileHeldChanged = [this] (bool held) { samples.setPlayWhileHeld (held); };
         showPanel (panelShowsSamples, false);
 
+        // Views in their own windows (F21): a pop-out button on each, the way back on its window.
+        popTimeline.setTooltip ("The timeline in a window of its own");
+        popTimeline.onClick = [this] { setDetached (View::timeline, true); };
+        popSignal.setTooltip ("The signal path in a window of its own");
+        popSignal.onClick = [this] { setDetached (View::signal, true); };
+        popPanel.onClick = [this]
+        {
+            const auto samplesHere = ! isDetached (View::samples), pluginsHere = ! isDetached (View::plugins);
+            setDetached (samplesHere && (panelShowsSamples || ! pluginsHere) ? View::samples : View::plugins, true);
+        };
+        settings.onPopOut = [this] { toggleDetached (View::settings); };
+        styleLabel (timelineAway, theme::textMd, theme::muted);
+        timelineAway.setJustificationType (Justification::centred);
+        timelineAway.setText ("The timeline is in its own window.", dontSendNotification);
+        timelineBack.onClick = [this] { setDetached (View::timeline, false); };
+
+        for (auto* pop : std::initializer_list<Component*> { &popTimeline, &popSignal, &popPanel })
+            addAndMakeVisible (pop);
+
+        addChildComponent (timelineAway);
+        addChildComponent (timelineBack);
         addChildComponent (startScreen);
 
         // Tabs: a click brings a project forward; closing asks to save, as Cmd/Ctrl+W does.
@@ -478,6 +594,8 @@ namespace carthage::ui
 
     MainComponent::~MainComponent()
     {
+        viewWindows.clear();   // the views they show are members here: their windows go first
+
         commands.getKeyMappings()->removeChangeListener (this);
         vblank.reset();
         session.onDeviceChanged = nullptr;
@@ -516,6 +634,7 @@ namespace carthage::ui
     void MainComponent::getAllCommands (Array<CommandID>& ids)
     {
         ids.addArray (cmd::all());
+        ids.addArray (cmd::layouts());
     }
 
     void MainComponent::getCommandInfo (CommandID id, ApplicationCommandInfo& info)
@@ -538,6 +657,12 @@ namespace carthage::ui
                                          info.shortName = "Undo " + session.getEdit().getUndoManager().getUndoDescription(); break;
             case cmd::redo:              info.setActive (session.getEdit().getUndoManager().canRedo()); break;
             case cmd::pasteClips:        info.setActive (timeline.canPaste() && ! session.isRecording()); break;
+            case cmd::windowSamples:     info.setTicked (isDetached (View::samples)); break;
+            case cmd::windowPlugins:     info.setTicked (isDetached (View::plugins)); break;
+            case cmd::windowTimeline:    info.setTicked (isDetached (View::timeline)); break;
+            case cmd::windowSignal:      info.setTicked (isDetached (View::signal)); break;
+            case cmd::windowSettings:    info.setTicked (isDetached (View::settings)); break;
+            case cmd::keepPluginOnTop:   info.setTicked (keepPluginOnTop()); break;
             case cmd::copyClips:
             case cmd::cutClips:
             case cmd::duplicateClips:
@@ -549,8 +674,34 @@ namespace carthage::ui
             case cmd::toolDelete: case cmd::toolMute: case cmd::toolZoom: case cmd::toolStretch:
                 info.setTicked (cmd::tools()[static_cast<int> (timeline.getTool())] == id); break;
             case cmd::measureLatency:    info.setActive (! session.isRecording()); break;
-            default: break;
+            default:
+                if (id >= cmd::recallLayoutFirst && id < cmd::afterLayouts)
+                {
+                    const auto save = id >= cmd::saveLayoutFirst;
+                    const auto n = id - (save ? cmd::saveLayoutFirst : cmd::recallLayoutFirst) + 1;
+                    const auto saved = props().getValue ("layout" + String (n)).isNotEmpty();
+                    info.setActive (n <= layoutSlots() && (save || saved));
+
+                    if (! save && ! saved)
+                        info.shortName << " (empty)";
+                }
+                break;
         }
+    }
+
+    int MainComponent::layoutSlots()
+    {
+        return jlimit (1, cmd::maxLayoutSlots, props().getIntValue ("layoutSlots", 4));
+    }
+
+    bool MainComponent::keepPluginOnTop()
+    {
+        return props().getBoolValue ("keepPluginOnTop", true);
+    }
+
+    PropertiesFile& MainComponent::props()
+    {
+        return session.getEngine().getPropertyStorage().getPropertiesFile();
     }
 
     bool MainComponent::perform (const InvocationInfo& info)
@@ -575,6 +726,18 @@ namespace carthage::ui
             case cmd::copyClips:        timeline.copySelection(); commands.commandStatusChanged(); return true;
             case cmd::cutClips:         timeline.copySelection(); timeline.deleteSelection(true); commands.commandStatusChanged(); return true;
             case cmd::pasteClips:       timeline.paste(); return true;
+            case cmd::windowSamples:    toggleDetached (View::samples); return true;
+            case cmd::windowPlugins:    toggleDetached (View::plugins); return true;
+            case cmd::windowTimeline:   toggleDetached (View::timeline); return true;
+            case cmd::windowSignal:     toggleDetached (View::signal); return true;
+            case cmd::windowSettings:   toggleDetached (View::settings); return true;
+            case cmd::defaultLayout:    defaultLayout(); setStatus ("Back to the default layout"); return true;
+            case cmd::commandPalette:   if (onCommandPalette) onCommandPalette(); return true;
+            case cmd::keepPluginOnTop:
+                props().setValue ("keepPluginOnTop", ! keepPluginOnTop());
+                if (pluginWindow != nullptr) pluginWindow->setAlwaysOnTop (keepPluginOnTop());
+                commands.commandStatusChanged();
+                return true;
             case cmd::deleteClips:      timeline.deleteSelection(); return true;
             case cmd::nudgeLeft:        timeline.nudgeSelection (-1); return true;
             case cmd::nudgeRight:       timeline.nudgeSelection (1); return true;
@@ -596,7 +759,33 @@ namespace carthage::ui
             case cmd::measureLatency:
                 if (! settingsOpen) toggleSettings();
                 return true;
-            default: return false;
+            default:
+                if (info.commandID >= cmd::saveLayoutFirst && info.commandID < cmd::afterLayouts)
+                {
+                    const auto n = info.commandID - cmd::saveLayoutFirst + 1;
+
+                    if (auto xml = getLayout().createXml())
+                        props().setValue ("layout" + String (n), xml->toString (XmlElement::TextFormat().singleLine()));
+
+                    setStatus ("Saved as layout " + String (n));
+                    commands.commandStatusChanged();
+                    return true;
+                }
+
+                if (info.commandID >= cmd::recallLayoutFirst && info.commandID < cmd::saveLayoutFirst)
+                {
+                    const auto n = info.commandID - cmd::recallLayoutFirst + 1;
+
+                    if (auto xml = parseXML (props().getValue ("layout" + String (n))))
+                    {
+                        applyLayout (ValueTree::fromXml (*xml));
+                        setStatus ("Layout " + String (n));
+                    }
+
+                    return true;
+                }
+
+                return false;
         }
     }
 
@@ -775,10 +964,13 @@ namespace carthage::ui
         panelShowsSamples = samplesView;
         session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("panelShowsSamples", samplesView);
 
-        browser.setVisible (browserOpen && ! samplesView);
-        samples.setVisible (browserOpen && samplesView);
-        samplesTab.setVisible (browserOpen);
-        pluginsTab.setVisible (browserOpen);
+        // A browser in its own window is shown there: choosing it brings that window forward.
+        const auto chosen = samplesView ? View::samples : View::plugins;
+
+        if (isDetached (chosen))
+            viewWindows[static_cast<int> (chosen)]->toFront (true);
+
+        resized();   // the panel's contents follow below
 
         // The switch: the chosen side stands out as the plugin filters' chosen kind does.
         for (auto [tab, isSamples] : { std::pair { &samplesTab, true }, { &pluginsTab, false } })
@@ -835,6 +1027,15 @@ namespace carthage::ui
                 {
                     MessageManager::callAsync ([safe = SafePointer<MainComponent> (this)] { if (safe) safe->closePluginWindow(); });
                 });
+
+        if (pluginWindow == nullptr)
+            return;
+
+        // Above Carthage's own windows unless switched off, where the last layout put it (F21).
+        pluginWindow->setAlwaysOnTop (keepPluginOnTop());
+
+        if (pluginWindowBounds)
+            pluginWindow->setTopLeftPosition (pluginWindowBounds->getPosition());
     }
 
     void MainComponent::closePluginWindow()
@@ -845,6 +1046,13 @@ namespace carthage::ui
     //==============================================================================================
     void MainComponent::toggleSettings()
     {
+        // Settings in its own window: the command brings that window forward.
+        if (isDetached (View::settings))
+        {
+            viewWindows[static_cast<int> (View::settings)]->toFront (true);
+            return;
+        }
+
         settingsOpen = ! settingsOpen;
 
         if (settingsOpen)
@@ -860,7 +1068,7 @@ namespace carthage::ui
 
     void MainComponent::layoutSettings (bool animate)
     {
-        const auto shown = getLocalBounds().removeFromRight (SettingsPanel::preferredWidth).withTrimmedTop (56);
+        const auto shown = getLocalBounds().removeFromRight (SettingsPanel::preferredWidth).withTrimmedTop (ProjectTabs::height + 56);
         const auto hidden = shown.withX (getWidth());
 
         settings.setVisible (true);
@@ -1039,29 +1247,78 @@ namespace carthage::ui
         loadMeter.setBounds (top.removeFromRight (140).withSizeKeepingCentre (140, 20));
 
         // The panel docks on the left, under the transport; the rest of the window shifts over.
-        // Its switch sits on the panel's own surface at the top.
-        if (browserOpen)
+        // Its switch sits on the panel's own surface at the top. A browser in its own window
+        // leaves the panel to the other; with both away, the panel closes (F21).
+        const auto samplesHere = ! isDetached (View::samples), pluginsHere = ! isDetached (View::plugins);
+        const auto panelOpen = browserOpen && (samplesHere || pluginsHere);
+        const auto showingSamples = samplesHere && (panelShowsSamples || ! pluginsHere);
+
+        samplesTab.setVisible (panelOpen);
+        pluginsTab.setVisible (panelOpen);
+        popPanel.setVisible (panelOpen);
+        samples.setVisible (! samplesHere || (panelOpen && showingSamples));
+        browser.setVisible (! pluginsHere || (panelOpen && ! showingSamples));
+
+        for (auto [tab, isSamples] : { std::pair { &samplesTab, true }, { &pluginsTab, false } })
+        {
+            const auto shown = isSamples == showingSamples;
+            tab->setColour (TextButton::buttonColourId, shown ? theme::hover : theme::bg2);
+            tab->setColour (TextButton::textColourOffId, shown ? theme::text : theme::muted);
+            tab->setTooltip ((isSamples ? samplesHere : pluginsHere) ? (isSamples ? "Your samples" : "Your plugins")
+                                                                       : String ("In its own window: click to bring it forward"));
+        }
+
+        if (panelOpen)
         {
             auto panel = r.removeFromLeft (panelWidth);
             panelArea = panel;
             auto switchRow = panel.removeFromTop (40).reduced (theme::space3, 0).withTrimmedTop (theme::space2).withTrimmedRight (1);
+            popPanel.setBounds (switchRow.removeFromRight (28).withHeight (28));
+            switchRow.removeFromRight (theme::space1);
             samplesTab.setBounds (switchRow.removeFromLeft (switchRow.getWidth() / 2 - 2).withHeight (28));
             switchRow.removeFromLeft (4);
             pluginsTab.setBounds (switchRow.withHeight (28));
-            browser.setBounds (panel);
-            samples.setBounds (panel);
+            popPanel.setTooltip (String ("The ") + (showingSamples ? "samples" : "plugins") + " in a window of their own");
+
+            if (samplesHere && showingSamples)  samples.setBounds (panel);
+            if (pluginsHere && ! showingSamples) browser.setBounds (panel);
         }
         else
         {
             panelArea = {};
         }
 
-        signalRow->setBounds (r.removeFromTop (132));
+        if (! isDetached (View::signal))
+        {
+            signalRow->setBounds (r.removeFromTop (132));
+            popSignal.setBounds (signalRow->getRight() - 34, signalRow->getBottom() - 34, 28, 28);
+        }
 
+        popSignal.setVisible (! isDetached (View::signal));
         statusLabel.setBounds (r.removeFromBottom (28).reduced (theme::space4, 0));
-        timeline.setBounds (r);
 
-        layoutSettings (false);
+        // The timeline away: its place says where it is, and brings it back.
+        const auto timelineHere = ! isDetached (View::timeline);
+        timelineAway.setVisible (! timelineHere);
+        timelineBack.setVisible (! timelineHere);
+        popTimeline.setVisible (timelineHere);
+
+        if (timelineHere)
+        {
+            timeline.setBounds (r);
+            popTimeline.setBounds (r.getX() + 4, r.getY() + 4, 24, 24);
+            popTimeline.toFront (false);
+        }
+        else
+        {
+            auto centre = r.withSizeKeepingCentre (360, 72);
+            timelineAway.setBounds (centre.removeFromTop (32));
+            timelineBack.setBounds (centre.removeFromTop (32).withSizeKeepingCentre (132, 30));
+        }
+
+        if (! isDetached (View::settings))
+            layoutSettings (false);
+
         layoutUpdateBanner();
         startScreen.setBounds (getLocalBounds().withTrimmedTop (ProjectTabs::height));
     }
@@ -1081,5 +1338,205 @@ namespace carthage::ui
         const auto h = updateBanner.getPreferredHeight (w);
         updateBanner.setBounds (right - w - theme::space2, getHeight() - 28 - h, w, h);
         updateBanner.toFront (false);
+    }
+
+    //==============================================================================================
+    // Views in their own windows (F21)
+    String MainComponent::nameOf (View v)
+    {
+        switch (v)
+        {
+            case View::samples:  return "Samples";
+            case View::plugins:  return "Plugins";
+            case View::timeline: return "Timeline";
+            case View::signal:   return "Signal path";
+            case View::settings: return "Settings";
+        }
+
+        return {};
+    }
+
+    Component& MainComponent::componentOf (View v)
+    {
+        switch (v)
+        {
+            case View::samples:  return samples;
+            case View::plugins:  return browser;
+            case View::timeline: return timeline;
+            case View::signal:   return *signalRow;
+            case View::settings: return settings;
+        }
+
+        return timeline;
+    }
+
+    void MainComponent::toggleDetached (View v)
+    {
+        setDetached (v, ! isDetached (v));
+    }
+
+    void MainComponent::setDetached (View v, bool detached, std::optional<Rectangle<int>> bounds)
+    {
+        auto& comp = componentOf (v);
+        const auto key = static_cast<int> (v);
+
+        if (detached)
+        {
+            if (const auto found = viewWindows.find (key); found != viewWindows.end())
+            {
+                if (bounds)
+                    found->second->setBounds (onScreen (*bounds));
+
+                found->second->toFront (true);
+                return;
+            }
+
+            if (auto* parent = comp.getParentComponent())
+                parent->removeChildComponent (&comp);
+
+            if (v == View::settings)
+            {
+                settingsOpen = true;
+                settings.refresh();
+                settings.setInWindow (true);
+            }
+
+            comp.setVisible (true);
+            auto window = std::make_unique<ViewWindow> (*this, v, comp);
+
+            // Its own size, beside the main window, on the same display, unless a layout says.
+            const auto size = v == View::timeline ? Rectangle<int> (0, 0, 1100, 520)
+                            : v == View::signal   ? Rectangle<int> (0, 0, 900, 160)
+                            : v == View::settings ? Rectangle<int> (0, 0, SettingsPanel::preferredWidth, 720)
+                                                  : Rectangle<int> (0, 0, 320, 720);
+            const auto* top = getTopLevelComponent();
+            const auto near = top != nullptr ? size.withPosition (top->getRight() - size.getWidth() / 2, top->getY() + 40) : size;
+            window->setBounds (onScreen (bounds.value_or (near)));
+            window->setVisible (true);
+            viewWindows[key] = std::move (window);
+        }
+        else
+        {
+            const auto found = viewWindows.find (key);
+
+            if (found == viewWindows.end())
+                return;
+
+            if (auto* parent = comp.getParentComponent())
+                parent->removeChildComponent (&comp);
+
+            viewWindows.erase (found);
+
+            if (v == View::settings)
+            {
+                settings.setInWindow (false);
+                settingsOpen = false;
+                addChildComponent (settings);
+            }
+            else
+            {
+                addAndMakeVisible (comp);
+            }
+        }
+
+        viewsChanged();
+    }
+
+    void MainComponent::viewsChanged()
+    {
+        startScreen.toFront (false);
+        resized();
+
+        if (! isDetached (View::settings))
+            layoutSettings (false);
+
+        commands.commandStatusChanged();
+    }
+
+    void MainComponent::defaultLayout()
+    {
+        for (auto v : views)
+            setDetached (v, false);
+
+        browserOpen = true;
+        panelShowsSamples = false;
+        settingsOpen = false;
+        setPanelWidth (PluginBrowser::preferredWidth);
+
+        if (auto* top = getTopLevelComponent())
+            top->setBounds (onScreen (Rectangle<int> (1280, 780 + ProjectTabs::height)
+                                          .withCentre (Desktop::getInstance().getDisplays().getPrimaryDisplay()->userBounds.toNearestInt().getCentre())));
+
+        showPanel (false, false);
+        layoutSettings (false);
+    }
+
+    ValueTree MainComponent::getLayout() const
+    {
+        ValueTree t ("LAYOUT");
+
+        if (const auto* top = getTopLevelComponent())
+            t.setProperty ("main", top->getBounds().toString(), nullptr);
+
+        t.setProperty ("panelOpen", browserOpen, nullptr);
+        t.setProperty ("panelShowsSamples", panelShowsSamples, nullptr);
+        t.setProperty ("panelWidth", panelWidth, nullptr);
+        t.setProperty ("settingsOpen", settingsOpen, nullptr);
+
+        for (auto v : views)
+        {
+            ValueTree view ("VIEW");
+            view.setProperty ("id", static_cast<int> (v), nullptr);
+
+            if (const auto found = viewWindows.find (static_cast<int> (v)); found != viewWindows.end())
+            {
+                view.setProperty ("detached", true, nullptr);
+                view.setProperty ("bounds", found->second->getBounds().toString(), nullptr);
+            }
+
+            t.appendChild (view, nullptr);
+        }
+
+        if (pluginWindow != nullptr)
+            t.setProperty ("plugin", pluginWindow->getBounds().toString(), nullptr);
+
+        return t;
+    }
+
+    void MainComponent::applyLayout (const ValueTree& t)
+    {
+        if (! t.hasType ("LAYOUT"))
+            return;
+
+        if (auto* top = getTopLevelComponent(); top != nullptr && t.hasProperty ("main"))
+            top->setBounds (onScreen (Rectangle<int>::fromString (t["main"].toString())));
+
+        for (auto view : t)
+        {
+            const auto v = static_cast<View> (static_cast<int> (view["id"]));
+
+            if (static_cast<bool> (view["detached"]))
+                setDetached (v, true, Rectangle<int>::fromString (view["bounds"].toString()));
+            else
+                setDetached (v, false);
+        }
+
+        browserOpen = static_cast<bool> (t.getProperty ("panelOpen", true));
+        setPanelWidth (static_cast<int> (t.getProperty ("panelWidth", PluginBrowser::preferredWidth)));
+
+        if (! isDetached (View::settings))
+            settingsOpen = static_cast<bool> (t.getProperty ("settingsOpen", false));
+
+        if (t.hasProperty ("plugin"))
+        {
+            pluginWindowBounds = onScreen (Rectangle<int>::fromString (t["plugin"].toString()));
+
+            if (pluginWindow != nullptr)
+                pluginWindow->setBounds (*pluginWindowBounds);
+        }
+
+        showPanel (static_cast<bool> (t.getProperty ("panelShowsSamples", false)), false);
+        browserOpen = static_cast<bool> (t.getProperty ("panelOpen", true));
+        viewsChanged();
     }
 }

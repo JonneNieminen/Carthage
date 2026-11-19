@@ -111,6 +111,32 @@ namespace carthage::ui
                 }
                 break;
             }
+            case Glyph::popOut:
+            case Glyph::popIn:
+            {
+                // A window (a rounded square open at its top-right corner) and an arrow leaving it,
+                // or coming into it: "in its own window" and "back".
+                const auto h = s * 0.42f;
+                Path frame;
+                frame.startNewSubPath (c.x + h * 0.15f, c.y - h);
+                frame.lineTo (c.x - h, c.y - h);
+                frame.lineTo (c.x - h, c.y + h);
+                frame.lineTo (c.x + h, c.y + h);
+                frame.lineTo (c.x + h, c.y - h * 0.15f);
+                g.strokePath (frame, roundStroke);
+
+                const bool out = glyph == Glyph::popOut;
+                const Point<float> from = out ? Point<float> (c.x, c.y) : Point<float> (c.x + h * 1.05f, c.y - h * 1.05f);
+                const Point<float> to = out ? Point<float> (c.x + h * 1.05f, c.y - h * 1.05f) : Point<float> (c.x, c.y);
+                Path arrow;
+                arrow.startNewSubPath (from);
+                arrow.lineTo (to);
+                arrow.startNewSubPath (to.x + (out ? -h * 0.55f : h * 0.55f), to.y);
+                arrow.lineTo (to);
+                arrow.lineTo (to.x, to.y + (out ? h * 0.55f : -h * 0.55f));
+                g.strokePath (arrow, roundStroke);
+                break;
+            }
             case Glyph::close:
             {
                 const auto h = s * 0.45f;

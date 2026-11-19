@@ -23,9 +23,9 @@ namespace carthage::app
         StringArray getMenuBarNames() override
         {
            #if JUCE_MAC
-            return { "File", "Transport", "Input", "Plugin", "Edit", "Tools", "Window" };
+            return { "File", "Transport", "Input", "Plugin", "Edit", "Tools", "Layouts", "Window" };
            #else
-            return { "File", "Transport", "Input", "Plugin", "Edit", "Tools", "Window", "Help" };   // macOS has the app menu for Help's item
+            return { "File", "Transport", "Input", "Plugin", "Edit", "Tools", "Layouts", "Window", "Help" };   // macOS has the app menu for Help's item
            #endif
         }
 
@@ -67,6 +67,8 @@ namespace carthage::app
                     m.addCommandItem (&commands, commands::choosePlugin);
                     m.addCommandItem (&commands, commands::openPluginEditor);
                     m.addCommandItem (&commands, commands::bypassPlugin);
+                    m.addSeparator();
+                    m.addCommandItem (&commands, commands::keepPluginOnTop);
                     break;
                 case 4:
                     for (auto id : { commands::undo, commands::redo })
@@ -87,6 +89,31 @@ namespace carthage::app
                         m.addCommandItem (&commands, id);
                     break;
                 case 6:
+                {
+                    // Layouts (F21): the slots Settings offers, saving into them, the default, and
+                    // which views are in windows of their own.
+                    const auto count = slots ? slots() : 4;
+
+                    for (int i = 0; i < count; ++i)
+                        m.addCommandItem (&commands, commands::recallLayoutFirst + i);
+
+                    PopupMenu save;
+                    for (int i = 0; i < count; ++i)
+                        save.addCommandItem (&commands, commands::saveLayoutFirst + i);
+
+                    m.addSubMenu ("Save layout as", save);
+                    m.addSeparator();
+                    m.addCommandItem (&commands, commands::defaultLayout);
+                    m.addSeparator();
+
+                    for (auto id : { commands::windowSamples, commands::windowPlugins, commands::windowTimeline,
+                                     commands::windowSignal, commands::windowSettings })
+                        m.addCommandItem (&commands, id);
+                    break;
+                }
+                case 7:
+                    m.addCommandItem (&commands, commands::commandPalette);
+                    m.addSeparator();
                    #if JUCE_MAC
                     m.addCommandItem (&commands, commands::minimiseWindow);
                    #endif
@@ -98,7 +125,7 @@ namespace carthage::app
                     m.addCommandItem (&commands, commands::nextProject);
                     m.addCommandItem (&commands, commands::previousProject);
                     break;
-                case 7:
+                case 8:
                     m.addCommandItem (&commands, commands::checkForUpdates);
                     break;
                 default:
@@ -109,6 +136,9 @@ namespace carthage::app
         }
 
         void menuItemSelected (int, int) override {}
+
+        /** How many layout slots Settings offers (F21). */
+        std::function<int()> slots;
 
         /** The app menu on macOS: settings live there, as on every Mac app. */
         PopupMenu appleMenu()
@@ -221,6 +251,7 @@ namespace carthage::app
 
             menuBar = std::make_unique<MenuBar> (commands);
             auto& content = window->showSession (*session, commands);
+            menuBar->slots = [this] { auto* c = this->content(); return c != nullptr ? c->layoutSlots() : 4; };
             commands.registerAllCommandsForTarget (this);   // check for updates, quit
             restoreShortcuts();
 

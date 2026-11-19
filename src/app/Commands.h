@@ -44,7 +44,17 @@ namespace carthage::app
             collectSamples,
             sampleBrowser,
             startScreen, saveAsTemplate,
+
+            // Views in their own windows and window layouts (F21)
+            windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings,
+            defaultLayout, commandPalette, keepPluginOnTop,
+            recallLayoutFirst,                          // recallLayoutFirst + 0..8: layouts 1-9
+            saveLayoutFirst = recallLayoutFirst + 9,    // saveLayoutFirst + 0..8
+            afterLayouts = saveLayoutFirst + 9,
         };
+
+        /** Layout slots there can be; Settings chooses how many are offered (F21). */
+        constexpr int maxLayoutSlots = 9;
 
         /** The tool commands, in Timeline::Tool order. */
         inline juce::Array<juce::CommandID> tools()
@@ -59,7 +69,18 @@ namespace carthage::app
                      toolSelect, toolDraw, toolPaint, toolSlice, toolDelete, toolMute, toolZoom, toolStretch,
                      undo, redo, toggleGrid, splitAtPlayhead, duplicateClips, deleteClips,
                      nudgeLeft, nudgeRight, addMarker, loopSelection, keyboardShortcuts,
-                     copyClips, cutClips, pasteClips, sampleBrowser };
+                     copyClips, cutClips, pasteClips, sampleBrowser,
+                     windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings,
+                     defaultLayout, commandPalette, keepPluginOnTop };
+        }
+
+        /** The layout commands, recall then save, slot 1 first. */
+        inline juce::Array<juce::CommandID> layouts()
+        {
+            juce::Array<juce::CommandID> ids;
+            for (int i = 0; i < maxLayoutSlots; ++i) ids.add (recallLayoutFirst + i);
+            for (int i = 0; i < maxLayoutSlots; ++i) ids.add (saveLayoutFirst + i);
+            return ids;
         }
 
         /** Commands the application itself performs, whatever window is in front. */
@@ -169,6 +190,14 @@ namespace carthage::app
                     info.addDefaultKeypress (KP::F11Key, 0);
                    #endif
                     break;
+                case windowSamples:   info.setInfo ("Samples in its own window", "Move the sample browser to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('s', primary | juce::ModifierKeys::altModifier); break;
+                case windowPlugins:   info.setInfo ("Plugins in its own window", "Move the plugin browser to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('p', primary | juce::ModifierKeys::altModifier); break;
+                case windowTimeline:  info.setInfo ("Timeline in its own window", "Move the timeline to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('t', primary | juce::ModifierKeys::altModifier); break;
+                case windowSignal:    info.setInfo ("Signal path in its own window", "Move the input, plugin and output row to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('i', primary | juce::ModifierKeys::altModifier); break;
+                case windowSettings:  info.setInfo ("Settings in its own window", "Move Settings to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress (',', primary | juce::ModifierKeys::altModifier); break;
+                case defaultLayout:   info.setInfo ("Default layout", "Every view back in the main window, as Carthage starts", "Layouts", 0); info.addDefaultKeypress ('0', primary | juce::ModifierKeys::altModifier); break;
+                case commandPalette:  info.setInfo (juce::String::fromUTF8 ("Find a command\xe2\x80\xa6"), "Type to find any command and run it", "Window", 0); info.addDefaultKeypress ('k', primary); break;
+                case keepPluginOnTop: info.setInfo ("Keep plugin windows on top", "Plugin windows stay above Carthage's own windows", "Plugin", 0); break;
                 case startScreen:
                     info.setInfo ("Start screen", "Recent projects and templates", "File", 0);
                     break;
@@ -196,6 +225,18 @@ namespace carthage::app
                     info.setInfo ("Measure latency", "Measure the round trip through a cable from an output to an input", "Settings", 0);
                     break;
                 default:
+                    if (id >= recallLayoutFirst && id < saveLayoutFirst)
+                    {
+                        const auto n = id - recallLayoutFirst + 1;
+                        info.setInfo ("Layout " + juce::String (n), "Put the windows where layout " + juce::String (n) + " has them", "Layouts", 0);
+                        info.addDefaultKeypress ('0' + n, primary | juce::ModifierKeys::altModifier);
+                    }
+                    else if (id >= saveLayoutFirst && id < afterLayouts)
+                    {
+                        const auto n = id - saveLayoutFirst + 1;
+                        info.setInfo ("Save as layout " + juce::String (n), "Keep where every window is now as layout " + juce::String (n), "Layouts", 0);
+                        info.addDefaultKeypress ('0' + n, primary | juce::ModifierKeys::altModifier | juce::ModifierKeys::shiftModifier);
+                    }
                     break;
             }
         }
@@ -205,8 +246,9 @@ namespace carthage::app
         {
             auto ids = all();
             ids.addArray (application());
+            ids.addArray (layouts());
 
-            const juce::StringArray order { "File", "Transport", "Input", "Plugin", "Edit", "Tools", "Window", "Settings", "Carthage" };
+            const juce::StringArray order { "File", "Transport", "Input", "Plugin", "Edit", "Tools", "Layouts", "Window", "Settings", "Carthage" };
             const auto rank = [&] (juce::CommandID id)
             {
                 juce::ApplicationCommandInfo info (id);

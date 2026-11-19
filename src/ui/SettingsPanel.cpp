@@ -24,7 +24,7 @@ namespace carthage::ui
         title.setText ("Settings", dontSendNotification);
 
         for (auto [label, text] : { std::pair { &interfaceHeading, "Interface" }, { &recordingHeading, "Recording" },
-                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" },
+                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" }, { &windowsHeading, "Windows" },
                                     { &updatesHeading, "Updates" },
                                     { &shortcutsHeading, "Keyboard shortcuts" } })
         {
@@ -62,6 +62,9 @@ namespace carthage::ui
         // The title stays put; everything below it scrolls when the window is short.
         addAndMakeVisible (title);
         addAndMakeVisible (closeButton);
+        popButton.setTooltip ("Settings in a window of its own");
+        popButton.onClick = [this] { if (onPopOut) onPopOut(); };
+        addAndMakeVisible (popButton);
         addAndMakeVisible (viewport);
         viewport.setViewedComponent (&body, false);
         viewport.setScrollBarsShown (true, false);
@@ -115,6 +118,18 @@ namespace carthage::ui
         fitLoops.setTooltip ("A loop dropped on a lane is stretched to the project's tempo, keeping its pitch, when its tempo is known. "
                              "Off: loops play as recorded.");
         fitLoops.onClick = [this] { session.setFitLoopsToTempo (fitLoops.getToggleState()); };
+
+        // Windows (F21): how many layouts the Layouts menu offers.
+        styleLabel (slotsLabel, theme::textMd, theme::muted);
+        slotsLabel.setText ("Layout slots", dontSendNotification);
+        for (int i = 1; i <= 9; ++i)
+            slots.addItem (String (i), i);
+        slots.setSelectedId (jlimit (1, 9, session.getEngine().getPropertyStorage().getPropertiesFile().getIntValue ("layoutSlots", 4)), dontSendNotification);
+        slots.setTooltip ("How many window layouts the Layouts menu keeps; Cmd+Option+1 to 9 recall them, with Shift to save");
+        slots.onChange = [this] { session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("layoutSlots", slots.getSelectedId()); };
+
+        for (auto* c : std::initializer_list<Component*> { &windowsHeading, &slotsLabel, &slots })
+            body.addAndMakeVisible (c);
 
         for (auto* c : std::initializer_list<Component*> { &browserHeading, &panelWidthLabel, &panelWidth, &textSizeLabel, &textSize, &playWhileHeld, &fitLoops })
             body.addAndMakeVisible (c);
@@ -412,6 +427,7 @@ namespace carthage::ui
         outer.removeFromTop (theme::space4);
         auto top = outer.removeFromTop (rowHeight);
         closeButton.setBounds (top.removeFromRight (rowHeight));
+        popButton.setBounds (top.removeFromRight (rowHeight));
         title.setBounds (top);
         outer.removeFromTop (theme::space1);
 
@@ -469,6 +485,9 @@ namespace carthage::ui
         copySamples.setBounds (r.removeFromTop (rowHeight));
         copySamplesHint.setBounds (r.removeFromTop (50));
 
+        heading (windowsHeading);
+        row (slotsLabel, slots);
+
         heading (browserHeading);
         row (panelWidthLabel, panelWidth);
         row (textSizeLabel, textSize);
@@ -495,5 +514,12 @@ namespace carthage::ui
         // would otherwise shrink the body, and the viewport would slide the search box down.
         body.setSize (bodyWidth, std::max (r.getY() - startY + theme::space4,
                                            shortcutsHeading.getY() - 8 + viewport.getHeight()));
+    }
+
+    void SettingsPanel::setInWindow (bool inWindow)
+    {
+        popButton.setGlyph (inWindow ? IconButton::Glyph::popIn : IconButton::Glyph::popOut);
+        popButton.setTooltip (inWindow ? "Settings back into the main window" : "Settings in a window of its own");
+        closeButton.setVisible (! inWindow);   // its window has its own close button
     }
 }

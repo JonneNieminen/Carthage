@@ -22,6 +22,10 @@ namespace carthage::ui
         void frame (int xruns, float engineCpu, engine::AudioCallback::Load);
 
         std::function<void()> onClose;
+
+        /** Into its own window and back (F21); the window shows the pop-in glyph. */
+        std::function<void()> onPopOut;
+        void setInWindow (bool);
         std::function<void()> onMeasure;
 
         /** "Receive beta updates": the app's updater owns the setting; the panel shows it. `note`
@@ -55,6 +59,8 @@ namespace carthage::ui
                     projectsHeading, copySamplesHint;
         juce::ToggleButton copySamples { "Copy samples into the project" };
         juce::ToggleButton showStart { "Show the start screen when Carthage opens" };
+        juce::Label windowsHeading, slotsLabel;
+        juce::ComboBox slots;
         juce::Label browserHeading, panelWidthLabel, textSizeLabel;
         ValueSlider panelWidth { 300.0 };   // px; double-click returns here
         juce::ComboBox textSize;
@@ -69,6 +75,7 @@ namespace carthage::ui
         juce::String unavailableNote;
         void showUpdatesHint();
         IconButton closeButton { IconButton::Glyph::close };
+        IconButton popButton { IconButton::Glyph::popOut };
 
         juce::Label inputDeviceLabel, outputDeviceLabel, rateLabel, bufferLabel, formatLabel;
         juce::ComboBox inputDevice, outputDevice, rate, buffer, format;
