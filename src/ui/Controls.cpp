@@ -153,7 +153,7 @@ namespace carthage::ui
         }
 
         const auto ink = chosen ? theme::onAccent : highlighted ? theme::text : theme::mist;
-        auto area = getLocalBounds().reduced (theme::space1 + 2, 0);
+        auto area = getLocalBounds().reduced (theme::space1, 0);
 
         // The icon on the left, the key on the right: the key is how the tool is picked.
         auto icon = toolGlyph (glyph);

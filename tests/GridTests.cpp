@@ -1,4 +1,5 @@
 #include <engine/time/Grid.h>
+#include <engine/time/TapTempo.h>
 
 using namespace carthage::time;
 
@@ -87,3 +88,52 @@ public:
 };
 
 static GridTests gridTests;
+
+class TapTempoTests final : public juce::UnitTest
+{
+public:
+    TapTempoTests() : juce::UnitTest ("Tap tempo", "time") {}
+
+    void runTest() override
+    {
+        using carthage::time::TapTempo;
+
+        beginTest ("Two taps give a tempo; steady taps give their tempo");
+        {
+            TapTempo t;
+            expect (! t.tap (10.0).has_value(), "one tap is not a tempo");
+            expectWithinAbsoluteError (t.tap (10.5).value_or (0.0), 120.0, 1.0e-9);
+
+            for (int i = 2; i < 8; ++i)
+                expectWithinAbsoluteError (t.tap (10.0 + i * 0.5).value_or (0.0), 120.0, 1.0e-9);
+        }
+
+        beginTest ("Uneven taps average out");
+        {
+            TapTempo t;
+            t.tap (0.0);
+            t.tap (0.48);
+            const auto bpm = t.tap (1.0);   // 0.48 and 0.52: a mean of 0.5 s
+            expectWithinAbsoluteError (bpm.value_or (0.0), 120.0, 1.0e-9);
+        }
+
+        beginTest ("A pause starts over; a change of rhythm follows the new one at once");
+        {
+            TapTempo t;
+            t.tap (0.0);
+            t.tap (0.5);
+            expect (! t.tap (5.0).has_value(), "after a pause, the first tap is a new start");
+            expectWithinAbsoluteError (t.tap (6.0).value_or (0.0), 60.0, 1.0e-9);
+            expectWithinAbsoluteError (t.tap (6.4).value_or (0.0), 150.0, 1.0e-9);   // 1.0 then 0.4: out of rhythm
+        }
+
+        beginTest ("The tempo stays within 20 to 400 bpm");
+        {
+            TapTempo t;
+            t.tap (0.0);
+            expectWithinAbsoluteError (t.tap (0.05).value_or (0.0), 400.0, 1.0e-9);
+        }
+    }
+};
+
+static TapTempoTests tapTempoTests;

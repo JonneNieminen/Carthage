@@ -555,6 +555,28 @@ namespace carthage::ui
             addAndMakeVisible (b);
         }
 
+        tempo.setSliderStyle (Slider::LinearBar);
+        tempo.setTextBoxStyle (Slider::TextBoxLeft, false, 76, 24);
+        tempo.setRange (time::TapTempo::minBpm, time::TapTempo::maxBpm, 0.01);
+        tempo.setNumDecimalPlacesToDisplay (2);
+        tempo.setTextValueSuffix (" bpm");
+        tempo.setSkewFactorFromMidPoint (120.0);
+        tempo.setTooltip ("The project's tempo. Drag, scroll (Shift for fine steps), or click and type; double-click returns to 120.");
+        tempo.onValueChange = [this] { setTempo (tempo.getValue()); };
+        tempo.onDragStart = [this] { session.getEdit().getUndoManager().beginNewTransaction ("Change tempo"); };
+        tapButton.setTooltip ("Tap in time, at least twice, to set the tempo");
+        tapButton.onClick = [this]
+        {
+            if (const auto bpm = tapTempo.tap (Time::getMillisecondCounterHiRes() / 1000.0))
+            {
+                session.getEdit().getUndoManager().beginNewTransaction ("Tap tempo");
+                tempo.setValue (std::round (*bpm * 10.0) / 10.0);   // to a tenth: taps are not finer
+            }
+        };
+        for (auto* comp : std::initializer_list<Component*> { &tempo, &tapButton })
+            addAndMakeVisible (comp);
+        refreshTempo();
+
         styleLabel (masterLabel, theme::textSm, theme::muted);
         masterLabel.setText ("Master", dontSendNotification);
         masterVolume.setSliderStyle (Slider::LinearHorizontal);
@@ -605,6 +627,7 @@ namespace carthage::ui
             timeline.projectChanged();
             refreshToolbar();
             refreshMasterVolume();
+            refreshTempo();
             signalRow->refreshPlugin();
             signalRow->setMessage ({}, false);
             updateTransportButtons();
@@ -967,6 +990,22 @@ namespace carthage::ui
         }), true);   // deletes the window when it closes
     }
 
+    void MainComponent::refreshTempo()
+    {
+        tempo.setValue (session.getEdit().tempoSequence.getTempo (0)->getBpm(), dontSendNotification);
+    }
+
+    void MainComponent::setTempo (double bpm)
+    {
+        auto* first = session.getEdit().tempoSequence.getTempo (0);
+
+        if (std::abs (first->getBpm() - bpm) > 1.0e-6)
+        {
+            first->setBpm (bpm);
+            timeline.gridChanged();
+        }
+    }
+
     void MainComponent::refreshMasterVolume()
     {
         if (auto master = session.getEdit().getMasterVolumePlugin())
@@ -1295,11 +1334,15 @@ namespace carthage::ui
         top.removeFromLeft (theme::space1);
         toStartButton.setBounds (top.removeFromLeft (36));
         top.removeFromLeft (theme::space4);
-        timeLabel.setBounds (top.removeFromLeft (140));
+        timeLabel.setBounds (top.removeFromLeft (112));
+        top.removeFromLeft (theme::space2);
+        tempo.setBounds (top.removeFromLeft (84).withSizeKeepingCentre (84, 26));
+        top.removeFromLeft (theme::space1);
+        tapButton.setBounds (top.removeFromLeft (40).withSizeKeepingCentre (40, 26));
         top.removeFromLeft (theme::space4);
 
         masterLabel.setBounds (top.removeFromLeft (46));
-        masterVolume.setBounds (top.removeFromLeft (116).withSizeKeepingCentre (116, 24));
+        masterVolume.setBounds (top.removeFromLeft (100).withSizeKeepingCentre (100, 24));
         top.removeFromLeft (theme::space4);
 
         for (auto* b : toolButtons)
@@ -1309,9 +1352,9 @@ namespace carthage::ui
         }
 
         top.removeFromLeft (theme::space3);
-        gridMenu.setBounds (top.removeFromLeft (170).withSizeKeepingCentre (170, 28));
+        gridMenu.setBounds (top.removeFromLeft (120).withSizeKeepingCentre (120, 28));
         top.removeFromLeft (theme::space1);
-        snapButton.setBounds (top.removeFromLeft (64).withSizeKeepingCentre (64, 28));
+        snapButton.setBounds (top.removeFromLeft (56).withSizeKeepingCentre (56, 28));
 
         settingsButton.setBounds (top.removeFromRight (36));
         top.removeFromRight (theme::space4);

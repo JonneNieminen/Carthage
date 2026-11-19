@@ -1,5 +1,6 @@
 #pragma once
 
+#include <engine/time/TapTempo.h>
 #include "Controls.h"
 #include "PluginBrowser.h"
 #include "SampleBrowser.h"
@@ -129,6 +130,14 @@ namespace carthage::ui
         ValueSlider masterVolume { newProjectMasterDb };
         juce::Label masterLabel;
         void refreshMasterVolume();
+
+        // The project's tempo, beside the time (owner's list F22): drag, scroll or type it, or tap
+        // it. Double-click returns to 120.
+        ValueSlider tempo { 120.0 };
+        juce::TextButton tapButton { "Tap" };
+        time::TapTempo tapTempo;
+        void refreshTempo();
+        void setTempo (double bpm);
         void askToRenameProject();
 
         // Toolbar: the tools (icons with their keys), the grid menu and the snap toggle.
