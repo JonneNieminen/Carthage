@@ -665,7 +665,11 @@ Needs owner:  The go-ahead for phase 5 (mixer, Cmd+R export).
 
 ## Phase 5 — Mixer, insert Lines, per-channel I/O
 
-Brief features: 3, 4, 5.
+Brief features: 3, 4, 5. Built in parts (W47), each verified and reported: 5a channels, routing and
+the mixer view; 5b insert Lines and delay compensation; 5c sends, buses and Cmd+R export; 5d
+per-channel inputs, arming, monitoring, count-in, loop recording, punch; 5e presets; 5f plugins in
+their own processes; 5g CPU per plugin, stems export, the processed sound recorded beside the dry.
+Routing is per sample; channels are the engine's tracks and lanes only where clips are drawn (W47).
 
 Deliver:
 - [ ] Master pinned left, 50 channels by default; add, remove, rename, colour, reorder

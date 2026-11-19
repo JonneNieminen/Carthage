@@ -7,8 +7,10 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 
 ## Now (2026-11-19)
 
-- **Phases 1 to 4g are verified** (reports in ROADMAP). **Next: phase 5** (mixer, Cmd+R export)
-  after the owner's go-ahead. The loop region stays on the ruler only (owner, 2026-11-20).
+- **Phases 1 to 4g are verified** (reports in ROADMAP). **Phase 5 started** (owner: "Yes, start
+  phase 5"); its plan is W47 (questions page https://claude.ai/artifact/HWFLoVfJYknY5D9g7xxA8P,
+  db `answers`). Waiting on one answer: the mixer as a panel under the lanes or its own window
+  (pictures added on the page). Next: 5a, channels as Tracktion tracks, lanes as a clip property.
 - **Open:** CI's Windows job on the 4f motion code (Motion_win.cpp) had not finished when the 4f
   report was written; check `gh run list` before the next code push.
 - The owner's macOS Zoom gesture was on Cmd + scroll and swallowed Carthage's zoom; they moved it.
