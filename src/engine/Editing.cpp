@@ -177,6 +177,24 @@ namespace carthage::editing
 
     juce::Array<AudioTrack*> lanes (Edit& edit)   { return getAudioTracks (edit); }
 
+    namespace
+    {
+        const juce::Identifier notesTag ("CARTHAGENOTES"), notesText ("text");
+    }
+
+    juce::String notes (Edit& edit)
+    {
+        return edit.state.getChildWithName (notesTag)[notesText].toString();
+    }
+
+    void setNotes (Edit& edit, const juce::String& text)
+    {
+        if (text == notes (edit))
+            return;
+
+        edit.state.getOrCreateChildWithName (notesTag, nullptr).setProperty (notesText, text, nullptr);
+    }
+
     juce::String nextLaneName (Edit& edit)
     {
         std::set<int> used;

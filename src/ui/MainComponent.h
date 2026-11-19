@@ -111,6 +111,12 @@ namespace carthage::ui
 
     private:
         std::unique_ptr<juce::FileChooser> logChooser;   // Export log's Save
+
+        // Project notes (W38): a window of their own that follows the project in front.
+        class NotesWindow;
+        std::unique_ptr<NotesWindow> notesWindow;
+        void toggleNotes();
+        void refreshNotes();
         class SignalRow;
 
         engine::Session& session;

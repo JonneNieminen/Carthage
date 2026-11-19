@@ -70,6 +70,7 @@ public:
             addClip (*edit, 0, take, 0.5);
             addClip (*edit, 2, sample, 3.0);
             editing::addMarker (*edit, 8.0);
+            editing::setNotes (*edit, "Verse riff in drop D.\nTry a slower take.");
 
             info.view = juce::ValueTree ("VIEW");
             info.view.setProperty ("pixelsPerBeat", 48.0, nullptr);
@@ -98,6 +99,7 @@ public:
             expectEquals (lanes[2]->getClips().size(), 1);
             expectWithinAbsoluteError (lanes[0]->getClips()[0]->getPosition().getStart().inSeconds(), 0.5, 1.0e-9);
             expectEquals (e.getMarkerManager().getMarkers().size(), 1);
+            expectEquals (editing::notes (e), juce::String ("Verse riff in drop D.\nTry a slower take."), "the notes come back");
 
             // Recordings inside the folder are written relative to the file (W32); outside, absolute.
             expectEquals (sourceOf (*lanes[0]->getClips()[0]), juce::String ("../Recordings/Take 1.wav"));

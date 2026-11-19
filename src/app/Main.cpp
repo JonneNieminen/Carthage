@@ -45,6 +45,7 @@ namespace carthage::app
                     m.addCommandItem (&commands, commands::saveAsTemplate);
                     m.addSeparator();
                     m.addCommandItem (&commands, commands::collectSamples);
+                    m.addCommandItem (&commands, commands::projectNotes);
                     m.addSeparator();
                     m.addCommandItem (&commands, commands::startScreen);
                    #if ! JUCE_MAC

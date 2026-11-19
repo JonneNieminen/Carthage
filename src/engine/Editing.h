@@ -112,6 +112,11 @@ namespace carthage::editing
     juce::Array<tracktion::AudioTrack*> lanes (tracktion::Edit&);
     int laneOf (const tracktion::Clip&);
 
+    /** The project's notes (W38): plain text kept in the edit itself, so they are saved with the
+        project and a change to them counts as an unsaved change. Not an undo step. */
+    juce::String notes (tracktion::Edit&);
+    void setNotes (tracktion::Edit&, const juce::String&);
+
     /** "Lane N" with the lowest N no lane already uses. */
     juce::String nextLaneName (tracktion::Edit&);
 

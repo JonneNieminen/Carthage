@@ -432,6 +432,54 @@ namespace carthage::ui
     };
 
     //==============================================================================================
+    /** The front project's notes, typed straight into the project. */
+    class MainComponent::NotesWindow final : public DocumentWindow
+    {
+    public:
+        explicit NotesWindow (MainComponent& m)
+            : DocumentWindow ("Notes", theme::bg2, DocumentWindow::closeButton | DocumentWindow::minimiseButton), owner (m)
+        {
+            setUsingNativeTitleBar (true);
+            editor.setMultiLine (true, true);
+            editor.setReturnKeyStartsNewLine (true);
+            editor.setFont (theme::uiFont (theme::textMd));
+            editor.setTextToShowWhenEmpty ("Lyrics, the settings you used, what to try next. Saved with the project.", theme::faint);
+            editor.setIndents (theme::space3, theme::space3);
+            editor.onTextChange = [this] { editing::setNotes (owner.session.getEdit(), editor.getText()); };
+            editor.setSize (420, 360);
+            setContentNonOwned (&editor, true);
+            setResizable (true, false);
+            addKeyListener (owner.commands.getKeyMappings());
+        }
+
+        ~NotesWindow() override
+        {
+            removeKeyListener (owner.commands.getKeyMappings());
+            clearContentComponent();
+        }
+
+        void show()
+        {
+            refresh();
+            setVisible (true);
+            toFront (true);
+            editor.grabKeyboardFocus();
+        }
+
+        void refresh()
+        {
+            setName ("Notes: " + owner.session.getProjectName());
+            editor.setText (editing::notes (owner.session.getEdit()), false);
+        }
+
+        void closeButtonPressed() override   { setVisible (false); }
+
+    private:
+        MainComponent& owner;
+        TextEditor editor;
+    };
+
+    //==============================================================================================
     MainComponent::MainComponent (engine::Session& s, ApplicationCommandManager& c)
         : session (s), commands (c), timeline (s), settings (s, c, cmd::inMenuOrder()), browser (s), samples (s)
     {
@@ -639,6 +687,7 @@ namespace carthage::ui
             refreshToolbar();
             refreshMasterVolume();
             tempoBefore.reset();   // a change in progress belonged to the other project
+            refreshNotes();
             ++tempoChanges;
             refreshTempo();
             signalRow->refreshPlugin();
@@ -765,6 +814,26 @@ namespace carthage::ui
                 }
                 break;
         }
+    }
+
+    void MainComponent::toggleNotes()
+    {
+        if (notesWindow == nullptr)
+        {
+            notesWindow = std::make_unique<NotesWindow> (*this);
+            notesWindow->centreAroundComponent (this, 420, 360);
+        }
+
+        if (notesWindow->isVisible() && notesWindow->isActiveWindow())
+            notesWindow->setVisible (false);
+        else
+            notesWindow->show();
+    }
+
+    void MainComponent::refreshNotes()
+    {
+        if (notesWindow != nullptr)
+            notesWindow->refresh();
     }
 
     void MainComponent::exportLog()
@@ -909,6 +978,7 @@ namespace carthage::ui
             case cmd::redo:             session.getEdit().getUndoManager().redo(); commands.commandStatusChanged(); return true;
             case cmd::undoHistory:      showUndoHistory(); return true;
             case cmd::exportLog:        exportLog(); return true;
+            case cmd::projectNotes:     toggleNotes(); return true;
             case cmd::toggleGrid:       timeline.getGrid().enabled = ! timeline.getGrid().enabled; timeline.gridChanged(); refreshToolbar(); return true;
             case cmd::splitAtPlayhead:  timeline.splitAtPlayhead(); return true;
             case cmd::duplicateClips:   timeline.duplicateSelection(); return true;
