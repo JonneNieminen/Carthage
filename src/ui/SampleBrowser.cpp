@@ -64,9 +64,10 @@ namespace carthage::ui
         styleLabel (volumeLabel, theme::textSm, theme::muted);
         volumeLabel.setText ("Preview", dontSendNotification);
         volume.setSliderStyle (Slider::LinearHorizontal);
-        volume.setTextBoxStyle (Slider::NoTextBox, true, 0, 0);
+        volume.setTextBoxStyle (Slider::TextBoxRight, false, 60, 22);   // a figure to read and type (owner)
+        volume.setNumDecimalPlacesToDisplay (1);
         volume.setRange (-60.0, 6.0, 0.5);
-        volume.setPopupDisplayEnabled (true, true, this);
+        volume.setPopupDisplayEnabled (false, false, nullptr);   // the figure beside it says the value
         volume.setTextValueSuffix (" dB");
         volume.setTooltip ("How loud sounds play while you browse; the project's own level is not changed. "
                            "Double-click for the default; scroll to adjust, Shift for fine steps.");

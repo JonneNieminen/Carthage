@@ -583,7 +583,12 @@ namespace carthage::ui
                     const auto visFrom = from + (visible.getX() - waveArea.getX()) * secondsPerPixel;
                     const auto visTo = visFrom + visible.getWidth() * secondsPerPixel;
                     g.setColour (colour.withAlpha (muted ? 0.35f : 1.0f));
-                    thumb.drawChannels (g, visible.toNearestInt(), visFrom, visTo, 1.0f);
+                    // As loud as it plays: the clip's gain grows or shrinks the waveform (owner).
+                    const auto gain = juce::Decibels::decibelsToGain (wave->getGainDB());
+                    g.saveState();
+                    g.reduceClipRegion (visible.toNearestInt());
+                    thumb.drawChannels (g, visible.toNearestInt(), visFrom, visTo, gain);
+                    g.restoreState();
                 }
             }
 

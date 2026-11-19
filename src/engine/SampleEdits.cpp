@@ -79,6 +79,31 @@ namespace carthage::editing
         return name;
     }
 
+    juce::Result renameSample (const Clip& clip, const juce::String& newName)
+    {
+        const auto name = newName.trim();
+
+        if (name.isEmpty())
+            return juce::Result::fail ("A sample needs a name");
+
+        const auto same = clipsOfSample (clip);
+
+        if (name == sampleName (clip))
+            return juce::Result::ok();
+
+        for (auto* lane : lanes (clip.edit))
+            for (auto* c : lane->getClips())
+                if (! same.contains (c) && sampleName (*c) == name)
+                    return juce::Result::fail ("Another sample is called " + name);
+
+        begin (clip.edit, "Rename sample");
+
+        for (auto* c : same)
+            c->state.setProperty (sampleProp, name, &c->edit.getUndoManager());
+
+        return juce::Result::ok();
+    }
+
     SampleSound soundOf (const Clip& c)
     {
         SampleSound s;

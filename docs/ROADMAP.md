@@ -557,6 +557,7 @@ Report: _not written yet_
 Deliver (F22, W38):
 - [ ] A refinement of the whole UI: type (a bundled open-licence typeface, once the owner approves the
       choice), icons, spacing, motion that answers actions; same theme and density
+- [ ] The sample editor's layout: its buttons and sliders placed with care (owner, 4e)
 - [ ] Carried from 4d: the owner's wheel check (scroll, Shift, Cmd and Option with a mouse), and the
       longer frame hitch when playback starts (measure again; fix if it holds)
 

@@ -10,6 +10,12 @@ namespace carthage::ui
     namespace
     {
         constexpr int rowHeight = 28, labelWidth = 64, controlsWidth = 380;
+
+        /** "Key: A minor   Tempo: 120 bpm" (owner: the key clearly apart from the clip count). */
+        String factsText (const engine::SampleLibrary::Analysis& a)
+        {
+            return "Key: " + (a.key.isNotEmpty() ? a.key : String ("none found")) + (a.bpm ? "   Tempo: " + String (*a.bpm, 1) + " bpm" : String());
+        }
     }
 
     SampleEditor::SampleEditor (engine::Session& s) : session (s)
@@ -19,8 +25,29 @@ namespace carthage::ui
         setWantsKeyboardFocus (true);   // Escape and Cmd+W close it while it is in front (W42)
 
         styleLabel (name, theme::textLg, theme::text, true);
+        name.setEditable (false, true, false);   // double-click to rename the sample (owner)
+        name.setTooltip ("Double-click to rename this sample; every clip of it takes the name");
+        name.setColour (Label::textWhenEditingColourId, theme::text);
+        name.setColour (TextEditor::backgroundColourId, theme::well);
+        name.onTextChange = [this]
+        {
+            auto* c = clip();
+
+            if (c == nullptr)
+                return;
+
+            if (auto r = editing::renameSample (*c, name.getText()); r.failed())
+            {
+                if (onStatus) onStatus ("Not renamed: " + r.getErrorMessage());
+                name.setText (editing::sampleName (*c), dontSendNotification);
+            }
+            else if (onStatus)
+            {
+                onStatus ("Renamed to " + editing::sampleName (*c));
+            }
+        };
         styleLabel (shared, theme::textSm, theme::muted);
-        styleFigure (facts, theme::textSm, theme::muted);
+        styleLabel (facts, theme::textSm, theme::muted);
 
         const auto setUp = [this] (ValueSlider& slider, Label& label, const String& text, double lo, double hi, double step,
                                    const String& suffix, const String& tip)
@@ -103,7 +130,7 @@ namespace carthage::ui
 
         shapeButton.setClickingTogglesState (true);
         shapeButton.setTooltip ("Draw the sample's volume shape: click the waveform to add a point, drag a point to move it, right-click to remove it, "
-                                "drag the small handle between two points to bend the line. Every clip of the sample follows.");
+                                "drag the small handle between two points to bend the line, double-click it to straighten. Every clip of the sample follows.");
         shapeButton.onClick = [this]
         {
             shaping = shapeButton.getToggleState();
@@ -172,8 +199,7 @@ namespace carthage::ui
         if (const auto known = session.getSampleLibrary().getAnalysis (file))
         {
             bpm = known->bpm;
-            facts.setText ((known->key.isNotEmpty() ? known->key : String ("No key")) + (known->bpm ? "   " + String (*known->bpm, 1) + " bpm" : String()),
-                           dontSendNotification);
+            facts.setText (factsText (*known), dontSendNotification);
             fit.setEnabled (bpm.has_value());
             return;
         }
@@ -191,8 +217,7 @@ namespace carthage::ui
                     return;
 
                 safe->bpm = found ? found->bpm : std::nullopt;
-                safe->facts.setText (found ? (found->key.isNotEmpty() ? found->key : String ("No key")) + (found->bpm ? "   " + String (*found->bpm, 1) + " bpm" : String())
-                                           : String ("Key and tempo not found"),
+                safe->facts.setText (found ? factsText (*found) : String ("Key: none found"),
                                      dontSendNotification);
                 safe->fit.setEnabled (safe->bpm.has_value());
             });
@@ -347,6 +372,7 @@ namespace carthage::ui
     {
         grabKeyboardFocus();
         dragPoint = dragBend = -1;
+        lastDrag = e.position;
 
         if (shaping && waveArea.contains (e.getPosition()))
         {
@@ -420,14 +446,20 @@ namespace carthage::ui
 
     void SampleEditor::mouseDrag (const MouseEvent& e)
     {
+        // Shape drags move by the mouse's steps; Ctrl halves them, for fine work (owner).
+        const auto step = (e.position - lastDrag) * (e.mods.isCtrlDown() ? 0.5f : 1.0f);
+        lastDrag = e.position;
+
         if (dragPoint >= 0)
         {
             // Between its neighbours in time; the level from the height.
             auto& p = envelope[static_cast<size_t> (dragPoint)];
             const auto lo = dragPoint > 0 ? envelope[static_cast<size_t> (dragPoint) - 1].time + 0.001 : 0.0;
             const auto hi = dragPoint + 1 < static_cast<int> (envelope.size()) ? envelope[static_cast<size_t> (dragPoint) + 1].time - 0.001 : fileSeconds;
-            p.time = std::clamp (secondsAt (static_cast<float> (e.x)), lo, std::max (lo, hi));
-            const auto level = gainForY (static_cast<float> (e.y));
+            const auto secondsPerPixel = fileSeconds / std::max (1, waveArea.getWidth());
+            p.time = std::clamp (p.time + static_cast<double> (step.x) * secondsPerPixel, lo, std::max (lo, hi));
+            const auto y = pointXY (p).y + step.y;
+            const auto level = gainForY (y);
             p.gainDb = level <= 0.001f ? -60.0f : Decibels::gainToDecibels (level);
             storeEnvelope();
             return;
@@ -436,7 +468,8 @@ namespace carthage::ui
         if (dragBend >= 0)
         {
             // Up bends the line up, down bends it down.
-            envelope[static_cast<size_t> (dragBend)].bend = std::clamp (bendAtStart - static_cast<float> (e.getDistanceFromDragStartY()) / 80.0f, -1.0f, 1.0f);
+            auto& bend = envelope[static_cast<size_t> (dragBend)].bend;
+            bend = std::clamp (bend + step.y / 80.0f, -1.0f, 1.0f);
             storeEnvelope();
             return;
         }
@@ -477,6 +510,39 @@ namespace carthage::ui
         grab = Grab::none;
     }
 
+    void SampleEditor::mouseDoubleClick (const MouseEvent& e)
+    {
+        if (! shaping || ! waveArea.contains (e.getPosition()))
+            return;
+
+        // A double-click on a line's handle straightens it; on a point, the lines either side.
+        auto straighten = [this] (int segment)
+        {
+            if (segment >= 0 && segment + 1 < static_cast<int> (envelope.size()))
+                envelope[static_cast<size_t> (segment)].bend = 0.0f;
+        };
+
+        const auto handle = handleAt (e.getPosition());
+        const auto point = pointAt (e.getPosition());
+
+        if (handle < 0 && point < 0)
+            return;
+
+        beginGesture ("Straighten");
+        dragPoint = dragBend = -1;
+
+        if (handle >= 0)
+            straighten (handle);
+        else
+        {
+            straighten (point - 1);
+            straighten (point);
+        }
+
+        storeEnvelope();
+        refresh();
+    }
+
     bool SampleEditor::keyPressed (const KeyPress& k)
     {
         if (k == KeyPress::escapeKey)
@@ -502,10 +568,14 @@ namespace carthage::ui
         if (thumbnail.getTotalLength() > 0.0)
         {
             const auto s = sound();
-            // Drawn to its own loudest peak (up to 8x), so a quiet take is still readable.
-            const auto zoom = std::clamp (0.9f / std::max (0.001f, thumbnail.getApproximatePeak()), 1.0f, 8.0f);
+            // Drawn to its own loudest peak (up to 8x), so a quiet take is still readable, then
+            // grown or shrunk by the sample's gain, so the gain can be seen (owner).
+            const auto zoom = std::clamp (0.9f / std::max (0.001f, thumbnail.getApproximatePeak()), 1.0f, 8.0f) * Decibels::decibelsToGain (s.gainDb);
+            g.saveState();
+            g.reduceClipRegion (waveArea.reduced (2));
             g.setColour (theme::faint);
             thumbnail.drawChannels (g, waveArea.reduced (2), 0.0, thumbnail.getTotalLength(), zoom);
+            g.restoreState();
 
             const auto x0 = xAt (s.start), x1 = xAt (s.start + s.length);
             const auto playing = Rectangle<float> (x0, static_cast<float> (waveArea.getY()), x1 - x0, static_cast<float> (waveArea.getHeight()));
@@ -617,10 +687,14 @@ namespace carthage::ui
         shapeButton.setBounds (top.removeFromRight (104));
         top.removeFromRight (theme::space1);
         clearShape.setBounds (top.removeFromRight (104));
-        name.setBounds (top.removeFromLeft (std::min (260, top.getWidth() / 2)));
-        shared.setBounds (top.removeFromLeft (std::min (200, top.getWidth() / 2)));
-        facts.setBounds (top);
-        r.removeFromTop (theme::space3);
+        name.setBounds (top);
+
+        // How many clips share it, and its key, each on its own (owner).
+        auto info = r.removeFromTop (20);
+        shared.setBounds (info.removeFromLeft (std::min (240, info.getWidth() / 2)));
+        info.removeFromLeft (theme::space4);
+        facts.setBounds (info);
+        r.removeFromTop (theme::space2);
 
         auto controls = r.removeFromRight (controlsWidth);
         r.removeFromRight (theme::space4);

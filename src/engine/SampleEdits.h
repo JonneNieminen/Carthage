@@ -23,6 +23,10 @@ namespace carthage::editing
         "Kick (2)", "Kick (3)"… One undo step. Returns the new name. */
     juce::String makeUnique (tracktion::Clip&);
 
+    /** Renames the sample (owner, 4e): every clip of it takes the name, as one undo step. Refused,
+        changing nothing, when the name is empty or another sample has it (they would merge). */
+    juce::Result renameSample (const tracktion::Clip&, const juce::String& newName);
+
     /** The sound of a sample, as one clip of it has it. Times are seconds on the timeline. */
     struct SampleSound
     {

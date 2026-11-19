@@ -120,6 +120,17 @@ public:
             expect (curveTimes (*a).empty(), "and its plugin gone");
         }
 
+        beginTest ("Renaming a sample renames every clip of it; a name in use is refused");
+        {
+            expect (editing::renameSample (*a, "Big kick").wasOk());
+            expectEquals (editing::sampleName (*b), juce::String ("Big kick"), "every clip of it");
+            expectEquals (editing::clipsOfSample (*a).size(), 2, "still one sample");
+            expect (editing::renameSample (*a, "Snare").failed(), "the snare's name is taken");
+            expect (editing::renameSample (*a, "  ").failed(), "a blank name is refused");
+            um.undo();
+            expectEquals (editing::sampleName (*a), juce::String ("Kick"), "undone in one step");
+        }
+
         beginTest ("Make unique splits a clip off as Kick (2); its copies stay with it");
         {
             expectEquals (editing::makeUnique (*b), juce::String ("Kick (2)"));

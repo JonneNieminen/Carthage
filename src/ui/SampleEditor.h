@@ -41,6 +41,7 @@ namespace carthage::ui
         void mouseDrag (const juce::MouseEvent&) override;
         void mouseUp (const juce::MouseEvent&) override;
         void mouseMove (const juce::MouseEvent&) override;
+        void mouseDoubleClick (const juce::MouseEvent&) override;
 
     private:
         engine::Session& session;
@@ -60,12 +61,13 @@ namespace carthage::ui
         juce::TextButton fit { "Fit to tempo" }, unique { "Make unique" };
 
         // The envelope (owner): Draw shape turns the waveform's clicks into envelope editing,
-        // FL-style: click adds a point, drag moves it, right-click removes it, and the handle
-        // halfway along a line bends it.
+        // FL-style: click adds a point, drag moves it, right-click removes it, the handle halfway
+        // along a line bends it (drag up: the line bulges up), and a double-click straightens it.
         juce::TextButton shapeButton { "Draw shape" }, clearShape { "Clear shape" };
         bool shaping = false;
         std::vector<editing::EnvelopePoint> envelope;
         int dragPoint = -1, dragBend = -1;
+        juce::Point<float> lastDrag;   // drags move by steps, so Ctrl (half speed) can change mid-drag
         float bendAtStart = 0.0f;
 
         float yForGain (float gain) const;
