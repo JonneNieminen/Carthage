@@ -125,3 +125,16 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Tracktion facts found: mute/solo are outside undo; Click::setClickWaveFile is internal (set
   SettingID::clickTrackSampleBig/Small); a freshly loaded edit's changed flag clears ~200 ms later.
 
+### 2026-11-19 (phase 4d, the owner's checks)
+
+- Checks page https://claude.ai/artifact/R5jmicCHEmADsRHY994jm3 (db `results`): 20 work. Interface
+  size failed: Cmd++ did not enlarge, because + is its own key on the owner's keyboard; fixed by
+  binding '+' as well as '='. Undo history "didn't do anything": not reproduced yet; the questions
+  page asks how it was opened. The wheel check is skipped until the owner has a mouse: remind them.
+- The owner's next list (lanes add-many, Cmd-click M mutes others, lane move by drag and keys,
+  per-lane height, header/grid border drag, settings search, views palette, beat shading, a
+  softer metronome, free slice cut with indicator, tab menu Notes, Cmd+1-9 tabs, settings
+  benchmark at first launch, version pictures). Questions page
+  https://claude.ai/artifact/FbCnpQEk9EXD482AfH7Xcd (db `answers`, with metronome auditions).
+  Done already: the tab menu's Rename text, Notes in the tab menu, Option/Alt wording by platform.
+

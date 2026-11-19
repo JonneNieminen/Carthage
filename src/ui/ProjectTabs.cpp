@@ -237,7 +237,9 @@ namespace carthage::ui
         if (tab >= 0 && e.mods.isPopupMenu())
         {
             PopupMenu menu;
-            menu.addItem ("Rename…", [this, tab] { if (onRename) onRename (tab); });
+            menu.addItem (String::fromUTF8 ("Rename\xe2\x80\xa6"), [this, tab] { if (onRename) onRename (tab); });
+            menu.addItem ("Notes", [this, tab] { if (onNotes) onNotes (tab); });
+            menu.addSeparator();
             menu.addItem ("Close", [this, tab] { if (onClose) onClose (tab); });
             menu.showMenuAsync (PopupMenu::Options().withTargetComponent (this).withMousePosition());
             return;

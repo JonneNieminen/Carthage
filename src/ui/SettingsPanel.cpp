@@ -144,7 +144,7 @@ namespace carthage::ui
         uiScale.setTextValueSuffix (" %");
         uiScale.setNumDecimalPlacesToDisplay (0);
         uiScale.setChangeNotificationOnlyOnRelease (true);   // the whole window rescales: once, on release
-        uiScale.setTooltip ("Everything in Carthage larger or smaller. Cmd+= and Cmd+- step it, Cmd+0 is 100 %.");
+        uiScale.setTooltip ("Everything in Carthage larger or smaller. Cmd+plus and Cmd+minus step it, Cmd+0 is 100 %.");
         uiScale.onValueChange = [this] { if (onUiScaleChanged) onUiScaleChanged (uiScale.getValue() / 100.0); };
 
         for (auto* c : std::initializer_list<Component*> { &windowsHeading, &slotsLabel, &slots, &uiScaleLabel, &uiScale })

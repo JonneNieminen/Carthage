@@ -587,6 +587,16 @@ namespace carthage::ui
                 commands.invokeDirectly (cmd::closeProject, false);
         };
         tabs.onNew = [this] { commands.invokeDirectly (cmd::newProject, false); };
+        tabs.onNotes = [this] (int index)
+        {
+            if (session.showProject (index).wasOk())
+            {
+                if (notesWindow == nullptr || ! notesWindow->isVisible())
+                    toggleNotes();
+                else
+                    refreshNotes();
+            }
+        };
         tabs.onRename = [this] (int index)
         {
             if (session.showProject (index).failed())

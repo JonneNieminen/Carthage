@@ -22,7 +22,7 @@ namespace carthage::ui
 
         static constexpr int height = 32;
 
-        std::function<void (int)> onSelect, onClose, onRename;
+        std::function<void (int)> onSelect, onClose, onRename, onNotes;
         std::function<void()> onNew;
 
         /** The session's projects changed (added, closed, saved, edited, moved). */

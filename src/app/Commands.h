@@ -12,6 +12,15 @@ namespace carthage::app
         Tool keys E P B C D T Z S are reserved for the timeline tools (F7, phase 4). */
     namespace commands
     {
+        /** The modifier names as the platform writes them: Option and Cmd on the Mac, Alt and Ctrl on Windows. */
+       #if JUCE_MAC
+        inline constexpr const char* optionName = "Option";
+        inline constexpr const char* commandName = "Cmd";
+       #else
+        inline constexpr const char* optionName = "Alt";
+        inline constexpr const char* commandName = "Ctrl";
+       #endif
+
         enum ID : juce::CommandID
         {
             record = 0x2001,
@@ -140,13 +149,13 @@ namespace carthage::app
                     info.addDefaultKeypress (',', primary);
                     break;
                 // Tools: a tap switches; holding the key switches until it is released (F7).
-                case toolSelect:  info.setInfo ("Select", "Select, move and trim clips; drag an edge to trim, with Option/Alt to stretch, with Cmd/Ctrl to slip", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('e', 0); break;
+                case toolSelect:  info.setInfo ("Select", "Select, move and trim clips; drag an edge to trim, with " + juce::String (optionName) + " to stretch, with " + juce::String (commandName) + " to slip", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('e', 0); break;
                 case toolDraw:    info.setInfo ("Draw", "Place a copy of the last clip you used where you click", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('p', 0); break;
                 case toolPaint:   info.setInfo ("Paint", "Drag to place copies of the last clip one after another", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('b', 0); break;
                 case toolSlice:   info.setInfo ("Slice", "Click a clip to cut it in two there", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('c', 0); break;
                 case toolDelete:  info.setInfo ("Delete", "Click or drag over clips to delete them", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('d', 0); break;
                 case toolMute:    info.setInfo ("Mute", "Click or drag over clips to mute or unmute them", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('t', 0); break;
-                case toolZoom:    info.setInfo ("Zoom", "Click to zoom in, Option/Alt-click to zoom out, drag across a range to fill the view with it", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('z', 0); break;
+                case toolZoom:    info.setInfo ("Zoom", "Click to zoom in, " + juce::String (optionName) + "-click to zoom out, drag across a range to fill the view with it", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('z', 0); break;
                 case toolStretch: info.setInfo ("Stretch", "Drag a clip's edge to time-stretch it", "Tools", juce::ApplicationCommandInfo::wantsKeyUpDownCallbacks); info.addDefaultKeypress ('s', 0); break;
 
                 case undo:            info.setInfo ("Undo", "Undo the last edit", "Edit", 0); info.addDefaultKeypress ('z', primary); break;
@@ -203,14 +212,17 @@ namespace carthage::app
                 case windowSettings:  info.setInfo ("Settings in its own window", "Move Settings to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress (',', primary | juce::ModifierKeys::altModifier); break;
                 case defaultLayout:   info.setInfo ("Default layout", "Every view back in the main window, as Carthage starts", "Layouts", 0); info.addDefaultKeypress ('0', primary | juce::ModifierKeys::altModifier); break;
                 case commandPalette:  info.setInfo (juce::String::fromUTF8 ("Find a command\xe2\x80\xa6"), "Type to find any command and run it", "Window", 0); info.addDefaultKeypress ('k', primary); break;
-                case lanesTaller:     info.setInfo ("Taller lanes", "Make every lane taller (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('=', primary | juce::ModifierKeys::altModifier); break;
+                case lanesTaller:     info.setInfo ("Taller lanes", "Make every lane taller (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('+', primary | juce::ModifierKeys::altModifier); info.addDefaultKeypress ('=', primary | juce::ModifierKeys::altModifier); break;
                 case lanesShorter:    info.setInfo ("Shorter lanes", "Make every lane shorter (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('-', primary | juce::ModifierKeys::altModifier); break;
                 case restoreVersion:  info.setInfo (juce::String::fromUTF8 ("Restore a version\xe2\x80\xa6"), "Go back to how this project was at an earlier save", "File", 0); break;
                 case projectNotes:    info.setInfo ("Project notes", "Notes kept with this project: lyrics, settings you used, what to try next", "File", 0); info.addDefaultKeypress ('n', primary | juce::ModifierKeys::shiftModifier); break;
                 case exportLog:       info.setInfo (juce::String::fromUTF8 ("Export log\xe2\x80\xa6"), "Save or copy Carthage's log, to send with a problem report", "Help", 0); break;
                 case undoHistory:     info.setInfo (juce::String::fromUTF8 ("Undo history\xe2\x80\xa6"), "Every step you can undo, newest first: choose one to go back to before it", "Edit", 0); info.addDefaultKeypress ('z', primary | juce::ModifierKeys::altModifier); break;
                 case toggleMetronome: info.setInfo ("Metronome", "Hear a click on every beat while playing and recording", "Transport", 0); info.addDefaultKeypress ('k', 0); break;
-                case uiLarger:        info.setInfo ("Larger interface", "Make everything in Carthage larger, up to 150 %", "View", 0); info.addDefaultKeypress ('=', primary); break;
+                case uiLarger:        info.setInfo ("Larger interface", "Make everything in Carthage larger, up to 150 %", "View", 0);
+                                      info.addDefaultKeypress ('+', primary);   // + is its own key on many keyboards (Finnish, German…)
+                                      info.addDefaultKeypress ('=', primary);   // and shares one with = on US ones
+                                      break;
                 case uiSmaller:       info.setInfo ("Smaller interface", "Make everything in Carthage smaller, down to 75 %", "View", 0); info.addDefaultKeypress ('-', primary); break;
                 case uiActualSize:    info.setInfo ("Actual size", "Interface at 100 %", "View", 0); info.addDefaultKeypress ('0', primary); break;
                 case keepPluginOnTop: info.setInfo ("Keep plugin windows on top", "Plugin windows stay above Carthage's own windows", "Plugin", 0); break;
