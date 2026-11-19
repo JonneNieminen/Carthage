@@ -14,7 +14,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
 | 3. Plugin manager and scanning | Verified (2026-11-18) |
-| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19); 4d built and checked by the owner except the wheel (2026-11-19); next 4e (sample editor), 4f (design pass) |
+| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19); 4d done (2026-11-19, the wheel check moved to 4f); next 4e (sample editor), 4f (design pass) |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
 | 7. Help page, icon and polish | Not started |
@@ -489,7 +489,8 @@ Deliver (F22, W38, W39):
 - [x] Pictures of every window with each project version, in a Restore window (W41)
 
 Exit checks:
-- [ ] Every item exercised in the running app by the owner (all but the wheel: no mouse at hand)
+- [x] Every item exercised in the running app by the owner (the wheel check moved to 4f by the
+      owner, 2026-11-19: no mouse at hand)
 - [ ] CI runs clang-tidy, the sanitizers and RTSan on every push, and is green (the jobs run; the
       run covering the last commits was queued when this was written)
 - [ ] Frame time and RTSan unchanged from 4c (RTSan clean; frame time at playback start is worse,
@@ -526,11 +527,12 @@ Measured:     RTSan soak, 60 s, built-in mic at 48 kHz / 128, metronome and prev
               frames in a 4-second burst as playback started (worst 50 ms), against one second and
               33 ms in 4a; steady 120 Hz otherwise. Fuzzing: 584k audio and 82k project inputs clean
               (after W40). Settings test on this Mac: clean at 32 samples, recommended 64.
-Not done:     - The wheel check (owner, with a mouse).
+Not done:     - The wheel check (owner, with a mouse): moved to 4f.
               - The longer hitch when playback starts: measured once; to look into in 4f.
               - Tracktion's clip reader still has the CoreAudio format (W40, not patched).
 Decisions:    W38, W39, W40, W41.
-Needs owner:  The wheel check; then the go-ahead for 4e (the sample editor).
+Needs owner:  Nothing: the owner moved the wheel check to 4f and gave the go-ahead for 4e
+              (2026-11-19).
 
 ### Phase 4e — the sample editor
 
@@ -553,6 +555,8 @@ Report: _not written yet_
 Deliver (F22, W38):
 - [ ] A refinement of the whole UI: type (a bundled open-licence typeface, once the owner approves the
       choice), icons, spacing, motion that answers actions; same theme and density
+- [ ] Carried from 4d: the owner's wheel check (scroll, Shift, Cmd and Option with a mouse), and the
+      longer frame hitch when playback starts (measure again; fix if it holds)
 
 Exit checks:
 - [ ] Before and after snapshots of every screen; owner's approval
