@@ -32,7 +32,7 @@ namespace carthage::ui
         /** A line for the status bar ("Fitted Kick to 120 bpm"). */
         std::function<void (const juce::String&)> onStatus;
 
-        static constexpr int defaultHeight = 230, minHeight = 160, maxHeight = 520;
+        static constexpr int defaultHeight = 272, minHeight = 232, maxHeight = 520;
 
         void paint (juce::Graphics&) override;
         void resized() override;
@@ -56,6 +56,8 @@ namespace carthage::ui
         juce::Label name, shared, facts;
         ValueSlider gain { 0.0 }, pitch { 0.0 }, formant { 0.0 }, fadeIn { 0.0 }, fadeOut { 0.0 };
         juce::Label gainLabel, pitchLabel, formantLabel, fadeInLabel, fadeOutLabel;
+        juce::Label soundHeading, fadesHeading;   // the right column's two groups (4f layout)
+        IconButton playButton { IconButton::Glyph::play };
         juce::ToggleButton reverse { "Reverse" };
         juce::ComboBox fadeInShape, fadeOutShape;   // linear, convex, concave, S-curve
         juce::TextButton fit { "Fit to tempo" }, unique { "Make unique" };
@@ -81,6 +83,7 @@ namespace carthage::ui
         std::optional<double> bpm;   // the sample's own tempo, when known
 
         juce::Rectangle<int> waveArea;
+        int factsDividerX = -1;   // the line between the clip count and the key
         enum class Grab { none, start, end } grab = Grab::none;
         double grabStart = 0.0, grabLength = 0.0;
 

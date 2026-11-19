@@ -9,7 +9,7 @@ namespace carthage::ui
 
     namespace
     {
-        constexpr int rowHeight = 28, labelWidth = 64, controlsWidth = 380;
+        constexpr int rowHeight = 28, sliderRow = 24, headingHeight = 16, labelWidth = 56, controlsWidth = 380;
 
         /** "Key: A minor   Tempo: 120 bpm" (owner: the key clearly apart from the clip count). */
         String factsText (const engine::SampleLibrary::Analysis& a)
@@ -70,6 +70,23 @@ namespace carthage::ui
                "The sound's colour without its pitch: up sounds smaller and brighter, down bigger and darker.");
         setUp (fadeIn, fadeInLabel, "Fade in", 0.0, 2000.0, 1.0, " ms", "A fade at the start.");
         setUp (fadeOut, fadeOutLabel, "Fade out", 0.0, 2000.0, 1.0, " ms", "A fade at the end.");
+        fadeInLabel.setText ("In", dontSendNotification);    // under the "Fades" heading
+        fadeOutLabel.setText ("Out", dontSendNotification);
+
+        for (auto [heading, text] : { std::pair { &soundHeading, "Sound" }, { &fadesHeading, "Fades" } })
+        {
+            styleLabel (*heading, theme::textSm, theme::text, true);
+            heading->setText (text, dontSendNotification);
+            addAndMakeVisible (heading);
+        }
+
+        playButton.setTooltip ("Play the sample from where it starts. Click the waveform to play from that point.");
+        playButton.onClick = [this]
+        {
+            if (file.existsAsFile())
+                session.getPreview().play (file, sound().start);
+        };
+        addAndMakeVisible (playButton);
 
         gain.onValueChange = [this] { apply ([this] (auto& s2) { s2.gainDb = static_cast<float> (gain.getValue()); }); };
         pitch.onValueChange = [this] { apply ([this] (auto& s2) { s2.pitch = static_cast<float> (pitch.getValue()); }); };
@@ -241,6 +258,7 @@ namespace carthage::ui
         name.setText (editing::sampleName (*c), dontSendNotification);
         const auto count = editing::clipsOfSample (*c).size();
         shared.setText (count == 1 ? String ("1 clip") : String (count) + " clips share this sample", dontSendNotification);
+        resized();   // the clip count sets where the key starts
         readControls();
         repaint();
     }
@@ -569,6 +587,9 @@ namespace carthage::ui
         g.setColour (theme::line);
         g.fillRect (0, 0, getWidth(), 1);
 
+        if (factsDividerX >= 0 && facts.getText().isNotEmpty())
+            g.fillRect (factsDividerX, facts.getY() + 4, 1, facts.getHeight() - 8);
+
         // The waveform: the whole file faint, the part that plays bright, with its fades.
         g.setColour (theme::well);
         g.fillRoundedRectangle (waveArea.toFloat(), theme::radiusSm);
@@ -681,47 +702,72 @@ namespace carthage::ui
 
     void SampleEditor::resized()
     {
+        // The agreed layout (4f): the name and close across the top; the clip count and the key
+        // under it; the waveform with its tools above and its actions below; the sound and the
+        // fades in a column on the right.
         auto r = getLocalBounds().reduced (theme::space4, theme::space3);
 
         auto top = r.removeFromTop (rowHeight);
         closeButton.setBounds (top.removeFromRight (rowHeight));
         top.removeFromRight (theme::space2);
-        unique.setBounds (top.removeFromRight (110));
-        top.removeFromRight (theme::space1);
-        fit.setBounds (top.removeFromRight (110));
-        top.removeFromRight (theme::space2);
-        reverse.setBounds (top.removeFromRight (96));
-        top.removeFromRight (theme::space2);
-        shapeButton.setBounds (top.removeFromRight (104));
-        top.removeFromRight (theme::space1);
-        clearShape.setBounds (top.removeFromRight (104));
         name.setBounds (top);
 
-        // How many clips share it, and its key, each on its own (owner).
         auto info = r.removeFromTop (20);
-        shared.setBounds (info.removeFromLeft (std::min (240, info.getWidth() / 2)));
-        info.removeFromLeft (theme::space4);
+        const auto sharedWidth = GlyphArrangement::getStringWidthInt (shared.getFont(), shared.getText()) + 2;
+        shared.setBounds (info.removeFromLeft (std::min (sharedWidth, info.getWidth() / 2)));
+        info.removeFromLeft (theme::space3);
+        factsDividerX = info.getX();
+        info.removeFromLeft (theme::space3);
         facts.setBounds (info);
-        r.removeFromTop (theme::space2);
+        r.removeFromTop (theme::space3);
 
+        // The right column: Sound (gain, pitch, formant), then Fades (in and out with shapes).
         auto controls = r.removeFromRight (controlsWidth);
-        r.removeFromRight (theme::space4);
-        waveArea = r;
+        r.removeFromRight (theme::space6);
 
-        for (auto [label, slider, shape] : { std::tuple<Label*, Slider*, ComboBox*> { &gainLabel, &gain, nullptr }, { &pitchLabel, &pitch, nullptr }, { &formantLabel, &formant, nullptr },
-                                                                                        { &fadeInLabel, &fadeIn, &fadeInShape }, { &fadeOutLabel, &fadeOut, &fadeOutShape } })
+        const auto row = [&controls] (Label& label, Slider& slider, ComboBox* shape)
         {
-            auto line = controls.removeFromTop (rowHeight);
-            label->setBounds (line.removeFromLeft (labelWidth));
+            auto line = controls.removeFromTop (sliderRow);
+            label.setBounds (line.removeFromLeft (labelWidth));
 
-            if (shape != nullptr)
+            if (shape != nullptr)   // the shape next to its name, so every figure ends on one edge
             {
-                shape->setBounds (line.removeFromRight (92));
-                line.removeFromRight (theme::space1);
+                shape->setBounds (line.removeFromLeft (96));
+                line.removeFromLeft (theme::space2);
             }
 
-            slider->setBounds (line);
+            slider.setBounds (line);
             controls.removeFromTop (theme::space1);
-        }
+        };
+
+        soundHeading.setBounds (controls.removeFromTop (headingHeight));
+        controls.removeFromTop (theme::space1);
+        row (gainLabel, gain, nullptr);
+        row (pitchLabel, pitch, nullptr);
+        row (formantLabel, formant, nullptr);
+        controls.removeFromTop (theme::space2);
+        fadesHeading.setBounds (controls.removeFromTop (headingHeight));
+        controls.removeFromTop (theme::space1);
+        row (fadeInLabel, fadeIn, &fadeInShape);
+        row (fadeOutLabel, fadeOut, &fadeOutShape);
+
+        // The waveform's tools above it, its actions below it.
+        auto tools = r.removeFromTop (rowHeight);
+        playButton.setBounds (tools.removeFromLeft (rowHeight));
+        tools.removeFromLeft (theme::space2);
+        shapeButton.setBounds (tools.removeFromLeft (104));
+        tools.removeFromLeft (theme::space1);
+        clearShape.setBounds (tools.removeFromLeft (104));
+        r.removeFromTop (theme::space2);
+
+        auto actions = r.removeFromBottom (rowHeight);
+        r.removeFromBottom (theme::space2);
+        reverse.setBounds (actions.removeFromLeft (96));
+        actions.removeFromLeft (theme::space2);
+        fit.setBounds (actions.removeFromLeft (110));
+        actions.removeFromLeft (theme::space1);
+        unique.setBounds (actions.removeFromLeft (110));
+
+        waveArea = r;
     }
 }
