@@ -14,6 +14,7 @@ target_link_libraries(carthage_juce
         juce::juce_audio_processors
         juce::juce_audio_utils
         juce::juce_gui_extra
+        juce::juce_animation   # motion that answers an action (W45), synced to the display
         juce::juce_dsp
         juce::juce_osc
     PUBLIC

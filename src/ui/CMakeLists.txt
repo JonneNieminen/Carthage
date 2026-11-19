@@ -12,6 +12,8 @@ add_library(carthage_ui STATIC
     CommandPalette.cpp CommandPalette.h
     Timeline.cpp Timeline.h
     UpdateBanner.cpp UpdateBanner.h
+    Motion.h
+    $<IF:$<PLATFORM_ID:Darwin>,platform/Motion_mac.mm,platform/Motion_win.cpp>
     theme/LookAndFeel.cpp theme/LookAndFeel.h
     theme/Fonts.cpp
     theme/Theme.h)

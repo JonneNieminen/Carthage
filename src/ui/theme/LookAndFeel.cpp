@@ -103,16 +103,19 @@ namespace carthage::ui
         const Rectangle<float> track (area.getX(), area.getCentreY() - h * 0.5f, w, h);
         const bool on = b.getToggleState();
 
-        g.setColour (on ? theme::accent : (highlighted ? theme::hover : theme::card));
-        g.fillRoundedRectangle (track, h * 0.5f);
-        g.setColour (theme::lineStrong);
+        // Where the thumb is, 0 to 1: a ui::Switch sets it while it slides (W45).
+        const auto* moving = b.getProperties().getVarPointer ("switchAt");
+        const auto at = moving != nullptr ? static_cast<float> (*moving) : (on ? 1.0f : 0.0f);
+        const auto off = highlighted ? theme::hover : theme::card;
 
-        if (! on)
-            g.drawRoundedRectangle (track.reduced (0.5f), h * 0.5f, theme::stroke);
+        g.setColour (off.interpolatedWith (theme::accent, at));
+        g.fillRoundedRectangle (track, h * 0.5f);
+        g.setColour (theme::lineStrong.withMultipliedAlpha (1.0f - at));
+        g.drawRoundedRectangle (track.reduced (0.5f), h * 0.5f, theme::stroke);
 
         const auto thumb = h - 4.0f;
-        g.setColour (on ? theme::onAccent : theme::muted);
-        g.fillEllipse (on ? track.getRight() - thumb - 2.0f : track.getX() + 2.0f, track.getY() + 2.0f, thumb, thumb);
+        g.setColour (theme::muted.interpolatedWith (theme::onAccent, at));
+        g.fillEllipse (track.getX() + 2.0f + at * (w - thumb - 4.0f), track.getY() + 2.0f, thumb, thumb);
 
         if (b.hasKeyboardFocus (true))
         {

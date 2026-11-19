@@ -42,6 +42,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   its name. Settings > Browser can fit a dropped loop to the project's tempo.
 
 ### Changed
+- Switches slide, the chosen tool cross-fades and the sample editor rises into place when it
+  opens. Nothing moves during playback, and macOS Reduce motion (Windows: Animation effects off)
+  turns it all off.
 - The sample editor is laid out in groups: Play and the shape tools above the waveform, Reverse,
   Fit to tempo and Make unique below it, and Sound and Fades in a column on the right.
 - The interface is set in Barlow, with Barlow Semi Condensed for dense rows and IBM Plex Mono for

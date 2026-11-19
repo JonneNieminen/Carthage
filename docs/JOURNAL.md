@@ -7,16 +7,15 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 
 ## Now (2026-11-19)
 
-- **Phases 1 to 4c are verified** (reports in ROADMAP). **Phase 4d is in progress** (the owner said
-  "Start phase 4d"); then 4e (sample editor), 4f (design pass), phase 5 (mixer). The owner's list is
-  F22, the answers W38, the C++ rules W39 (AGENTS.md "C++ practices").
-- **4d: every deliverable is built** (ROADMAP 4d list ticked). The owner asked to keep going and
-  do one larger hands-on test run at the end. **Next: the owner's 4d checks** (a checklist of
-  every item, run in the app), then the 4d report, then 4e (sample editor). Not yet tried by the
-  owner: toolbar (icons, master level, tempo and Tap, metronome K), lanes, tab rename, the tempo
-  question, Option-scroll lane height, panel edge, UI size, Cmd+W in view windows, layout names,
-  copyable tooltips, FL switches, plugin check at first launch, metronome sounds, Export log, the
-  crash report, notes, versions, undo history.
+- **Phases 1 to 4e are verified** (reports in ROADMAP). **Phase 4f (design pass) is in progress**
+  (the owner said "Yes, start 4f"); then 4g (loop region), phase 5 (mixer, Cmd+R export). The
+  owner's choices for 4f: Barlow / Barlow Semi Condensed / IBM Plex Mono, the proposed sample
+  editor layout, motion only on actions (W45).
+- **4f so far:** fonts embedded with their licences; dense face on lane rows, Plex Mono figures in
+  value boxes; sample editor in the agreed layout; motion (switches slide, tools cross-fade, the
+  sample editor rises in and fades out, Settings slides) with Reduce motion and playback
+  respected. **Next:** measure the playback-start hitch, the owner's 4f checks (with the deferred
+  mouse-wheel check), the 4f report.
 - **Rule learnt:** run the full clang-tidy pass (AGENTS.md "Commands") before every push; CI's
   tidy job failed twice on new test files that were not re-checked.
 - **In hand, not finished:**
@@ -202,4 +201,16 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Checks page has the 4e items (e-*), including these. Next: read results, fix, 4e report.
 - Owner: 4e a pass; the rising-line bend fixed (e9648c2). 4e report written. Next: 4f after the
   owner confirms the bend and gives the go-ahead.
+
+### 2026-11-19 (phase 4f, design pass)
+
+- Owner chose on the typeface page: Barlow, Barlow Semi Condensed for dense rows, IBM Plex Mono
+  for figures; the proposed sample editor layout; motion "answers" (W45).
+- Built: fonts compiled in (`juce_add_binary_data`), OFL texts in the bundle; tokens, theme guide,
+  README and the repo art follow. Sample editor: Play + shape tools above the waveform, Reverse /
+  Fit to tempo / Make unique below, Sound and Fades on the right, figures on one edge.
+- Motion: `ui/Motion.h` (Host, allowedFor, Tween on JUCE's juce_animation, display-synced),
+  `ui/platform/Motion_mac.mm` / `Motion_win.cpp` read the system's reduce-motion setting.
+  `ui::Switch` replaces every `juce::ToggleButton`. MotionTests cover the rules.
+- An older Carthage was running when I wanted to try the motion live; I left it alone.
 

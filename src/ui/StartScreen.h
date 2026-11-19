@@ -40,7 +40,7 @@ namespace carthage::ui
         juce::File templates;
         juce::Label title, recentHeading, templatesHeading, recentEmpty, templatesHint;
         juce::TextButton openButton { juce::String::fromUTF8 ("Open\xe2\x80\xa6") }, newButton { "New project" };
-        juce::ToggleButton showAtStart { "Show this when Carthage opens" };
+        Switch showAtStart { "Show this when Carthage opens" };
         IconButton closeButton { IconButton::Glyph::close };
         juce::OwnedArray<Row> recentRows, templateRows;
         std::shared_ptr<bool> alive = std::make_shared<bool> (true);

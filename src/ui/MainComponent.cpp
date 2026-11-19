@@ -419,7 +419,7 @@ namespace carthage::ui
         Label inputHeading, outputHeading, pluginName, pluginDetail;
         ComboBox input, output;
         LevelMeter meterL, meterR;
-        ToggleButton monitor { "Hear the input" };
+        Switch monitor { "Hear the input" };
         TextButton choose { "Choose a plugin" }, open { "Open" }, bypass { "Bypass" }, remove { "Remove" };
         Rectangle<int> cardBounds;
         bool dropHover = false;
@@ -1127,18 +1127,40 @@ namespace carthage::ui
         }), true);
     }
 
+    bool MainComponent::isPlaying() const
+    {
+        return session.isPlaying();
+    }
+
     void MainComponent::openSampleEditor (tracktion::Clip& c)
     {
+        const auto opening = ! sampleEditor.isVisible();
         sampleEditor.setVisible (true);
         sampleEditorEdge.setVisible (true);
         resized();
         sampleEditor.show (c);
+
+        // Opening answers the double-click: the panel rises a little into place and fades in
+        // (W45). Showing another sample in an open editor does not move.
+        if (opening && ! isPlaying() && ! motion::reduced())
+        {
+            const auto place = sampleEditor.getBounds();
+            sampleEditor.setBounds (place.translated (0, theme::space4));
+            sampleEditor.setAlpha (0.0f);
+            Desktop::getInstance().getAnimator().animateComponent (&sampleEditor, place, 1.0f, theme::fast, false, 0.0, 0.0);
+        }
     }
 
     void MainComponent::closeSampleEditor()
     {
         if (! sampleEditor.isVisible())
             return;
+
+        auto& animator = Desktop::getInstance().getAnimator();
+        animator.cancelAnimation (&sampleEditor, true);
+
+        if (! isPlaying() && ! motion::reduced())
+            animator.fadeOut (&sampleEditor, theme::fast);   // a picture of it fades; the panel itself is hidden now
 
         sampleEditor.setVisible (false);
         sampleEditorEdge.setVisible (false);
@@ -1847,7 +1869,7 @@ namespace carthage::ui
         settings.toFront (false);
 
         // Motion answers the action and is short (design/README.md); no animation while playing.
-        if (animate && ! session.isPlaying())
+        if (animate && ! session.isPlaying() && ! motion::reduced())
         {
             settings.setBounds (settingsOpen ? hidden : shown);
             Desktop::getInstance().getAnimator().animateComponent (&settings, settingsOpen ? shown : hidden, 1.0f,

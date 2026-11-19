@@ -73,20 +73,20 @@ namespace carthage::ui
         juce::Label noMatch;
         juce::Label title, interfaceHeading, recordingHeading, latencyHeading, loadHeading, updatesHeading, updatesHint, shortcutsHeading,
                     projectsHeading, copySamplesHint;
-        juce::ToggleButton copySamples { "Copy samples into the project" };
+        Switch copySamples { "Copy samples into the project" };
         juce::Label atLaunchLabel, tempoFollowLabel, timelineHeading;
 
         juce::Label metronomeHeading, clickSoundLabel, clickLevelLabel;
         juce::ComboBox clickSound;
         ValueSlider clickLevel { 100.0 };   // %, Tracktion's own range 20-100
-        juce::ToggleButton clickAccent { "Accent the first beat of each bar" };
-        juce::ToggleButton clickWhileRecording { "Only while recording" };
+        Switch clickAccent { "Accent the first beat of each bar" };
+        Switch clickWhileRecording { "Only while recording" };
         std::unique_ptr<juce::FileChooser> clickChooser;
         void chooseOwnClick();
         juce::Label beatShadingLabel;
         juce::ComboBox beatShading;
-        juce::ToggleButton clickPlaces { "Click an empty spot to place the last clip" };
-        juce::ToggleButton rightClickDeletes { "Right-click deletes a clip" };
+        Switch clickPlaces { "Click an empty spot to place the last clip" };
+        Switch rightClickDeletes { "Right-click deletes a clip" };
         juce::ComboBox atLaunch, tempoFollow;
         juce::Label windowsHeading, slotsLabel, uiScaleLabel;
         ValueSlider uiScale { 100.0 };   // %; double-click returns here
@@ -94,13 +94,13 @@ namespace carthage::ui
         juce::Label browserHeading, panelWidthLabel, textSizeLabel;
         ValueSlider panelWidth { 300.0 };   // px; double-click returns here
         juce::ComboBox textSize;
-        juce::ToggleButton playWhileHeld { "Play sounds only while held" };
-        juce::ToggleButton fitLoops { "Fit loops to the project tempo" };
-        juce::ToggleButton checkPlugins { "Check for new plugins at every launch" };
+        Switch playWhileHeld { "Play sounds only while held" };
+        Switch fitLoops { "Fit loops to the project tempo" };
+        Switch checkPlugins { "Check for new plugins at every launch" };
         ShortcutEditor shortcuts;
         juce::Viewport viewport;
         juce::Component body;
-        juce::ToggleButton betaUpdates { "Receive beta updates" };
+        Switch betaUpdates { "Receive beta updates" };
         juce::Label versionLabel, versionValue;
         juce::TextButton checkNow { "Check now" };
         juce::String unavailableNote;
@@ -115,11 +115,11 @@ namespace carthage::ui
         juce::Label reportedLabel, reportedValue, measuredLabel, measuredValue, loopOutLabel, loopInLabel, loopHint;
         juce::ComboBox loopOut, loopIn;
         juce::TextButton measureButton { "Measure" };
-        juce::ToggleButton useMeasured { "Place takes using the measured round trip" };
+        Switch useMeasured { "Place takes using the measured round trip" };
 
         juce::Label cpuLabel, cpuValue, threadLabel, threadValue, dropoutsLabel, dropoutsValue;
         juce::TextButton resetDropouts { "Reset" };
-        juce::ToggleButton showLoad { "Show the load in the toolbar" };
+        Switch showLoad { "Show the load in the toolbar" };
         int dropoutBase = 0, lastXruns = 0;
         float threadPeakShown = 0.0f;
 

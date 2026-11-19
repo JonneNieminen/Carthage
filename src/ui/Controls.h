@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Motion.h"
 #include "theme/Theme.h"
 
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -43,7 +44,8 @@ namespace carthage::ui
         explicit ToolButton (Glyph);
 
         void setKeyText (const juce::String& k)  { keyText = k; repaint(); }
-        void setChosen (bool on)                 { chosen = on; repaint(); }
+        /** Chosen or not; a change cross-fades over theme::fast when motion is allowed (W45). */
+        void setChosen (bool on);
 
         /** In a narrow toolbar the key is left to the tooltip. */
         void setShowsKey (bool on)               { showsKey = on; repaint(); }
@@ -61,6 +63,21 @@ namespace carthage::ui
         Glyph glyph;
         juce::String keyText;
         bool chosen = false, showsKey = true;
+        float chosenAmount = 0.0f;   // 0 to 1, follows `chosen` through the cross-fade
+        motion::Tween tween { *this };
+    };
+
+    /** An on/off switch (W45): its thumb slides when it is clicked, over theme::fast, unless
+        motion is not allowed; set from the model, it jumps. Drawn by the LookAndFeel, which reads
+        where the thumb is from the "switchAt" property (0 off, 1 on). */
+    class Switch final : public juce::ToggleButton
+    {
+    public:
+        explicit Switch (const juce::String& text);
+
+    private:
+        motion::Tween tween { *this };
+        void clicked() override;
     };
 
     /** The border of a panel, to drag (owner's list F22): resize it by dragging, double-click to

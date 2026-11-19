@@ -51,7 +51,10 @@ src/
                      on Sparkle, Updater_win.cpp on WinSparkle, Updater_other.cpp)
   ui/                carthage_ui: MainComponent (transport, signal row, take lane), SettingsPanel,
                      UpdateBanner, PluginBrowser,
-    theme/           Theme.h (mirror of design/tokens.css) and the LookAndFeel
+    theme/           Theme.h (mirror of design/tokens.css), Fonts.cpp (the embedded typefaces)
+                     and the LookAndFeel
+    Motion.h         motion that answers an action: Host, allowedFor, Tween (W45)
+    platform/        the system's reduce-motion setting (Motion_mac.mm, Motion_win.cpp)
   scan/              carthage-scan
 tools/bench/         carthage-bench: latency, soak, align, takes, wgprobe, devices, plugins;
                      libcarthage_bench_workgroups counts os_workgroup_join (bench only)

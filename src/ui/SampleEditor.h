@@ -58,7 +58,7 @@ namespace carthage::ui
         juce::Label gainLabel, pitchLabel, formantLabel, fadeInLabel, fadeOutLabel;
         juce::Label soundHeading, fadesHeading;   // the right column's two groups (4f layout)
         IconButton playButton { IconButton::Glyph::play };
-        juce::ToggleButton reverse { "Reverse" };
+        Switch reverse { "Reverse" };
         juce::ComboBox fadeInShape, fadeOutShape;   // linear, convex, concave, S-curve
         juce::TextButton fit { "Fit to tempo" }, unique { "Make unique" };
 

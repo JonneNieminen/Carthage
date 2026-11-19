@@ -270,17 +270,33 @@ namespace carthage::ui
         }
     }
 
+    void ToolButton::setChosen (bool on)
+    {
+        if (on == chosen)
+            return;
+
+        chosen = on;
+        const auto from = chosenAmount, to = on ? 1.0f : 0.0f;
+        tween.start (motion::allowedFor (*this), theme::fast, [this, from, to] (float v)
+        {
+            chosenAmount = from + (to - from) * v;
+            repaint();
+        });
+    }
+
     void ToolButton::paintButton (Graphics& g, bool highlighted, bool down)
     {
         const auto r = getLocalBounds().toFloat().reduced (0.5f);
+        const auto rest = down ? theme::hover.darker (0.15f) : highlighted ? theme::hover : theme::hover.withAlpha (0.0f);
 
-        if (chosen || highlighted || down)
+        // Chosen is the accent; the change between tools cross-fades (W45).
+        if (chosenAmount > 0.0f || highlighted || down)
         {
-            g.setColour (chosen ? theme::accent : down ? theme::hover.darker (0.15f) : theme::hover);
+            g.setColour (rest.interpolatedWith (theme::accent, chosenAmount));
             g.fillRoundedRectangle (r, theme::radiusSm);
         }
 
-        const auto ink = chosen ? theme::onAccent : highlighted ? theme::text : theme::mist;
+        const auto ink = (highlighted ? theme::text : theme::mist).interpolatedWith (theme::onAccent, chosenAmount);
         auto area = getLocalBounds().reduced (theme::space1, 0);
 
         // The icon on the left, the key on the right: the key is how the tool is picked.
@@ -293,9 +309,29 @@ namespace carthage::ui
         if (! showsKey)
             return;
 
-        g.setColour (chosen ? theme::onAccent : theme::muted);
+        g.setColour (theme::muted.interpolatedWith (theme::onAccent, chosenAmount));
         g.setFont (theme::timeFont (theme::textXs));
         g.drawText (keyText, area, Justification::centredRight, false);
+    }
+
+    //==============================================================================================
+    Switch::Switch (const String& text) : ToggleButton (text) {}
+
+    void Switch::clicked()
+    {
+        // The state has already flipped; the thumb travels from where it was.
+        const auto to = getToggleState() ? 1.0f : 0.0f;
+        const auto from = 1.0f - to;
+        tween.start (motion::allowedFor (*this), theme::fast, [this, from, to] (float v)
+        {
+            if (v >= 1.0f)
+                getProperties().remove ("switchAt");   // at rest the state decides
+            else
+                getProperties().set ("switchAt", from + (to - from) * v);
+
+            repaint();
+        });
+        ToggleButton::clicked();
     }
 
     //==============================================================================================

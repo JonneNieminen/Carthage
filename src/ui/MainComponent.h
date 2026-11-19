@@ -29,11 +29,14 @@ namespace carthage::ui
         Animates only from the display's frame callback (VBlankAttachment): meters, the playhead,
         the load figure. Nothing else moves. */
     class MainComponent final : public juce::Component, public juce::ApplicationCommandTarget,
-                                public juce::DragAndDropContainer, private juce::ChangeListener
+                                public juce::DragAndDropContainer, public motion::Host, private juce::ChangeListener
     {
     public:
         MainComponent (engine::Session&, juce::ApplicationCommandManager&);
         ~MainComponent() override;
+
+        /** Controls inside move only while this is false (W45, motion::allowedFor). */
+        bool isPlaying() const override;
 
         void paint (juce::Graphics&) override;
         void resized() override;
@@ -202,7 +205,7 @@ namespace carthage::ui
         // as the person answers (W38).
         std::optional<std::vector<editing::BeatPlace>> tempoBefore;
         int tempoChanges = 0;
-        juce::ToggleButton rememberTempoFollow { "Remember this choice (Settings can change it)" };   // outlives the question's window
+        Switch rememberTempoFollow { "Remember this choice (Settings can change it)" };   // outlives the question's window
         void tempoSettled();
         void askHowClipsFollow (std::vector<editing::BeatPlace> before);
         void askToRenameProject();
