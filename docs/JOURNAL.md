@@ -200,4 +200,6 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   latency compensated; bench `clip-formant`; RTSan-clean test); lane colours (Colour submenu,
   kept in the lane); Cmd+M minimises the front window. Editor layout tidy is listed for 4f.
 - Checks page has the 4e items (e-*), including these. Next: read results, fix, 4e report.
+- Owner: 4e a pass; the rising-line bend fixed (e9648c2). 4e report written. Next: 4f after the
+  owner confirms the bend and gives the go-ahead.
 

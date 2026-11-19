@@ -14,7 +14,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
 | 3. Plugin manager and scanning | Verified (2026-11-18) |
-| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19); 4d done (2026-11-19, the wheel check moved to 4f); next 4e (sample editor), 4f (design pass), 4g (loop region) |
+| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19); 4d and 4e done (2026-11-19; the wheel check moved to 4f); next 4f (design pass), 4g (loop region) |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
 | 7. Help page, icon and polish | Not started |
@@ -536,21 +536,49 @@ Needs owner:  Nothing: the owner moved the wheel check to 4f and gave the go-ahe
 
 ### Phase 4e — the sample editor
 
-Deliver (F22, W38):
-- [ ] Double-click a clip: the sample editor with its waveform (click to play from there, as in the
+Deliver (F22, W38, W42):
+- [x] Double-click a clip: the sample editor with its waveform (click to play from there, as in the
       browser), key and tempo, gain, a volume envelope, fades, reverse, start and end, pitch,
       time-stretch and Fit to tempo
-- [ ] Edits belong to the sample: every clip of it follows; Make unique splits one off and names it
+- [x] Edits belong to the sample: every clip of it follows; Make unique splits one off and names it
       ("Kick", "Kick (2)"); key and tempo shown on every clip on the grid
-- [ ] Fit one sample to the tempo: Option while dropping, the right-click menu, the editor
-- [ ] Fade shapes (linear, convex, concave, S-curve) and a shape drawn with points, FL-style:
+- [x] Fit one sample to the tempo: Option while dropping, the right-click menu, the editor
+- [x] Fade shapes (linear, convex, concave, S-curve) and a shape drawn with points, FL-style:
       click adds a point, drag moves it, right-click removes it, a handle bends each line (owner)
+- [x] The owner's additions: rename a sample, a formant shift (W44), lane colours, the preview
+      volume figure, waveforms that follow the gain, Ctrl for fine shape drags, Cmd+M per window
 
 Exit checks:
-- [ ] An edit changes every clip of the sample and undoes in one step; Make unique leaves the others
-- [ ] Owner's checks in the running app
+- [x] An edit changes every clip of the sample and undoes in one step; Make unique leaves the others
+- [x] Owner's checks in the running app ("otherwise a pass"; the rising-line bend direction was
+      fixed after and is the one item to confirm)
 
-Report: _not written yet_
+Report:
+
+### Report — phase 4e (2026-11-19, e9648c2)
+Works:        Double-click a clip: the sample editor opens under the lanes (Escape, the clip again or
+              Cmd+W in front closes it; its border drags). The waveform plays from a click, its bright
+              part is what plays and its edges drag; it grows and shrinks with the gain. Gain, pitch,
+              formant, fades with four shapes, reverse, Fit to tempo, Make unique and a drawn shape
+              (points, bends, straighten, Ctrl for fine work) act on every clip of the sample as one
+              undo step, never on the file (W42). The sample can be renamed; its key and tempo show
+              in the editor and on every clip. Option-drop and the clip menu fit a loop to the tempo.
+              Lanes take colours; Cmd+M minimises the window in front.
+Tested:       - Owner in the running app, two rounds (2026-11-19): a pass, with the bend direction for
+                rising lines fixed after.
+              - SampleEditTests: grouping, shared edits and undo, Make unique, rename, the envelope's
+                timeline placement and following a move, fade shapes, formant; the formant plugin's
+                blocks inside a real-time scope (clean under RTSan).
+              - carthage-bench clip-envelope and clip-formant: rendered proof (unity matches no
+                envelope, silence where it drops, follows a moved clip; formant starts within 0.4 ms
+                of the plain render at the same 220 Hz, with a different colour).
+Measured:     As above. The envelope and formant run on the clip at playback; no device soak with them
+              playing yet.
+Not done:     - The editor's layout (to 4f).
+              - Rendering checks need the bench: Tracktion's renderer hangs in the headless tests.
+              - A renamed sample does not take new drops of its file (they start as the file's own).
+Decisions:    W42, W43, W44.
+Needs owner:  Confirm the rising-line bend; then the go-ahead for 4f (the design pass).
 
 ### Phase 4f — the design pass
 
