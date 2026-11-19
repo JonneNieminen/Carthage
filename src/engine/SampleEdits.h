@@ -65,6 +65,10 @@ namespace carthage::editing
         stretched, reversed, undone). Cheap when nothing changed. Not an undo step: the curve is
         worked out from the envelope, which is. */
     void syncEnvelope (tracktion::Clip&);
+
+    /** The envelope's gain (linear, 0 to 1) at `fileTime` on this clip, read from the curve that
+        plays, so the editor draws exactly what is heard; 1 with no envelope. */
+    float envelopeGainAt (tracktion::Clip&, double fileTime);
     void syncEnvelopes (tracktion::Edit&);
 
     /** Fits every clip of the sample to the project tempo (W36, fitToTempo), from `bpm`. */

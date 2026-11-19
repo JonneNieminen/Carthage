@@ -543,6 +543,8 @@ Deliver (F22, W38):
 - [ ] Edits belong to the sample: every clip of it follows; Make unique splits one off and names it
       ("Kick", "Kick (2)"); key and tempo shown on every clip on the grid
 - [ ] Fit one sample to the tempo: Option while dropping, the right-click menu, the editor
+- [ ] Fade shapes (linear, convex, concave, S-curve) and a shape drawn with points, FL-style:
+      click adds a point, drag moves it, right-click removes it, a handle bends each line (owner)
 
 Exit checks:
 - [ ] An edit changes every clip of the sample and undoes in one step; Make unique leaves the others

@@ -58,6 +58,23 @@ namespace carthage::ui
         juce::ToggleButton reverse { "Reverse" };
         juce::ComboBox fadeInShape, fadeOutShape;   // linear, convex, concave, S-curve
         juce::TextButton fit { "Fit to tempo" }, unique { "Make unique" };
+
+        // The envelope (owner): Draw shape turns the waveform's clicks into envelope editing,
+        // FL-style: click adds a point, drag moves it, right-click removes it, and the handle
+        // halfway along a line bends it.
+        juce::TextButton shapeButton { "Draw shape" }, clearShape { "Clear shape" };
+        bool shaping = false;
+        std::vector<editing::EnvelopePoint> envelope;
+        int dragPoint = -1, dragBend = -1;
+        float bendAtStart = 0.0f;
+
+        float yForGain (float gain) const;
+        float gainForY (float y) const;
+        juce::Point<float> pointXY (const editing::EnvelopePoint&) const;
+        juce::Point<float> handleXY (int segment);
+        int pointAt (juce::Point<int>) const;
+        int handleAt (juce::Point<int>);
+        void storeEnvelope();
         IconButton closeButton { IconButton::Glyph::close };
         std::optional<double> bpm;   // the sample's own tempo, when known
 

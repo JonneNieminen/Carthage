@@ -10,6 +10,7 @@
 
 #include <app/Commands.h>
 #include <engine/Session.h>
+#include <engine/SampleEdits.h>
 #include <ui/MainComponent.h>
 #include <ui/theme/LookAndFeel.h>
 
@@ -316,6 +317,23 @@ namespace
                 });
                 Thread::sleep (600);   // its waveform reads in the background
                 capture (outDir.getChildFile ("sample-editor.png"));
+
+                // With a shape drawn on it (owner, 4e): rise, a dip with a bend, fall.
+                onMessageThreadVoid ([this]
+                {
+                    if (auto* c = tracktion::getAudioTracks (session->getEdit()).getFirst()->getClips().getFirst())
+                    {
+                        const auto length = c->getPosition().getLength().inSeconds();
+                        carthage::editing::begin (session->getEdit(), "Shape");
+                        carthage::editing::setEnvelope (*c, { { 0.0, -60.0f, 0.0f }, { length * 0.1, 0.0f, 0.6f }, { length * 0.5, -12.0f, -0.6f },
+                                                              { length * 0.8, 0.0f, 0.0f }, { length, -60.0f, 0.0f } });
+                        session->getEdit().getUndoManager().dispatchPendingMessages();
+                    }
+
+                    content->projectStateChanged();   // what the app's session hook does after an edit
+                });
+                Thread::sleep (300);
+                capture (outDir.getChildFile ("sample-editor-shape.png"));
                 onMessageThreadVoid ([this] { session->setBeatShading (0); content->getTimeline().gridChanged(); });
             }
 

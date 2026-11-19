@@ -101,6 +101,25 @@ namespace carthage::ui
             }
         };
 
+        shapeButton.setClickingTogglesState (true);
+        shapeButton.setTooltip ("Draw the sample's volume shape: click the waveform to add a point, drag a point to move it, right-click to remove it, "
+                                "drag the small handle between two points to bend the line. Every clip of the sample follows.");
+        shapeButton.onClick = [this]
+        {
+            shaping = shapeButton.getToggleState();
+            clearShape.setVisible (shaping);
+            repaint();
+        };
+        clearShape.setTooltip ("Remove every point: the sample plays at its full level again");
+        clearShape.onClick = [this]
+        {
+            beginGesture ("Clear shape");
+            envelope.clear();
+            storeEnvelope();
+        };
+        addChildComponent (clearShape);
+        addAndMakeVisible (shapeButton);
+
         closeButton.setTooltip ("Close the sample editor (Escape)");
         closeButton.onClick = [this] { if (onClose) onClose(); };
 
@@ -206,6 +225,9 @@ namespace carthage::ui
         fadeIn.setValue (s.fadeIn * 1000.0, dontSendNotification);
         fadeOut.setValue (s.fadeOut * 1000.0, dontSendNotification);
         reverse.setToggleState (s.reversed, dontSendNotification);
+
+        if (auto* c = clip(); c != nullptr && dragPoint < 0 && dragBend < 0)
+            envelope = editing::envelopeOf (*c);
         fadeInShape.setSelectedId (s.fadeInShape, dontSendNotification);
         fadeOutShape.setSelectedId (s.fadeOutShape, dontSendNotification);
     }
@@ -242,6 +264,59 @@ namespace carthage::ui
         return std::clamp (static_cast<double> (t), 0.0, 1.0) * fileSeconds;
     }
 
+    float SampleEditor::yForGain (float level) const
+    {
+        const auto area = waveArea.toFloat().reduced (0.0f, 6.0f);
+        return area.getBottom() - std::clamp (level, 0.0f, 1.0f) * area.getHeight();
+    }
+
+    float SampleEditor::gainForY (float y) const
+    {
+        const auto area = waveArea.toFloat().reduced (0.0f, 6.0f);
+        return std::clamp ((area.getBottom() - y) / std::max (1.0f, area.getHeight()), 0.0f, 1.0f);
+    }
+
+    Point<float> SampleEditor::pointXY (const editing::EnvelopePoint& p) const
+    {
+        return { xAt (p.time), yForGain (p.gainDb <= -60.0f ? 0.0f : Decibels::decibelsToGain (p.gainDb)) };
+    }
+
+    Point<float> SampleEditor::handleXY (int segment)
+    {
+        // Halfway along the line in time, on the line as it plays.
+        const auto& a = envelope[static_cast<size_t> (segment)];
+        const auto& b = envelope[static_cast<size_t> (segment) + 1];
+        const auto t = (a.time + b.time) * 0.5;
+        auto* c = clip();
+        return { xAt (t), yForGain (c != nullptr ? editing::envelopeGainAt (*c, t) : 1.0f) };
+    }
+
+    int SampleEditor::pointAt (Point<int> p) const
+    {
+        for (size_t i = 0; i < envelope.size(); ++i)
+            if (pointXY (envelope[i]).getDistanceFrom (p.toFloat()) <= 7.0f)
+                return static_cast<int> (i);
+
+        return -1;
+    }
+
+    int SampleEditor::handleAt (Point<int> p)
+    {
+        for (int i = 0; i + 1 < static_cast<int> (envelope.size()); ++i)
+            if (handleXY (i).getDistanceFrom (p.toFloat()) <= 6.0f)
+                return i;
+
+        return -1;
+    }
+
+    void SampleEditor::storeEnvelope()
+    {
+        if (auto* c = clip())
+            editing::setEnvelope (*c, envelope);
+
+        repaint (waveArea);
+    }
+
     SampleEditor::Grab SampleEditor::grabAt (Point<int> p) const
     {
         if (! waveArea.contains (p))
@@ -257,6 +332,13 @@ namespace carthage::ui
 
     void SampleEditor::mouseMove (const MouseEvent& e)
     {
+        if (shaping && waveArea.contains (e.getPosition()))
+        {
+            setMouseCursor (pointAt (e.getPosition()) >= 0 ? MouseCursor::DraggingHandCursor
+                            : handleAt (e.getPosition()) >= 0 ? MouseCursor::UpDownResizeCursor : MouseCursor::CrosshairCursor);
+            return;
+        }
+
         setMouseCursor (grabAt (e.getPosition()) != Grab::none ? MouseCursor::LeftRightResizeCursor
                         : waveArea.contains (e.getPosition()) ? MouseCursor::PointingHandCursor : MouseCursor::NormalCursor);
     }
@@ -264,6 +346,62 @@ namespace carthage::ui
     void SampleEditor::mouseDown (const MouseEvent& e)
     {
         grabKeyboardFocus();
+        dragPoint = dragBend = -1;
+
+        if (shaping && waveArea.contains (e.getPosition()))
+        {
+            const auto hit = pointAt (e.getPosition());
+
+            if (e.mods.isPopupMenu())
+            {
+                if (hit >= 0)
+                {
+                    beginGesture ("Remove point");
+                    envelope.erase (envelope.begin() + hit);
+                    storeEnvelope();
+                }
+                return;
+            }
+
+            if (hit >= 0)
+            {
+                beginGesture ("Move point");
+                dragPoint = hit;
+                return;
+            }
+
+            if (const auto handle = handleAt (e.getPosition()); handle >= 0)
+            {
+                beginGesture ("Bend shape");
+                dragBend = handle;
+                bendAtStart = envelope[static_cast<size_t> (handle)].bend;
+                return;
+            }
+
+            // A new point. The first one also puts points at both ends, at full level, so the
+            // shape covers the whole sound.
+            beginGesture ("Add point");
+            const auto s = sound();
+            const auto level = gainForY (static_cast<float> (e.y));
+            const editing::EnvelopePoint added { secondsAt (static_cast<float> (e.x)), level <= 0.001f ? -60.0f : Decibels::gainToDecibels (level), 0.0f };
+
+            if (envelope.empty())
+            {
+                envelope.push_back ({ s.start, 0.0f, 0.0f });
+                envelope.push_back ({ s.start + s.length, 0.0f, 0.0f });
+            }
+
+            envelope.push_back (added);
+            std::sort (envelope.begin(), envelope.end(), [] (const auto& a, const auto& b) { return a.time < b.time; });
+
+            for (size_t i = 0; i < envelope.size(); ++i)
+                if (std::abs (envelope[i].time - added.time) < 1.0e-9)
+                    dragPoint = static_cast<int> (i);
+
+            storeEnvelope();
+            return;
+        }
+
         grab = grabAt (e.getPosition());
 
         if (grab != Grab::none)
@@ -282,6 +420,27 @@ namespace carthage::ui
 
     void SampleEditor::mouseDrag (const MouseEvent& e)
     {
+        if (dragPoint >= 0)
+        {
+            // Between its neighbours in time; the level from the height.
+            auto& p = envelope[static_cast<size_t> (dragPoint)];
+            const auto lo = dragPoint > 0 ? envelope[static_cast<size_t> (dragPoint) - 1].time + 0.001 : 0.0;
+            const auto hi = dragPoint + 1 < static_cast<int> (envelope.size()) ? envelope[static_cast<size_t> (dragPoint) + 1].time - 0.001 : fileSeconds;
+            p.time = std::clamp (secondsAt (static_cast<float> (e.x)), lo, std::max (lo, hi));
+            const auto level = gainForY (static_cast<float> (e.y));
+            p.gainDb = level <= 0.001f ? -60.0f : Decibels::gainToDecibels (level);
+            storeEnvelope();
+            return;
+        }
+
+        if (dragBend >= 0)
+        {
+            // Up bends the line up, down bends it down.
+            envelope[static_cast<size_t> (dragBend)].bend = std::clamp (bendAtStart - static_cast<float> (e.getDistanceFromDragStartY()) / 80.0f, -1.0f, 1.0f);
+            storeEnvelope();
+            return;
+        }
+
         if (grab == Grab::none)
             return;
 
@@ -305,6 +464,13 @@ namespace carthage::ui
 
     void SampleEditor::mouseUp (const MouseEvent&)
     {
+        if (dragPoint >= 0 || dragBend >= 0)
+        {
+            dragPoint = dragBend = -1;
+            refresh();
+            return;
+        }
+
         if (grab != Grab::none)
             refresh();
 
@@ -376,6 +542,49 @@ namespace carthage::ui
             g.setColour (theme::accent.withAlpha (0.6f));
             g.strokePath (fades, PathStrokeType (1.25f));
 
+            // The envelope as it plays: read from the clip's own curve, so bends are drawn true.
+            if (! envelope.empty())
+            {
+                if (auto* c = clip())
+                {
+                    Path line;
+                    const auto from = waveArea.getX(), to = waveArea.getRight();
+
+                    for (int x = from; x <= to; x += 2)
+                    {
+                        const Point<float> p (static_cast<float> (x), yForGain (editing::envelopeGainAt (*c, secondsAt (static_cast<float> (x)))));
+                        if (x == from) line.startNewSubPath (p); else line.lineTo (p);
+                    }
+
+                    g.setColour (shaping ? theme::warn : theme::warn.withAlpha (0.45f));
+                    g.strokePath (line, PathStrokeType (shaping ? 2.0f : 1.25f));
+
+                    if (shaping)
+                    {
+                        for (const auto& p : envelope)
+                        {
+                            const auto at = pointXY (p);
+                            g.setColour (theme::bg2);
+                            g.fillEllipse (Rectangle<float> (9.0f, 9.0f).withCentre (at));
+                            g.setColour (theme::warn);
+                            g.drawEllipse (Rectangle<float> (9.0f, 9.0f).withCentre (at), 2.0f);
+                        }
+
+                        for (int i = 0; i + 1 < static_cast<int> (envelope.size()); ++i)
+                        {
+                            g.setColour (theme::warn.withAlpha (0.7f));
+                            g.fillEllipse (Rectangle<float> (6.0f, 6.0f).withCentre (handleXY (i)));
+                        }
+                    }
+                }
+            }
+            else if (shaping)
+            {
+                g.setColour (theme::warn);
+                g.setFont (theme::uiFont (theme::textSm, true));
+                g.drawText ("Click to add the first point", waveArea.reduced (theme::space2), Justification::topLeft, false);
+            }
+
             if (s.reversed)
             {
                 g.setColour (theme::accentText);
@@ -404,6 +613,10 @@ namespace carthage::ui
         fit.setBounds (top.removeFromRight (110));
         top.removeFromRight (theme::space2);
         reverse.setBounds (top.removeFromRight (96));
+        top.removeFromRight (theme::space2);
+        shapeButton.setBounds (top.removeFromRight (104));
+        top.removeFromRight (theme::space1);
+        clearShape.setBounds (top.removeFromRight (104));
         name.setBounds (top.removeFromLeft (std::min (260, top.getWidth() / 2)));
         shared.setBounds (top.removeFromLeft (std::min (200, top.getWidth() / 2)));
         facts.setBounds (top);

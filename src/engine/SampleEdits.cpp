@@ -225,6 +225,22 @@ namespace carthage::editing
         }
     }
 
+    float envelopeGainAt (Clip& c, double fileTime)
+    {
+        auto* audio = dynamic_cast<AudioClipBase*> (&c);
+        auto* plugin = envelopePlugin (c);
+
+        if (audio == nullptr || plugin == nullptr || plugin->volParam->getCurve().getNumPoints() == 0)
+            return 1.0f;
+
+        const auto pos = c.getPosition();
+        const auto speed = std::max (0.0001, c.getSpeedRatio());
+        const auto inFile = audio->getIsReversed() ? audio->getWaveInfo().getLengthInSeconds() - fileTime : fileTime;
+        const auto at = pos.getStart().inSeconds() + (inFile - pos.getOffset().inSeconds() * speed) / speed;
+        const auto position = plugin->volParam->getCurve().getValueAt (TimePosition::fromSeconds (at), plugin->volParam->getCurrentBaseValue());
+        return position <= 0.0f ? 0.0f : juce::Decibels::decibelsToGain (volumeFaderPositionToDB (position));
+    }
+
     void syncEnvelopes (Edit& edit)
     {
         for (auto* lane : lanes (edit))
