@@ -92,7 +92,7 @@ namespace carthage::ui
     public:
         explicit Headers (Timeline& t) : timeline (t)
         {
-            nameEditor.setFont (theme::uiFont (theme::textMd, true));
+            nameEditor.setFont (theme::denseFont (theme::textMd, true));
             nameEditor.setJustification (Justification::centredLeft);
             nameEditor.setIndents (4, 0);
             nameEditor.onReturnKey = [this] { finishRename (true); };
@@ -134,7 +134,7 @@ namespace carthage::ui
                 if (! (renaming == lane->itemID && nameEditor.isVisible()))
                 {
                     g.setColour (lane->isMuted (false) ? theme::muted : theme::text);
-                    g.setFont (theme::uiFont (theme::textMd, true));
+                    g.setFont (theme::denseFont (theme::textMd, true));
                     g.drawText (lane->getName(), parts.name, Justification::centredLeft, true);
                 }
 
@@ -145,7 +145,7 @@ namespace carthage::ui
                     continue;   // short lanes show the name only
 
                 g.setColour (theme::muted);
-                g.setFont (theme::uiFont (theme::textSm));
+                g.setFont (theme::denseFont (theme::textSm));
                 const auto count = lane->getClips().size();
                 const auto recordsHere = lane == &timeline.session.getTrack();
                 auto detail = count == 0 ? String ("Empty") : String (count) + (count == 1 ? " clip" : " clips");
@@ -633,7 +633,7 @@ namespace carthage::ui
                 }
 
                 g.setColour (muted ? theme::muted : theme::text);
-                g.setFont (theme::uiFont (theme::textXs, true));
+                g.setFont (theme::denseFont (theme::textXs, true));
                 g.drawText (c.getName(), row, Justification::centredLeft, true);
             }
         }
@@ -1294,7 +1294,7 @@ namespace carthage::ui
                     g.fillRoundedRectangle (ghost, theme::radiusXs);
                     g.setColour (theme::accent);
                     g.drawRoundedRectangle (ghost.reduced (0.5f), theme::radiusXs, 1.5f);
-                    g.setFont (theme::uiFont (theme::textXs, true));
+                    g.setFont (theme::denseFont (theme::textXs, true));
                     g.drawText (dropping[static_cast<int> (i)].getFileNameWithoutExtension(), ghost.reduced (6.0f, 2.0f).withHeight (14.0f),
                                 Justification::centredLeft, true);
                     start = end;
@@ -1943,7 +1943,7 @@ namespace carthage::ui
         int widest = 0;
 
         for (auto* t : laneTracks())
-            widest = std::max (widest, GlyphArrangement::getStringWidthInt (theme::uiFont (theme::textMd, true), t->getName()));
+            widest = std::max (widest, GlyphArrangement::getStringWidthInt (theme::denseFont (theme::textMd, true), t->getName()));
 
         return widest + 2 * theme::space3 + 4 + theme::space2 + 2 * 20 + 2 * theme::space1 + 2;
     }

@@ -65,6 +65,13 @@ namespace carthage::ui
     Font LookAndFeel::getLabelFont (Label& l)               { return l.getFont(); }
     Font LookAndFeel::getPopupMenuFont()                    { return theme::uiFont(); }
 
+    Label* LookAndFeel::createSliderTextBox (Slider& slider)
+    {
+        auto* box = LookAndFeel_V4::createSliderTextBox (slider);   // JUCE's Slider owns it
+        box->setFont (theme::timeFont (theme::textSm));
+        return box;
+    }
+
     void LookAndFeel::drawButtonBackground (Graphics& g, Button& b, const Colour& background, bool highlighted, bool down)
     {
         auto r = b.getLocalBounds().toFloat().reduced (0.5f);

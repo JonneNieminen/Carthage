@@ -18,6 +18,9 @@ namespace carthage::ui
         juce::Font getLabelFont (juce::Label&) override;
         juce::Font getPopupMenuFont() override;
 
+        /** A slider's value box shows a figure: set in the time face so it does not jitter as it changes. */
+        juce::Label* createSliderTextBox (juce::Slider&) override;
+
         void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour& background,
                                    bool highlighted, bool down) override;
         void drawToggleButton (juce::Graphics&, juce::ToggleButton&, bool highlighted, bool down) override;
