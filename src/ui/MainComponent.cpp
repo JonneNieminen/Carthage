@@ -1741,6 +1741,19 @@ namespace carthage::ui
             return true;
         }
 
+        // The notes and the versions close by themselves; the notes are already in the project.
+        if (notesWindow != nullptr && static_cast<Component*> (notesWindow.get()) == front)
+        {
+            notesWindow->setVisible (false);
+            return true;
+        }
+
+        if (versionsWindow != nullptr && static_cast<Component*> (versionsWindow.get()) == front)
+        {
+            versionsWindow->setVisible (false);
+            return true;
+        }
+
         return false;
     }
 

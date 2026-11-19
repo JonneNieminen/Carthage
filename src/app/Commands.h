@@ -192,7 +192,7 @@ namespace carthage::app
                 case cutClips:        info.setInfo ("Cut", "Copy the selected clips and remove them", "Edit", 0); info.addDefaultKeypress ('x', primary); break;
                 case pasteClips:      info.setInfo ("Paste", "Paste the copied clips at the playhead, on the lanes they came from", "Edit", 0); info.addDefaultKeypress ('v', primary); break;
                 case duplicateClips:  info.setInfo ("Duplicate", "Copy the selected clips right after themselves", "Edit", 0); info.addDefaultKeypress ('d', primary); break;
-                case deleteClips:     info.setInfo ("Delete clips", "Delete the selected clips", "Edit", 0); info.addDefaultKeypress (KP::deleteKey, 0); info.addDefaultKeypress (KP::backspaceKey, 0); break;
+                case deleteClips:     info.setInfo ("Delete clips", "Delete the selected clips", "Edit", 0); info.addDefaultKeypress (KP::deleteKey, 0); info.addDefaultKeypress (KP::backspaceKey, 0); info.addDefaultKeypress (KP::backspaceKey, primary); break;
                 case nudgeLeft:       info.setInfo ("Nudge left", "Move the selected clips one grid step earlier", "Edit", 0); info.addDefaultKeypress (KP::leftKey, 0); break;
                 case nudgeRight:      info.setInfo ("Nudge right", "Move the selected clips one grid step later", "Edit", 0); info.addDefaultKeypress (KP::rightKey, 0); break;
                 case addMarker:       info.setInfo ("Add marker", "Add a marker at the playhead", "Edit", 0); info.addDefaultKeypress ('m', juce::ModifierKeys::shiftModifier); break;
