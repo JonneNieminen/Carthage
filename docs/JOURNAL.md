@@ -7,16 +7,11 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 
 ## Now (2026-11-19)
 
-- **Phases 1 to 4e are verified** (reports in ROADMAP). **Phase 4f (design pass) is in progress**
-  (the owner said "Yes, start 4f"); then 4g (loop region), phase 5 (mixer, Cmd+R export). The
-  owner's choices for 4f: Barlow / Barlow Semi Condensed / IBM Plex Mono, the proposed sample
-  editor layout, motion only on actions (W45).
-- **4f so far:** fonts embedded with their licences; dense face on lane rows, Plex Mono figures in
-  value boxes; sample editor in the agreed layout; motion (switches slide, tools cross-fade, the
-  sample editor rises in and fades out, Settings slides) with Reduce motion and playback
-  respected. Playback-start hitch measured again: none (worst 8.34 ms, 120 Hz, three starts).
-  **Next:** the owner's 4f checks (f-* on the checks page, with the deferred mouse-wheel check),
-  then the 4f report.
+- **Phases 1 to 4f are verified** (reports in ROADMAP). **Next: 4g (loop region)**, once the
+  owner gives the go-ahead; then phase 5 (mixer, Cmd+R export). The owner's 4f choices are W45.
+- **Open:** CI's Windows job on the 4f motion code (Motion_win.cpp) had not finished when the 4f
+  report was written; check `gh run list` before the next code push.
+- The owner's macOS Zoom gesture was on Cmd + scroll and swallowed Carthage's zoom; they moved it.
 - **Rule learnt:** run the full clang-tidy pass (AGENTS.md "Commands") before every push; CI's
   tidy job failed twice on new test files that were not re-checked.
 - **In hand, not finished:**
@@ -222,3 +217,4 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   a Shift wheel turn as deltaX, the lanes read deltaY; fixed, `Timeline::wheelScroll` tested), the
   time scrollbar's track under the lane names (corner painted), and the fade line crossing into the
   controls (the waveform's drawing is clipped to it). Sliders already took Shift (checked by test).
+- Owner retested: all pass. 4f report written. Next: the go-ahead for 4g.

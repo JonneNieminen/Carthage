@@ -14,7 +14,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
 | 3. Plugin manager and scanning | Verified (2026-11-18) |
-| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19); 4d and 4e done (2026-11-19; the wheel check moved to 4f); next 4f (design pass), 4g (loop region) |
+| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19); 4d, 4e and 4f done (2026-11-19/20); next 4g (loop region) |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
 | 7. Help page, icon and polish | Not started |
@@ -586,14 +586,39 @@ Deliver (F22, W38):
 - [x] A refinement of the whole UI: type (Barlow, Barlow Semi Condensed, IBM Plex Mono, embedded;
       W45), spacing, motion that answers actions (Reduce motion respected); same theme and density
 - [x] The sample editor's layout: its buttons and sliders placed with care (owner, 4e)
-- [ ] Carried from 4d: the owner's wheel check (scroll, Shift, Cmd and Option with a mouse)
+- [x] Carried from 4d: the owner's wheel check (scroll, Shift, Cmd and Option with a mouse)
 - [x] Carried from 4d: the frame hitch when playback starts, measured again (2026-11-19, the
       300-clip demo at 120 Hz, three starts): no late frame, worst 8.34 ms. It does not hold.
 
 Exit checks:
-- [ ] Before and after snapshots of every screen; owner's approval
+- [x] Before and after snapshots of every screen (build/snaps/4f-before, build/snaps/4f); owner's
+      approval (checks page, 2026-11-19/20)
 
-Report: _not written yet_
+Report:
+
+### Report — phase 4f (2026-11-20, 510a0cf)
+Works:        The interface is set in Barlow, lane rows and clip names in Barlow Semi Condensed, and
+              every value box in IBM Plex Mono, embedded with their licences (W45). The sample
+              editor has the agreed layout: Play and the shape tools above the waveform, Reverse, Fit
+              to tempo and Make unique below, Sound and Fades on the right, figures on one edge.
+              Motion only answers actions: switches slide, the chosen tool cross-fades, the editor
+              rises in and fades out, Settings slides; nothing moves during playback or with Reduce
+              motion on. Reversed samples are drawn reversed in the editor and on the lanes (owner's
+              addition). Shift + wheel scrolls the lanes in time with a mouse.
+Tested:       - Owner in the running app: every 4f check passed, the 4d wheel check included; three
+                problems found (Shift + wheel on the lanes, the scrollbar under the lane names, a
+                fade line over the controls) were fixed and passed on retest. Cmd + wheel zoom needed
+                macOS's Zoom gesture moved off Cmd (the owner's system setting, not Carthage).
+              - MotionTests: no motion outside a host or while playing, a tween that may not move
+                lands at once, the slider wheel with Shift, the lanes' Shift wheel as macOS sends it.
+              - Snapshots before and after (carthage-snapshot), and in the app on the 300-clip demo.
+Measured:     The frame hitch when playback starts (from 4d): three starts on the 300-clip demo at
+              120 Hz, no late frame, worst 8.34 ms. It does not hold.
+Not done:     - Icons were left as they are: their strokes were already consistent (1.4 px, round).
+              - CI's Windows build had not finished on the motion code when this was written (each
+                push cancelled the one before); the macOS, sanitizer, RTSan, fuzzing and tidy jobs passed.
+Decisions:    W45.
+Needs owner:  The go-ahead for 4g (loop region).
 
 ### Phase 4g — loop region
 
