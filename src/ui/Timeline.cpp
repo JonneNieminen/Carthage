@@ -37,8 +37,12 @@ namespace carthage::ui
 
             g.setFont (theme::timeFont (theme::textXs));
 
-            for (auto b = std::floor (first / bar) * bar; b <= last; b += bar)
+            const auto firstBar = static_cast<long> (std::floor (first / bar));
+            const auto lastBar = static_cast<long> (std::floor (last / bar));
+
+            for (auto i = firstBar; i <= lastBar; ++i)
             {
+                const auto b = static_cast<double> (i) * bar;
                 const auto x = timeline.xAtBeat (b) - static_cast<float> (getX());
                 const auto barNumber = static_cast<int> (std::round (b / bar)) + 1;
                 const bool labelled = std::fmod (barNumber - 1, labelEvery) == 0.0;
@@ -54,10 +58,10 @@ namespace carthage::ui
                 }
 
                 if (bar * ppb >= 40.0)   // beats inside the bar, when there is room
-                    for (int i = 1; i < static_cast<int> (bar); ++i)
+                    for (int beat = 1; beat < static_cast<int> (bar); ++beat)
                     {
                         g.setColour (theme::line);
-                        g.fillRect (x + static_cast<float> (i * ppb), r.getHeight() * 0.8f, 1.0f, r.getHeight());
+                        g.fillRect (x + static_cast<float> (beat * ppb), r.getHeight() * 0.8f, 1.0f, r.getHeight());
                     }
             }
         }
@@ -648,7 +652,7 @@ namespace carthage::ui
         }
 
         bool isInterestedInDragSource (const SourceDetails& d) override   { return sampleIn (d.description).has_value(); }
-        void itemDragEnter (const SourceDetails& d) override              { startGhost ({ *sampleIn (d.description) }); itemDragMove (d); }
+        void itemDragEnter (const SourceDetails& d) override              { if (auto f = sampleIn (d.description)) startGhost ({ *f }); itemDragMove (d); }
         void itemDragMove (const SourceDetails& d) override               { moveGhost (d.localPosition); }
         void itemDragExit (const SourceDetails&) override                 { endGhost(); }
         void itemDropped (const SourceDetails& d) override                { moveGhost (d.localPosition); drop(); }

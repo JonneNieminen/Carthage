@@ -48,7 +48,7 @@ namespace carthage::engine
             double seconds = 0.0;
         };
 
-        explicit SampleLibrary (juce::File settingsFolder);
+        explicit SampleLibrary (const juce::File& settingsFolder);
         ~SampleLibrary() override;
 
         //==========================================================================================

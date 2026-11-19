@@ -36,7 +36,7 @@ public:
     void runTest() override
     {
         juce::TemporaryFile folderHolder;
-        const auto folder = folderHolder.getFile();
+        const auto& folder = folderHolder.getFile();
         folder.createDirectory();
         const auto audio = makeAudio (folder);
 
@@ -165,8 +165,7 @@ public:
         beginTest ("Copy and paste into another project, in another folder and tempo (W30)");
         {
             for (auto* l : lanes)
-                for (auto* c : l->getClips())
-                    editing::remove ({ c });
+                editing::remove (l->getClips());   // the lane's own list: remove() must hold the clips
 
             auto* a = newClip (2.0);
             auto* b = tracktion::insertWaveClip (*lanes[1], "Tone 2", audio,

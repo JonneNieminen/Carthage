@@ -1,6 +1,7 @@
 // The theme header must mirror design/tokens.css value for value (AGENTS.md, "UI").
 #include <ui/theme/Theme.h>
 
+#include <cmath>
 #include <map>
 
 class ThemeTests final : public juce::UnitTest
@@ -37,7 +38,7 @@ public:
             parts.trim();
             return juce::Colour (static_cast<juce::uint8> (parts[0].getIntValue()), static_cast<juce::uint8> (parts[1].getIntValue()),
                                  static_cast<juce::uint8> (parts[2].getIntValue()),
-                                 static_cast<juce::uint8> (parts[3].getDoubleValue() * 255.0 + 0.5));
+                                 static_cast<juce::uint8> (std::lround (parts[3].getDoubleValue() * 255.0)));
         }
 
         return {};

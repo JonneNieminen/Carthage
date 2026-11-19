@@ -53,11 +53,32 @@ The engine's first rule (F8) is checked by a tool, not by review (how it is held
   when the tool was set up (phase 1 report) and worth repeating after a toolchain change.
 - **Timing is never judged in the RTSan build**: it renders on one thread and reports cost time.
   Dropouts and load come from the normal build.
-- Run Thread Sanitizer and Address Sanitizer builds of the test suite regularly; they catch the data
-  races and lifetime bugs that show up as rare crashes in an audio app. (Presets for them arrive when
-  CI does, phase 2.)
+- **In CI.** The tests' own audio-thread calls (`LatencyProbe::process`, `TakeRecorder::pushBlock`,
+  `SamplePreview::render`) run inside a `ScopedRealtime`, so CI's `rtsan` job fails on any
+  allocation, lock or blocking call there, without an audio device. The device soak above stays an
+  owner-machine check.
 - Third-party plugins break these rules inside their own code; those reports are baseline entries at
   the plugin boundary, and the report says which plugins were used.
+
+## Static checks and sanitizers
+
+How Carthage's C++ is held to its rules (DECISIONS W39, AGENTS.md "C++ practices"). CI runs all
+three on macOS on every push, and fails on any finding.
+
+- **clang-tidy**, from Homebrew LLVM, with the checks in `.clang-tidy`: bugs, the static analyser,
+  concurrency, performance and the modern-C++ checks that match the rules. Build first, then:
+
+  ```bash
+  /opt/homebrew/opt/llvm/bin/run-clang-tidy -clang-tidy-binary /opt/homebrew/opt/llvm/bin/clang-tidy \
+      -p build/release -quiet "$PWD/(src|tools|tests)/.*\.cpp$"
+  ```
+
+  A finding is fixed, not silenced. A `NOLINT` is allowed only for a proven false positive, names the
+  check and says why on the same line (`.mm` files are not checked: the tool misreads Objective-C).
+- **AddressSanitizer + UBSan.** `cmake --preset asan && cmake --build --preset asan && ctest --preset asan`
+  runs the tests with out-of-bounds, use-after-free and undefined-behaviour checks; any report stops
+  the run.
+- **RealTimeSanitizer**: the `rtsan` preset's tests, above.
 
 ## Measuring
 
@@ -138,4 +159,4 @@ not only the empty state.
 3. Run the app and exercise what changed.
 4. Update the docs the change touches (see the table in `AGENTS.md`).
 
-CI repeats steps 1 and 2 on macOS and Windows. A red `main` is fixed before anything else is pushed.
+CI repeats steps 1 and 2 on macOS and Windows, then clang-tidy and the ASan/UBSan and RTSan tests on macOS. A red `main` is fixed before anything else is pushed.

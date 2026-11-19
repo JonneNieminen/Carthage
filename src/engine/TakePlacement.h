@@ -57,7 +57,7 @@ namespace carthage::engine
                 return state;
             }
 
-            if (! offset || std::abs (*offset - *settled) > jumpToleranceSeconds)
+            if (! offset || ! settled || std::abs (*offset - *settled) > jumpToleranceSeconds)
                 state = State::interrupted;       // stopped or jumped: keep the last good offset
             else
                 settled = offset;                 // follow the settled value

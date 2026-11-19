@@ -21,7 +21,8 @@ using namespace juce;
 namespace
 {
     template <typename F>
-    auto onMessageThread (F&& f)  { return *MessageManager::callSync (std::forward<F> (f)); }
+    // callSync is empty only if the message loop has stopped; then .value() throwing is right.
+    auto onMessageThread (F&& f)  { return MessageManager::callSync (std::forward<F> (f)).value(); }   // NOLINT(bugprone-unchecked-optional-access)
 
     template <typename F>
     void onMessageThreadVoid (F&& f) { MessageManager::callSync (std::forward<F> (f)); }
@@ -93,7 +94,7 @@ namespace
                 PNGImageFormat().writeImageToStream (image, out);
             });
 
-            std::cout << "wrote " << file.getFullPathName() << std::endl;
+            std::cout << "wrote " << file.getFullPathName() << '\n';
         }
 
         int run()
@@ -203,7 +204,7 @@ namespace
                 Thread::sleep (500);
                 std::atomic<bool> saved { false };
                 onMessageThreadVoid ([this, temp, &saved] { session->saveCopy (temp.getChildFile ("Templates/Four on the floor"),
-                                                                               [&saved] (Result) { saved = true; }); });
+                                                                               [&saved] (const Result&) { saved = true; }); });
                 while (! saved) Thread::sleep (50);
                 onMessageThreadVoid ([this] { content->showStartScreen (true); });
                 Thread::sleep (800);   // miniatures
@@ -273,7 +274,7 @@ namespace
                 }
                 else
                 {
-                    std::cout << "plugin scan failed: " << outcome.detail << std::endl;
+                    std::cout << "plugin scan failed: " << outcome.detail << '\n';
                 }
             }
 

@@ -44,7 +44,7 @@ public:
     void runTest() override
     {
         juce::TemporaryFile holder;
-        const auto root = holder.getFile();
+        const auto& root = holder.getFile();
         root.createDirectory();
 
         tracktion::Engine engine ("CarthageTests", nullptr, std::make_unique<HeadlessBehaviour>());
@@ -137,11 +137,15 @@ public:
         {
             const auto m = project::miniatureOf (songFile);
             expect (m.has_value());
-            expect (m->lanes.size() >= 3, "every lane");
-            int clips = 0;
-            for (const auto& lane : m->lanes) clips += static_cast<int> (lane.size());
-            expect (clips >= 2, "the take and the sample");
-            expect (m->seconds > 0.0);
+
+            if (m.has_value())
+            {
+                expect (m->lanes.size() >= 3, "every lane");
+                int clips = 0;
+                for (const auto& lane : m->lanes) clips += static_cast<int> (lane.size());
+                expect (clips >= 2, "the take and the sample");
+                expect (m->seconds > 0.0);
+            }
             expect (! project::miniatureOf (root.getChildFile ("nothing.carthage")).has_value(), "no file, no miniature");
         }
 

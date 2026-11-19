@@ -37,7 +37,7 @@ namespace carthage::engine
             juce::int64 lastUsedMs = 0;   ///< 0 = never
         };
 
-        explicit PluginLibrary (juce::File cacheFolder);
+        explicit PluginLibrary (const juce::File& cacheFolder);
 
         /** Replaces the plugin list (after a scan); favourites and use times are kept by key. */
         void setPlugins (const juce::Array<juce::PluginDescription>&);

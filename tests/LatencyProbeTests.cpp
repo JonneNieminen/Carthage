@@ -32,7 +32,7 @@ public:
             }
 
             out.clear();
-            probe.process (in.getArrayOfReadPointers(), 2, out.getArrayOfWritePointers(), 2, blockSize);
+            { const carthage::rt::ScopedRealtime realtime; probe.process (in.getArrayOfReadPointers(), 2, out.getArrayOfWritePointers(), 2, blockSize); }   // checked in the rtsan build
 
             for (int i = 0; i < blockSize; ++i)
                 if (t + static_cast<size_t> (i + delay) < cable.size())
@@ -83,7 +83,7 @@ public:
             juce::AudioBuffer<float> in (1, 256), out (2, 256);
             out.applyGain (0.0f);
             for (int i = 0; i < 256; ++i) out.setSample (1, i, 0.5f);   // what the engine rendered
-            probe.process (in.getArrayOfReadPointers(), 1, out.getArrayOfWritePointers(), 2, 256);
+            { const carthage::rt::ScopedRealtime realtime; probe.process (in.getArrayOfReadPointers(), 1, out.getArrayOfWritePointers(), 2, 256); }   // checked in the rtsan build
             expectEquals (out.getMagnitude (1, 0, 256), 0.0f);
         }
     }

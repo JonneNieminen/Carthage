@@ -2,6 +2,7 @@
 
 #include <limits>
 #include <set>
+#include <vector>
 
 #include <map>
 
@@ -61,12 +62,12 @@ namespace carthage::editing
 
             // As written: relative to the edit file taken as a folder. Older files, if any, may be
             // relative to the edit's folder; take whichever exists.
-            const auto asWritten = editFile.getChildFile (path);
+            auto asWritten = editFile.getChildFile (path);
 
             if (asWritten.exists())
                 return asWritten;
 
-            if (const auto besideEdit = editFile.getSiblingFile (path); besideEdit.exists())
+            if (auto besideEdit = editFile.getSiblingFile (path); besideEdit.exists())
                 return besideEdit;
 
             return asWritten;
@@ -380,7 +381,11 @@ namespace carthage::editing
 
     void remove (const Clips& clips)
     {
-        for (auto* c : clips)
+        // Hold every clip first: removing one changes its lane's clip list, which may be the very
+        // list passed in (a lane's getClips()), and frees the clip (found by ASan, phase 4d).
+        std::vector<tracktion::Clip::Ptr> held (clips.begin(), clips.end());
+
+        for (auto& c : held)
             c->removeFromParent();
     }
 

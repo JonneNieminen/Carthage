@@ -20,3 +20,12 @@ if(CARTHAGE_RTSAN)
     target_link_options(carthage_sanitizers INTERFACE -fsanitize=realtime)
     target_compile_definitions(carthage_sanitizers INTERFACE CARTHAGE_RTSAN=1)
 endif()
+
+# AddressSanitizer + UndefinedBehaviorSanitizer: out-of-bounds, use-after-free, leaks of the
+# sanitizer's kind, signed overflow, misaligned or null access. Any report fails the run.
+if(CARTHAGE_ASAN)
+    set(carthage_asan_flags -fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer)
+    target_compile_options(carthage_sanitizers INTERFACE ${carthage_asan_flags})
+    target_link_options(carthage_sanitizers INTERFACE -fsanitize=address,undefined)
+    target_compile_definitions(carthage_sanitizers INTERFACE CARTHAGE_ASAN=1)
+endif()

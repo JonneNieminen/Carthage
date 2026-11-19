@@ -34,16 +34,27 @@
         "CMAKE_OBJCXX_COMPILER": "/opt/homebrew/opt/llvm/bin/clang++"
       },
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+    },
+    {
+      "name": "asan",
+      "displayName": "AddressSanitizer + UBSan",
+      "description": "Debug-info build with -fsanitize=address,undefined, for the tests (macOS, Apple Clang).",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "CARTHAGE_ASAN": "ON" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
     }
   ],
   "buildPresets": [
     { "name": "debug", "configurePreset": "debug" },
     { "name": "release", "configurePreset": "release" },
-    { "name": "rtsan", "configurePreset": "rtsan" }
+    { "name": "rtsan", "configurePreset": "rtsan" },
+    { "name": "asan", "configurePreset": "asan" }
   ],
   "testPresets": [
     { "name": "debug", "configurePreset": "debug", "output": { "outputOnFailure": true } },
     { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } },
-    { "name": "rtsan", "configurePreset": "rtsan", "output": { "outputOnFailure": true } }
+    { "name": "rtsan", "configurePreset": "rtsan", "output": { "outputOnFailure": true } },
+    { "name": "asan", "configurePreset": "asan", "output": { "outputOnFailure": true },
+      "environment": { "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=1", "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1" } }
   ]
 }

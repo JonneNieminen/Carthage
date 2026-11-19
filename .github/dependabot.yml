@@ -1,0 +1,11 @@
+# Keeps the GitHub Actions used by the workflows current (owner's list, F22). Only actions: the
+# C++ dependencies are git submodules pinned by decision (DECISIONS W7), updated by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

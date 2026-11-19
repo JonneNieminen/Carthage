@@ -1,0 +1,47 @@
+# Carthage's static checks (DECISIONS W39, AGENTS.md "C++ practices"). Chosen for this project:
+# bugs, performance and the modern-C++ checks that match its rules; not style checks that fight
+# JUCE's own conventions (its macros, its naming, its widespread use of int for sizes). Left out on
+# purpose: owning-memory (JUCE APIs take ownership of a naked `new` by design, which AGENTS.md
+# allows), signed-bitwise (JUCE's modifier and flag sets are ints), throwing static
+# initialisation (theme constants; a failure there would show at launch, not later).
+# CI runs it over Carthage's own sources (src/, tools/, tests/) and fails on any finding.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-signed-bitwise,
+  -bugprone-throwing-static-initialization,
+  -bugprone-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-exception-escape,
+  clang-analyzer-*,
+  -clang-analyzer-optin.cplusplus.VirtualCall,
+  concurrency-*,
+  -concurrency-mt-unsafe,
+  cppcoreguidelines-no-malloc,
+  cppcoreguidelines-prefer-member-initializer,
+  cppcoreguidelines-slicing,
+  cppcoreguidelines-virtual-class-destructor,
+  misc-definitions-in-headers,
+  misc-redundant-expression,
+  misc-unused-using-decls,
+  misc-misleading-identifier,
+  misc-throw-by-value-catch-by-reference,
+  modernize-make-unique,
+  modernize-make-shared,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-emplace,
+  modernize-use-equals-default,
+  modernize-use-equals-delete,
+  modernize-loop-convert,
+  modernize-redundant-void-arg,
+  performance-*,
+  -performance-enum-size,
+  readability-container-size-empty,
+  readability-delete-null-pointer,
+  readability-redundant-smartptr-get,
+  readability-misleading-indentation
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/(src|tools|tests)/.*'
+ExcludeHeaderFilterRegex: '.*/external/.*'

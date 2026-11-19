@@ -1,6 +1,8 @@
 #include "Project.h"
 #include "Editing.h"
 
+#include <utility>
+
 namespace carthage::project
 {
     using namespace tracktion;
@@ -59,7 +61,7 @@ namespace carthage::project
                 self (self, child);
         };
 
-        visit (visit, editState);
+        visit (visit, std::move(editState));
     }
 
     juce::ValueTree snapshot (Edit& edit, const juce::File& destination, const Info& info, const juce::File& movingFrom)
@@ -167,7 +169,7 @@ namespace carthage::project
         // Resolve with the old location, then point the edit at the new one before rewriting, so
         // each clip re-resolves against the new file. A path that reads the same from both (the
         // recordings, relative) is not rewritten, so every clip is told to reload.
-        const auto oldFile = edit.editFileRetriever ? edit.editFileRetriever() : juce::File();
+        auto oldFile = edit.editFileRetriever ? edit.editFileRetriever() : juce::File();
         const auto resolveOld = editing::consistentFilePaths ([oldFile] { return oldFile; });
 
         edit.editFileRetriever = [newFile] { return newFile; };

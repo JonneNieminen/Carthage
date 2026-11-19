@@ -86,10 +86,11 @@ namespace
         return a;
     }
 
-    void say (const String& s)    { std::cout << s << std::endl; }
+    void say (const String& s)    { std::cout << s << '\n'; }
 
     template <typename F>
-    auto onMessageThread (F&& f)  { return *MessageManager::callSync (std::forward<F> (f)); }
+    // callSync is empty only if the message loop has stopped; then .value() throwing is right.
+    auto onMessageThread (F&& f)  { return MessageManager::callSync (std::forward<F> (f)).value(); }   // NOLINT(bugprone-unchecked-optional-access)
 
     template <typename F>
     void onMessageThreadVoid (F&& f) { MessageManager::callSync (std::forward<F> (f)); }
@@ -165,7 +166,7 @@ namespace
         {
             std::optional<Result> result;
             WaitableEvent done;
-            onMessageThreadVoid ([&] { start ([&] (Result r) { result = r; done.signal(); }); });
+            onMessageThreadVoid ([&] { start ([&] (const Result& r) { result = r; done.signal(); }); });
             done.wait (10000);
             return result.value_or (Result::fail ("timed out"));
         }
@@ -419,7 +420,7 @@ namespace
             say ("Collect samples into Other");
             const auto collected = await ([this] (auto done)
             {
-                session->collectSamples ([done] (Result r, int n)
+                session->collectSamples ([done] (const Result& r, int n)
                 {
                     done (r.failed() ? r : n == 1 ? Result::ok() : Result::fail ("copied " + String (n)));
                 });

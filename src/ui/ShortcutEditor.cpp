@@ -59,7 +59,7 @@ namespace carthage::ui
     class ShortcutEditor::Keycap final : public Component, public SettableTooltipClient
     {
     public:
-        Keycap (KeyPress k, String commandName) : key (std::move (k)), name (std::move (commandName))
+        Keycap (KeyPress k, String commandName) : key (k), name (std::move (commandName))
         {
             setWantsKeyboardFocus (false);
             setMouseCursor (MouseCursor::PointingHandCursor);

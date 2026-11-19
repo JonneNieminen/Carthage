@@ -395,7 +395,7 @@ namespace carthage::app
                 case commands::startScreen:     if (auto* c = content()) c->showStartScreen (true); return true;
                 case commands::saveAsTemplate:  saveAsTemplate(); return true;
                 case commands::collectSamples:
-                    session->collectSamples ([this] (Result r, int copied)
+                    session->collectSamples ([this] (const Result& r, int copied)
                     {
                         report (r, copied == 0 ? String ("Every sample is already in the project")
                                                : copied == 1 ? String ("Copied a sample into the project")
@@ -484,7 +484,7 @@ namespace carthage::app
 
         /** Runs `then` once the current project may be closed: at once if nothing is unsaved,
             otherwise after asking (and saving, if the user says so). */
-        void whenClosable (std::function<void()> then)
+        void whenClosable (const std::function<void()>& then)
         {
             if (session == nullptr || ! session->hasUnsavedChanges())
             {
@@ -564,7 +564,7 @@ namespace carthage::app
                     return;
                 }
 
-                session->saveCopy (folder, [this, name] (Result r) { report (r, "Saved the template " + name); });
+                session->saveCopy (folder, [this, name] (const Result& r) { report (r, "Saved the template " + name); });
             }), true);
         }
 
@@ -645,15 +645,16 @@ namespace carthage::app
         }
 
         /** Saves; asks where first if the project was never saved. `then` gets whether it was. */
-        void save (std::function<void (bool)> then)
+        void save (const std::function<void (bool)>& then)
         {
             if (session->isUntitled())
             {
-                saveAs (std::move (then));
+                saveAs (then);
                 return;
             }
 
-            session->save ([this, then] (Result r)
+            // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks): std::function owns the copy; the analyzer loses it
+            session->save ([this, then] (const Result& r)
             {
                 report (r, "Saved");
 
@@ -663,13 +664,14 @@ namespace carthage::app
         }
 
         /** A project is a folder: the name the user types becomes the folder and the file in it. */
-        void saveAs (std::function<void (bool)> then)
+        void saveAs (const std::function<void (bool)>& then)
         {
             const auto suggested = session->isUntitled() ? Paths::projects().getChildFile ("My song")
                                                           : session->getProjectFolder().getSiblingFile (session->getProjectName() + " copy");
 
             chooser = std::make_unique<FileChooser> ("Save the project as", suggested, String());
             chooser->launchAsync (FileBrowserComponent::saveMode | FileBrowserComponent::warnAboutOverwriting,
+                                  // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks): as in save()
                                   [this, then] (const FileChooser& fc)
                                   {
                                       auto folder = fc.getResult();
@@ -690,7 +692,7 @@ namespace carthage::app
                                           return;
                                       }
 
-                                      session->saveAs (folder, [this, then, folder] (Result r)
+                                      session->saveAs (folder, [this, then, folder] (const Result& r)
                                       {
                                           report (r, "Saved as " + folder.getFileName());
 
@@ -712,7 +714,7 @@ namespace carthage::app
             for (size_t i = 1; i < unclosed.size(); ++i)
                 store->markClosed (unclosed[i].projectId);
 
-            const auto r = unclosed.front();
+            const auto& r = unclosed.front();
             const auto name = r.projectFile.getParentDirectory().getFileName();
 
             const auto options = MessageBoxOptions()

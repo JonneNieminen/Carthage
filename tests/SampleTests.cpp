@@ -1,5 +1,6 @@
 #include <engine/SampleAnalysis.h>
 #include <engine/SampleLibrary.h>
+#include <engine/RealtimeCheck.h>
 #include <engine/SamplePreview.h>
 
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -80,8 +81,9 @@ namespace synth
     {
         std::vector<float> out (static_cast<size_t> (seconds * rate), 0.0f);
 
-        for (double beat = 0.0; beat * 60.0 / bpm < seconds; beat += 1.0)
+        for (int n = 0; n * 60.0 / bpm < seconds; ++n)
         {
+            const auto beat = static_cast<double> (n);
             const auto start = static_cast<size_t> (beat * 60.0 / bpm * rate);
 
             for (size_t i = 0; i < 1200 && start + i < out.size(); ++i)
@@ -112,7 +114,7 @@ public:
     void runTest() override
     {
         juce::TemporaryFile holder;
-        const auto root = holder.getFile();
+        const auto& root = holder.getFile();
         const auto settings = root.getChildFile ("Settings");
         const auto library = root.getChildFile ("My samples");
 
@@ -179,7 +181,8 @@ public:
             engine::SampleLibrary samples (settings);
             const auto loop = library.getChildFile ("Loops/Bass loop 120.wav");
             samples.setAnalysis (loop, { 120.0, "A minor", 0.2 });
-            expect (samples.getAnalysis (loop).has_value() && samples.getAnalysis (loop)->key == "A minor");
+            const auto stored = samples.getAnalysis (loop);
+            expect (stored.has_value() && stored->key == "A minor");
 
             writeSine (loop, 0.3);   // rewritten: another size
             expect (! samples.getAnalysis (loop).has_value(), "a changed file is analysed again");
@@ -209,6 +212,7 @@ public:
 
             // A short tuned hit has a note, not a key: a 0.5 s tone at A (220 Hz).
             std::vector<float> hit;
+            hit.reserve (static_cast<size_t> (0.5 * synth::rate));
             for (int i = 0; i < static_cast<int> (0.5 * synth::rate); ++i)
                 hit.push_back (static_cast<float> (0.8 * std::exp (-i / 6000.0) * std::sin (2 * juce::MathConstants<double>::pi * 220.0 * i / synth::rate)));
             expectEquals (run (hit).key, juce::String ("A"), "a one-shot shows its note");
@@ -233,7 +237,7 @@ public:
                 for (int b = 0; b < blocks; ++b)
                 {
                     out.clear();
-                    preview.render (out.getWritePointer (0), out.getWritePointer (1), 256);
+                    { const carthage::rt::ScopedRealtime realtime; preview.render (out.getWritePointer (0), out.getWritePointer (1), 256); }   // checked in the rtsan build
                     peak = std::max (peak, out.getMagnitude (0, 256));
                     juce::Thread::sleep (1);
                 }

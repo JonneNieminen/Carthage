@@ -454,6 +454,7 @@ namespace carthage::engine
         {
             std::atomic<size_t> next { 0 };
             std::vector<std::thread> workers;
+            workers.reserve (static_cast<size_t> (parallel));
 
             for (int w = 0; w < parallel; ++w)
                 workers.emplace_back ([&]

@@ -69,6 +69,12 @@ cmake --preset rtsan && cmake --build --preset rtsan
 build/rtsan/tools/bench/carthage_bench_artefacts/RelWithDebInfo/carthage_bench soak --seconds 60 \
     --device "Audient iD44" --rate 48000 --buffer 64 --input 1 \
     --plugin-format VST3 --plugin /Library/Audio/Plug-Ins/VST3/NeuralAmpModeler.vst3
+ctest --preset rtsan   # the tests' audio-thread calls, checked
+
+# Static checks and sanitizers, as CI runs them (docs/TESTING.md, "Static checks and sanitizers")
+/opt/homebrew/opt/llvm/bin/run-clang-tidy -clang-tidy-binary /opt/homebrew/opt/llvm/bin/clang-tidy \
+    -p build/release -quiet "$PWD/(src|tools|tests)/.*\.cpp$"
+cmake --preset asan && cmake --build --preset asan && ctest --preset asan
 
 # A release build with a version, as the release workflow makes it (docs/RELEASING.md)
 cmake --preset release -DCARTHAGE_RELEASE=0.1.0 && cmake --build --preset release --target Carthage

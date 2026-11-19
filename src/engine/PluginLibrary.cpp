@@ -79,7 +79,7 @@ namespace carthage::engine
         }
     }
 
-    PluginLibrary::PluginLibrary (juce::File cacheFolder)
+    PluginLibrary::PluginLibrary (const juce::File& cacheFolder)
         : file (cacheFolder.getChildFile ("Library.xml"))
     {
         load();

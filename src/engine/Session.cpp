@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace carthage::engine
 {
@@ -606,7 +607,7 @@ namespace carthage::engine
             index = frontIndex + 1;
         }
 
-        auto& added = *projects.insert (projects.begin() + index, std::move (p))->get();
+        auto& added = **projects.insert (projects.begin() + index, std::move (p));
         bringForward (index);
 
         // Setting up is not an edit: nothing to undo, nothing unsaved.
@@ -813,7 +814,7 @@ namespace carthage::engine
         projectStateChanged();
     }
 
-    void Session::save (std::function<void (juce::Result)> done)
+    void Session::save (const std::function<void (juce::Result)>& done)
     {
         auto& p = front();
 
@@ -830,7 +831,7 @@ namespace carthage::engine
         auto* target = &p;
 
         writer.post ([snapshot, file] { return project::write (snapshot, file); },
-                     [this, target, file, taken, done] (juce::Result r)
+                     [this, target, file, taken, done] (const juce::Result& r)
                      {
                          if (r.wasOk() && isOpen (target) && file == target->file)
                          {
@@ -842,7 +843,7 @@ namespace carthage::engine
                      });
     }
 
-    void Session::saveAs (const juce::File& folder, std::function<void (juce::Result)> done)
+    void Session::saveAs (const juce::File& folder, const std::function<void (juce::Result)>& done)
     {
         if (isRecording())
         {
@@ -874,7 +875,7 @@ namespace carthage::engine
 
                          return project::write (snapshot, file);
                      },
-                     [this, target, file, oldFolder, wasUntitled, newInfo, taken, done] (juce::Result r)
+                     [this, target, file, oldFolder, wasUntitled, newInfo, taken, done] (const juce::Result& r)
                      {
                          if (r.wasOk() && isOpen (target))
                          {
@@ -907,7 +908,7 @@ namespace carthage::engine
                      });
     }
 
-    void Session::collectSamples (std::function<void (juce::Result, int)> done)
+    void Session::collectSamples (const std::function<void (juce::Result, int)>& done)
     {
         auto& p = front();
         const auto folder = p.file.getParentDirectory();
@@ -921,6 +922,9 @@ namespace carthage::engine
         {
             for (auto* c : lane->getClips())
             {
+                if (c == nullptr)
+                    continue;
+
                 auto* audio = dynamic_cast<tracktion::AudioClipBase*> (c);
                 const auto from = audio != nullptr ? audio->getOriginalFile() : juce::File();
 
@@ -963,7 +967,7 @@ namespace carthage::engine
 
                          return juce::Result::ok();
                      },
-                     [this, target, moves, done] (juce::Result r)
+                     [this, target, moves, done] (const juce::Result& r)
                      {
                          int copied = 0;
 
@@ -1003,7 +1007,7 @@ namespace carthage::engine
         engine->getPropertyStorage().getPropertiesFile().setValue ("alwaysCopySamples", shouldCopy);
     }
 
-    void Session::saveCopy (const juce::File& folder, std::function<void (juce::Result)> done)
+    void Session::saveCopy (const juce::File& folder, const std::function<void (juce::Result)>& done)
     {
         auto& p = front();
         const auto file = project::fileIn (folder);
@@ -1020,7 +1024,7 @@ namespace carthage::engine
 
                          return project::write (snapshot, file);
                      },
-                     [done] (juce::Result r) { if (done) done (r); });
+                     [done] (juce::Result r) { if (done) done (std::move(r)); });
     }
 
     juce::Array<juce::File> Session::getRecentProjects() const

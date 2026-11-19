@@ -116,6 +116,8 @@ namespace carthage::engine
         std::unique_ptr<juce::AudioFormatReader> reader;
         juce::LagrangeInterpolator interpolators[2];
         juce::AudioBuffer<float> source (2, 4096), converted (2, 2048);
+        source.clear();      // a short read never hands stale memory to the interpolators
+        converted.clear();
         juce::int64 readPosition = 0;
         double ratio = 1.0;
 

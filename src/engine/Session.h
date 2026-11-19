@@ -136,17 +136,17 @@ namespace carthage::engine
         juce::Result recover (const autosave::Store::Recovery&);
 
         /** Writes the project to its file in the background; `done` runs on the message thread. */
-        void save (std::function<void (juce::Result)> done);
+        void save (const std::function<void (juce::Result)>& done);
 
         /** Writes the project into `folder` (created if needed) as `<folder>/<name>.carthage`,
             copying its recordings along, and carries on there. */
-        void saveAs (const juce::File& folder, std::function<void (juce::Result)> done);
+        void saveAs (const juce::File& folder, const std::function<void (juce::Result)>& done);
 
         /** Copies every audio file the front project uses from outside its folder into its
             Samples folder, then points the clips at the copies, as one undo step ("Collect
             samples", W30). The copying runs on the writer; `done` gets how many files were copied.
             Files that no longer exist are left as they are. */
-        void collectSamples (std::function<void (juce::Result, int)> done = {});
+        void collectSamples (const std::function<void (juce::Result, int)>& done = {});
 
         /** Settings: collect a project's samples whenever clips from outside it arrive (W30). */
         bool getAlwaysCopySamples() const;
@@ -164,7 +164,7 @@ namespace carthage::engine
 
         /** Writes a copy of the front project into `folder` (with its recordings and samples) and
             carries on in the original: Save as template. */
-        void saveCopy (const juce::File& folder, std::function<void (juce::Result)> done);
+        void saveCopy (const juce::File& folder, const std::function<void (juce::Result)>& done);
 
         /** Projects opened or saved, newest first, those still on disk (F20, the start screen). */
         juce::Array<juce::File> getRecentProjects() const;

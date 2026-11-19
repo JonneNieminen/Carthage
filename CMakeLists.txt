@@ -37,6 +37,7 @@ if(MSVC)
 endif()
 
 option(CARTHAGE_RTSAN "Build with Clang's RealTimeSanitizer (needs a Clang that supports it)" OFF)
+option(CARTHAGE_ASAN "Build with AddressSanitizer and UndefinedBehaviorSanitizer (Clang or GCC)" OFF)
 option(CARTHAGE_TESTS "Build the unit and engine tests" ON)
 
 include(cmake/CarthageOptions.cmake)

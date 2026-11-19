@@ -54,7 +54,7 @@ namespace carthage::engine
         }
     }
 
-    SampleLibrary::SampleLibrary (juce::File settingsFolder)
+    SampleLibrary::SampleLibrary (const juce::File& settingsFolder)
         : juce::Thread ("Carthage sample index"), storeFile (settingsFolder.getChildFile ("Samples.xml"))
     {
         load();

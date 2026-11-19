@@ -19,7 +19,8 @@ namespace carthage::theme
     /** rgba(r, g, b, a) with the alpha rounded the way a browser stores it, to 8 bits. */
     constexpr juce::uint32 rgba (juce::uint32 hex, double alpha) noexcept
     {
-        return (static_cast<juce::uint32> (alpha * 255.0 + 0.5) << 24) | hex;
+        // alpha is 0..1, so adding a half rounds correctly; std::lround is not constexpr on every compiler.
+        return (static_cast<juce::uint32> (alpha * 255.0 + 0.5) << 24) | hex;   // NOLINT(bugprone-incorrect-roundings)
     }
 
     // Harbour palette

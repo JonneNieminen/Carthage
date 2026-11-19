@@ -37,7 +37,7 @@ public:
                 for (int b = 0; b < blocks; ++b)
                 {
                     const float* chans[] = { expected.getReadPointer (0, b * block), expected.getReadPointer (1, b * block) };
-                    recorder.pushBlock (chans, 2, block, 10.0 + b * block / rate);
+                    { const carthage::rt::ScopedRealtime realtime; recorder.pushBlock (chans, 2, block, 10.0 + b * block / rate); }   // checked in the rtsan build
                     std::this_thread::sleep_for (std::chrono::microseconds (100));   // faster than real time
                 }
             });
@@ -84,7 +84,7 @@ public:
 
             while (recorder.getOverflowCount() == 0 && pushes < 100000)
             {
-                recorder.pushBlock (chans, 1, 80, 0.0);
+                { const carthage::rt::ScopedRealtime realtime; recorder.pushBlock (chans, 1, 80, 0.0); }   // checked in the rtsan build
                 ++pushes;
             }
 

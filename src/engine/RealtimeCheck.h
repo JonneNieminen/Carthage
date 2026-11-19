@@ -34,7 +34,7 @@ namespace carthage::rt
         ScopedRealtime() noexcept   { __rtsan_realtime_enter(); }
         ~ScopedRealtime() noexcept  { __rtsan_realtime_exit(); }
        #else
-        ScopedRealtime() noexcept {}
+        ScopedRealtime() noexcept = default;
         ~ScopedRealtime() noexcept {}
        #endif
 

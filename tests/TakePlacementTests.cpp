@@ -26,7 +26,7 @@ public:
             expect (w.update (-5.010667, 5) == TakeWatch::State::running);          // first reading
             expect (w.update (-5.012000, 10) == TakeWatch::State::running);         // settles by one block
             expect (w.update (-5.012000, 15) == TakeWatch::State::running);
-            expectWithinAbsoluteError (*w.getOffset(), -5.012, 1.0e-9);
+            expectWithinAbsoluteError (w.getOffset().value_or (1.0e9), -5.012, 1.0e-9);
         }
 
         beginTest ("Playback stopping under the take interrupts it and keeps the last good offset");
@@ -35,7 +35,7 @@ public:
             w.update (-1.0, 5);
             w.update (-1.0, 10);
             expect (w.update (std::nullopt, 15) == TakeWatch::State::interrupted);
-            expectWithinAbsoluteError (*w.getOffset(), -1.0, 1.0e-12);
+            expectWithinAbsoluteError (w.getOffset().value_or (1.0e9), -1.0, 1.0e-12);
 
             // Once interrupted, it stays so even if playback comes back.
             expect (w.update (-1.0, 20) == TakeWatch::State::interrupted);
@@ -47,7 +47,7 @@ public:
             w.update (-1.0, 5);
             expect (w.update (-1.0 + w.getJumpTolerance() * 0.5, 10) == TakeWatch::State::running);
             expect (w.update (-1.0 + 0.5, 15) == TakeWatch::State::interrupted);
-            expectWithinAbsoluteError (*w.getOffset(), -1.0 + w.getJumpTolerance() * 0.5, 1.0e-12);
+            expectWithinAbsoluteError (w.getOffset().value_or (1.0e9), -1.0 + w.getJumpTolerance() * 0.5, 1.0e-12);
         }
 
         beginTest ("At a large buffer, the one-block settle is not a jump");

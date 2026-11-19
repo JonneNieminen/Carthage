@@ -75,3 +75,56 @@ jobs:
 
       - name: Test
         run: ctest --preset release
+
+  # Static checks and sanitizers (DECISIONS W39, docs/TESTING.md "Static checks and sanitizers"),
+  # macOS only: Homebrew LLVM provides clang-tidy and RTSan; Apple Clang provides ASan and UBSan.
+  checks:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: clang-tidy, preset: release, kind: tidy }
+          - { name: ASan and UBSan tests, preset: asan, kind: test }
+          - { name: RTSan tests, preset: rtsan, kind: test }
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_COMPRESS: "true"
+      CCACHE_MAXSIZE: 2G
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Compiler cache
+        uses: actions/cache@v6
+        with:
+          path: .ccache
+          key: ccache-checks-${{ matrix.preset }}-${{ github.sha }}
+          restore-keys: ccache-checks-${{ matrix.preset }}-
+
+      - name: Tools
+        run: |
+          brew install ninja ccache llvm
+          /opt/homebrew/opt/llvm/bin/clang-tidy --version
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache
+
+      # Builds first, so generated headers exist and the analysis sees what the compiler sees.
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: clang-tidy
+        if: matrix.kind == 'tidy'
+        run: |
+          /opt/homebrew/opt/llvm/bin/run-clang-tidy -clang-tidy-binary /opt/homebrew/opt/llvm/bin/clang-tidy \
+            -p build/release -quiet "$PWD/(src|tools|tests)/.*\.cpp$"
+
+      - name: Test
+        if: matrix.kind == 'test'
+        run: ctest --preset ${{ matrix.preset }}

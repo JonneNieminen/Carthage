@@ -28,7 +28,7 @@ namespace carthage::ui
         PropertiesFile& settingsOf (engine::Session& s)   { return s.getEngine().getPropertyStorage().getPropertiesFile(); }
     }
 
-    SampleBrowser::SampleBrowser (engine::Session& s) : session (s)
+    SampleBrowser::SampleBrowser (engine::Session& s) : session (s), playWhileHeld(settingsOf (session).getBoolValue ("playWhileHeld", false))
     {
         styleLabel (status, theme::textSm, theme::muted);
 
@@ -82,7 +82,7 @@ namespace carthage::ui
             addAndMakeVisible (c);
 
         setTextSize (static_cast<float> (settingsOf (session).getDoubleValue ("browserTextSize", 13.0)));
-        playWhileHeld = settingsOf (session).getBoolValue ("playWhileHeld", false);
+        
 
         for (const auto& root : session.getSampleLibrary().getRoots())
             open.insert (root.getFullPathName());
