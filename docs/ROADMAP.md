@@ -614,7 +614,8 @@ Tested:       - Owner in the running app: every 4f check passed, the 4d wheel ch
               - Snapshots before and after (carthage-snapshot), and in the app on the 300-clip demo.
 Measured:     The frame hitch when playback starts (from 4d): three starts on the 300-clip demo at
               120 Hz, no late frame, worst 8.34 ms. It does not hold.
-Not done:     - Icons were left as they are: their strokes were already consistent (1.4 px, round).
+Not done:     - Icons were left as they are: round caps throughout, 1.4 px on the 16 px tool icons and
+                1.75 px on the larger icon buttons.
               - CI's Windows build had not finished on the motion code when this was written (each
                 push cancelled the one before); the macOS, sanitizer, RTSan, fuzzing and tidy jobs passed.
 Decisions:    W45.
