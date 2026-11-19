@@ -476,8 +476,8 @@ namespace carthage::ui
                     if (shading == 2 || shading == 4)
                     {
                         g.setColour (theme::line);
-                        for (auto b = std::floor (first); b <= last; b += 1.0)
-                            g.fillRect (timeline.xAtBeat (b + 0.5) - static_cast<float> (getX()), static_cast<float> (clip.getY()), 1.0f,
+                        for (auto beat = static_cast<long> (std::floor (first)); static_cast<double> (beat) <= last; ++beat)
+                            g.fillRect (timeline.xAtBeat (static_cast<double> (beat) + 0.5) - static_cast<float> (getX()), static_cast<float> (clip.getY()), 1.0f,
                                         static_cast<float> (clip.getHeight()));
                     }
                 }
