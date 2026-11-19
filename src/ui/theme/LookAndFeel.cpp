@@ -6,6 +6,7 @@ namespace carthage::ui
 
     LookAndFeel::LookAndFeel()
     {
+        setDefaultSansSerifTypeface (theme::defaultTypeface());   // JUCE's own text in Barlow too (W45)
         auto scheme = getDarkColourScheme();
         using CS = LookAndFeel_V4::ColourScheme;
         scheme.setUIColour (CS::windowBackground, theme::bg);

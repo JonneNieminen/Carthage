@@ -9,6 +9,14 @@
 <meta charset="utf-8" />
 <link rel="stylesheet" href="../tokens.css" />
 <style>
+  /* The app's embedded typefaces (DECISIONS W45), so the art matches the app. */
+  @font-face { font-family: "Barlow"; font-weight: 400; src: url("../../resources/fonts/Barlow-Regular.ttf"); }
+  @font-face { font-family: "Barlow"; font-weight: 500 700; src: url("../../resources/fonts/Barlow-SemiBold.ttf"); }
+  @font-face { font-family: "Barlow Semi Condensed"; font-weight: 400; src: url("../../resources/fonts/BarlowSemiCondensed-Regular.ttf"); }
+  @font-face { font-family: "Barlow Semi Condensed"; font-weight: 500 700; src: url("../../resources/fonts/BarlowSemiCondensed-SemiBold.ttf"); }
+  @font-face { font-family: "IBM Plex Mono"; font-weight: 400; src: url("../../resources/fonts/IBMPlexMono-Regular.ttf"); }
+</style>
+<style>
   * { box-sizing: border-box; margin: 0; }
   body { font-family: var(--font-ui); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; overflow: hidden; }
   .art { position: relative; overflow: hidden; background: var(--bg); }
@@ -120,11 +128,11 @@ if (art === "hero" || art === "social") {
           return `<div style="display:flex;align-items:center;height:17px"><span style="width:62px;font-size:13px;font-weight:500;color:var(--muted)">${l[0].toUpperCase() + l.slice(1)}</span><span style="position:relative;flex:1;height:17px">${clips}</span></div>`;
         }).join(""); })()}</div>` },
     type: {
-      title: "Three voices", sub: "Futura for the name, the system typeface for the interface, fixed-width figures for anything that counts time.",
+      title: "Three voices", sub: "Futura for the name, Barlow for the interface, IBM Plex Mono for anything that counts time.",
       art: `<div style="position:absolute;left:40px;right:40px;bottom:36px;display:grid;grid-template-columns:1.25fr 1fr 1.25fr;gap:12px">
         ${[[`<span class="wm" style="font-size:44px">carthage</span>`, "Display", "Futura Medium"],
-           [`<span style="font-size:40px;font-weight:600;letter-spacing:-0.02em">Mixer</span>`, "Interface", "System UI, 13 px"],
-           [`<span style="font-family:var(--font-time);font-size:24px;color:var(--accent-text)">017.3.240</span>`, "Time", "Fixed-width figures"]].map(([s, n, d]) => `
+           [`<span style="font-size:40px;font-weight:600;letter-spacing:-0.02em">Mixer</span>`, "Interface", "Barlow, 13 px"],
+           [`<span style="font-family:var(--font-time);font-size:24px;color:var(--accent-text)">017.3.240</span>`, "Time", "IBM Plex Mono"]].map(([s, n, d]) => `
         <div style="height:150px;border-radius:14px;background:var(--card);border:1px solid var(--line);padding:16px;display:flex;flex-direction:column;justify-content:space-between">
           <div style="height:56px;display:flex;align-items:center">${s}</div>
           <div><div style="font-size:14px;font-weight:600">${n}</div><div style="margin-top:4px;font-size:13px;color:var(--muted)">${d}</div></div>

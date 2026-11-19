@@ -80,20 +80,16 @@ namespace carthage::theme
     // Motion (ms)
     constexpr int fast = 120, slow = 220;
 
-    /** Font roles. The interface uses the platform's own face; figures use its monospaced face. */
-    inline juce::Font uiFont (float size = textMd, bool medium = false)
-    {
-        // CSS px sizes are em sizes, which is JUCE's point height.
-        return juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), size,
-                                              medium ? juce::Font::bold : juce::Font::plain)
-                               .withPointHeight (size));
-    }
+    /** Font roles (W45), bundled so Carthage reads the same on every machine (theme/Fonts.cpp):
+        the interface in Barlow, dense rows (lane headers, the toolbar) in Barlow Semi Condensed,
+        and figures that must not shift (clocks, meters, keycaps) in IBM Plex Mono. Sizes are em
+        sizes, JUCE's point height. */
+    juce::Font uiFont (float size = textMd, bool medium = false);
+    juce::Font denseFont (float size = textMd, bool medium = false);
+    juce::Font timeFont (float size = textMd);
 
-    inline juce::Font timeFont (float size = textMd)
-    {
-        return juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), size, juce::Font::plain)
-                               .withPointHeight (size));
-    }
+    /** Barlow, for JUCE's own text (labels, buttons, menus) through the look and feel. */
+    juce::Typeface::Ptr defaultTypeface();
 
     /** Every mirrored token by its tokens.css name, for the consistency test. */
     struct ColourToken { std::string_view name; const Colour& value; };

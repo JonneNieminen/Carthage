@@ -53,9 +53,10 @@
   --clip: #f0736a;      /* clipping, record, destructive */
 
   /* Type */
-  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Barlow", system-ui, sans-serif;                                        /* embedded in the app (W45) */
+  --font-dense: "Barlow Semi Condensed", var(--font-ui);                              /* lane headers, toolbars, dense rows */
   --font-display: "Futura", "Futura PT", "Jost", "Century Gothic", var(--font-ui); /* wordmark and artwork only */
-  --font-time: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;          /* timecode, bars.beats, dB */
+  --font-time: "IBM Plex Mono", ui-monospace, monospace;                            /* timecode, bars.beats, dB */
   --text-xs: 11px;
   --text-sm: 12px;
   --text-md: 13px;      /* default UI size */

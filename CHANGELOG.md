@@ -42,6 +42,8 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   its name. Settings > Browser can fit a dropped loop to the project's tempo.
 
 ### Changed
+- The interface is set in Barlow, with Barlow Semi Condensed for dense rows and IBM Plex Mono for
+  figures, built into the app so it looks the same on macOS and Windows.
 - Clicking a sound in the sample browser always plays it from the top, even while it plays.
 - Sliders: double-click puts one back to its default; the scroll wheel over it adjusts it, Shift
   for fine steps.

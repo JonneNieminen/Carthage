@@ -78,3 +78,18 @@ add_custom_command(TARGET Carthage POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:carthage_scan>
             $<TARGET_FILE_DIR:Carthage>/carthage-scan$<$<PLATFORM_ID:Windows>:.exe>
     COMMENT "Placing carthage-scan next to the app")
+
+# The embedded typefaces' SIL Open Font License texts ship with the app (DECISIONS W45):
+# Contents/Resources/Fonts on macOS, a Fonts folder next to Carthage.exe on Windows.
+set(carthage_font_licences
+    "${CMAKE_SOURCE_DIR}/resources/fonts/OFL-Barlow.txt"
+    "${CMAKE_SOURCE_DIR}/resources/fonts/OFL-IBMPlexMono.txt")
+if(APPLE)
+    set(carthage_font_licence_dir "$<TARGET_BUNDLE_CONTENT_DIR:Carthage>/Resources/Fonts")
+else()
+    set(carthage_font_licence_dir "$<TARGET_FILE_DIR:Carthage>/Fonts")
+endif()
+add_custom_command(TARGET Carthage POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${carthage_font_licence_dir}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${carthage_font_licences} "${carthage_font_licence_dir}/"
+    COMMENT "Placing the font licences with the app")

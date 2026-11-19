@@ -82,12 +82,14 @@ record arm, clipping, warnings, destructive actions.
 
 | Voice | Token | Use |
 | --- | --- | --- |
-| Interface | `--font-ui` | Everything in the app. The platform's own typeface, 13 px by default |
-| Time | `--font-time` | Timecode, bars.beats.ticks, dB, Hz, sample counts: figures that must not jitter as they change |
+| Interface | `--font-ui` | Everything in the app. Barlow, embedded in the app, 13 px by default |
+| Dense | `--font-dense` | Lane headers, toolbar labels, dense rows. Barlow Semi Condensed |
+| Time | `--font-time` | Timecode, bars.beats.ticks, dB, Hz, sample counts: figures that must not jitter as they change. IBM Plex Mono |
 | Display | `--font-display` | The wordmark and repo artwork only. Futura Medium |
 
-Sizes: 11, 12, **13**, 15, 20, 28 px (`--text-xs` … `--text-2xl`). Weights: 400 for text, 500 for
-labels, 600 for titles. Sentence case everywhere; no all-caps labels.
+Sizes: 11, 12, **13**, 15, 20, 28 px (`--text-xs` … `--text-2xl`). Weights: 400 for text, 600
+(semibold) for labels and titles; the app embeds only these two (DECISIONS W45). The typefaces are
+under the SIL Open Font License; its texts ship with the app. Sentence case everywhere; no all-caps labels.
 
 The wordmark is lowercase `carthage` in Futura Medium, tracked at −0.02 em. Futura's round `c`, `a`,
 `g` and `e` repeat the ring.

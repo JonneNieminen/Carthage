@@ -67,7 +67,7 @@ in one place around a centre, and tracks leave through one channel as a timeline
   </tr>
   <tr>
     <td width="50%"><picture><source media="(prefers-color-scheme: light)" srcset="docs/art/card-lanes-light.png" /><img src="docs/art/card-lanes-dark.png" alt="Eight lane colours for tracks: sky, tide, kelp, sand, coral, murex, rose and slate" /></picture></td>
-    <td width="50%"><picture><source media="(prefers-color-scheme: light)" srcset="docs/art/card-type-light.png" /><img src="docs/art/card-type-dark.png" alt="Three voices: Futura for the name, the system typeface for the interface, fixed-width figures for time" /></picture></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: light)" srcset="docs/art/card-type-light.png" /><img src="docs/art/card-type-dark.png" alt="Three voices: Futura for the name, Barlow for the interface, IBM Plex Mono for time" /></picture></td>
   </tr>
 </table>
 
@@ -77,7 +77,7 @@ in one place around a centre, and tracks leave through one channel as a timeline
 | **Accent** | One blue, *sky*. It marks what is live: the playhead, the selection, the focused control. |
 | **Tracks** | Eight lane colours. A track takes one, and its clips, meter and mixer strip follow. |
 | **Signal** | Green, amber and red appear only on meters, record arm and warnings. |
-| **Type** | The system typeface at 13 px; fixed-width figures for timecode, bars and decibels; Futura for the wordmark. |
+| **Type** | Barlow at 13 px, embedded in the app, with Barlow Semi Condensed for dense rows; IBM Plex Mono for timecode, bars and decibels; Futura for the wordmark. |
 
 The full guide is in [design/README.md](design/README.md).
 
