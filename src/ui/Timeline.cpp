@@ -1,6 +1,8 @@
 #include "Timeline.h"
 #include <app/Commands.h>
 #include <engine/AudioFormats.h>
+#include <engine/SampleAnalysis.h>
+#include <engine/SampleEdits.h>
 #include "SampleBrowser.h"
 
 namespace carthage::ui
@@ -587,9 +589,26 @@ namespace carthage::ui
 
             if (body.getWidth() > 24.0f)
             {
+                auto row = body.reduced (6.0f, 2.0f).withHeight (14.0f);
+
+                // Key and tempo on the right of the name row, when there is room (4e).
+                if (auto* audio = dynamic_cast<tracktion::AudioClipBase*> (&c); audio != nullptr && body.getWidth() > 90.0f)
+                {
+                    if (const auto a = timeline.analysisFor (audio->getOriginalFile()))
+                    {
+                        if (const auto facts = Timeline::shortFacts (*a); facts.isNotEmpty())
+                        {
+                            g.setColour (muted ? theme::faint : theme::muted);
+                            g.setFont (theme::timeFont (theme::textXs));
+                            const auto w = static_cast<float> (GlyphArrangement::getStringWidthInt (g.getCurrentFont(), facts)) + 4.0f;
+                            g.drawText (facts, row.removeFromRight (w), Justification::centredRight, false);
+                        }
+                    }
+                }
+
                 g.setColour (muted ? theme::muted : theme::text);
                 g.setFont (theme::uiFont (theme::textXs, true));
-                g.drawText (c.getName(), body.reduced (6.0f, 2.0f).withHeight (14.0f), Justification::centredLeft, true);
+                g.drawText (c.getName(), row, Justification::centredLeft, true);
             }
         }
 
@@ -731,6 +750,13 @@ namespace carthage::ui
                 return;
             }
 
+            // Otherwise a right-click on a clip offers what can be done to it (4e).
+            if (e.mods.isPopupMenu() && hit.clip != nullptr)
+            {
+                showClipMenu (*hit.clip);
+                return;
+            }
+
             switch (timeline.tool)
             {
                 case Tool::select:
@@ -852,6 +878,45 @@ namespace carthage::ui
                     marquee = {};
                     return;
             }
+        }
+
+        void showClipMenu (tracktion::Clip& c)
+        {
+            if (! timeline.isSelected (c))
+                timeline.selectOnly ({ &c });
+
+            const auto id = c.itemID;
+            auto& edit = timeline.session.getEdit();
+            const auto find = [&edit, id] { return tracktion::findClipForID (edit, id); };
+            const auto* audio = dynamic_cast<tracktion::AudioClipBase*> (&c);
+            const auto a = audio != nullptr ? timeline.analysisFor (audio->getOriginalFile()) : std::nullopt;
+            const auto bpm = a ? a->bpm : std::nullopt;
+
+            PopupMenu m;
+            m.addItem (String::fromUTF8 ("Edit sample\xe2\x80\xa6"), audio != nullptr, false, [this, find]
+            {
+                if (auto* clip = find(); clip != nullptr && timeline.onClipDoubleClicked)
+                    timeline.onClipDoubleClicked (*clip);
+            });
+            m.addItem (bpm ? "Fit to tempo (from " + String (*bpm, 1) + " bpm)" : String ("Fit to tempo (no tempo found)"), bpm.has_value(), false, [this, find, bpm]
+            {
+                if (auto* clip = find(); clip != nullptr && bpm)
+                {
+                    begin ("Fit to tempo");
+                    editing::fitSampleToTempo (*clip, *bpm);
+                }
+            });
+            m.addItem ("Make unique", audio != nullptr, false, [this, find]
+            {
+                if (auto* clip = find())
+                {
+                    const auto name = editing::makeUnique (*clip);
+                    if (timeline.onStatus) timeline.onStatus ("This clip is now " + name);
+                }
+            });
+            m.addSeparator();
+            m.addItem ("Delete", [this] { timeline.deleteSelection(); });
+            m.showMenuAsync (PopupMenu::Options().withTargetComponent (this).withMousePosition());
         }
 
         void eraseOrMute (const Hit& hit)
@@ -1134,10 +1199,22 @@ namespace carthage::ui
             for (const auto& f : dropping)
                 if (auto* c = editing::insertFile (*tracks[dropLane], f, beat))
                 {
-                    // A loop of known tempo can follow the project's (Settings > Browser).
-                    if (timeline.session.getFitLoopsToTempo())
-                        if (const auto a = timeline.session.getSampleLibrary().getAnalysis (f); a && a->bpm)
+                    // A loop of known tempo can follow the project's: always with Settings > Browser,
+                    // or this once with Option held while dropping (4e).
+                    const auto fitThisOnce = ModifierKeys::currentModifiers.isAltDown();
+
+                    if (timeline.session.getFitLoopsToTempo() || fitThisOnce)
+                    {
+                        auto a = timeline.session.getSampleLibrary().getAnalysis (f);
+
+                        if (! a && fitThisOnce)
+                            a = engine::analysis::analyseFile (f);   // asked for: worth the moment it takes
+
+                        if (a && a->bpm)
                             editing::fitToTempo (*c, *a->bpm);
+                        else if (fitThisOnce && timeline.onStatus)
+                            timeline.onStatus (f.getFileNameWithoutExtension() + " has no tempo Carthage could find, so it was not fitted");
+                    }
 
                     added.add (c);
                     beat = editing::endBeat (*c);
@@ -1403,6 +1480,56 @@ namespace carthage::ui
                 return t;
 
         return nullptr;
+    }
+
+    std::optional<engine::SampleLibrary::Analysis> Timeline::analysisFor (const File& file)
+    {
+        // Painting asks per clip, per frame: answered from memory. The library (which checks the
+        // file on disk) is asked once per file, and the background analysis at most once.
+        const auto& path = file.getFullPathName();
+
+        if (const auto found = knownFacts.find (path); found != knownFacts.end())
+            return found->second;
+
+        if (! analysisAsked.insert (path).second)
+            return std::nullopt;   // asked already: on its way, or nothing found
+
+        if (auto known = session.getSampleLibrary().getAnalysis (file))
+        {
+            knownFacts[path] = *known;
+            return known;
+        }
+
+        if (file.existsAsFile())
+        {
+            analysisPool.addJob ([safe = Component::SafePointer<Timeline> (this), file]
+            {
+                const auto found = engine::analysis::analyseFile (file);
+
+                MessageManager::callAsync ([safe, file, found]
+                {
+                    if (safe != nullptr && found)
+                    {
+                        safe->session.getSampleLibrary().setAnalysis (file, *found);
+                        safe->knownFacts[file.getFullPathName()] = *found;
+                        safe->repaintLanes();
+                    }
+                });
+            });
+        }
+
+        return std::nullopt;
+    }
+
+    String Timeline::shortFacts (const engine::SampleLibrary::Analysis& a)
+    {
+        String key = a.key;
+
+        if (key.endsWith (" minor"))       key = key.dropLastCharacters (6) + "m";
+        else if (key.endsWith (" major"))  key = key.dropLastCharacters (6);
+
+        const auto bpm = a.bpm ? String (roundToInt (*a.bpm)) : String();
+        return key.isNotEmpty() && bpm.isNotEmpty() ? key + "  " + bpm : key + bpm;
     }
 
     void Timeline::addLaneBelowCurrent()   { addLane (findCurrentLane()); }

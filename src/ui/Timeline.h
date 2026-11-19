@@ -8,6 +8,7 @@
 #include <engine/time/Grid.h>
 
 #include <map>
+#include <set>
 
 namespace carthage::ui
 {
@@ -174,6 +175,16 @@ namespace carthage::ui
             which painting never does, so each source path is resolved once per project file and
             kept; a Save as changes the project file, so it resolves afresh. */
         juce::File fileOf (tracktion::WaveAudioClip&);
+
+        /** A file's key and tempo for the clips on the grid (4e): the library's, else analysed once
+            in the background and kept in the library, so the browser and the editor share it. */
+        std::optional<engine::SampleLibrary::Analysis> analysisFor (const juce::File&);
+        juce::ThreadPool analysisPool { juce::ThreadPoolOptions{}.withThreadName ("Carthage clip analysis").withNumberOfThreads (1) };
+        std::set<juce::String> analysisAsked;
+        std::map<juce::String, engine::SampleLibrary::Analysis> knownFacts;   // painting never touches the disk
+
+        /** "Am  120", "F#", "120": a clip's facts, short enough for its name row. */
+        static juce::String shortFacts (const engine::SampleLibrary::Analysis&);
         juce::Array<tracktion::AudioTrack*> laneTracks() const;
         juce::Colour laneColour (int laneIndex) const;
         double secondsToBeats (double seconds) const;
