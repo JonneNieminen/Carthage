@@ -471,9 +471,13 @@ namespace carthage::ui
 
         if (dragBend >= 0)
         {
-            // Up bends the line up, down bends it down.
+            // Up bends the line up, down bends it down. Tracktion bends a line relative to its
+            // direction, so a rising line takes the opposite sign to a falling one (owner).
+            const auto& from = envelope[static_cast<size_t> (dragBend)];
+            const auto& to = envelope[static_cast<size_t> (dragBend) + 1];
+            const auto rising = to.gainDb > from.gainDb;
             auto& bend = envelope[static_cast<size_t> (dragBend)].bend;
-            bend = std::clamp (bend + step.y / 80.0f, -1.0f, 1.0f);
+            bend = std::clamp (bend + (rising ? -step.y : step.y) / 80.0f, -1.0f, 1.0f);
             storeEnvelope();
             return;
         }
