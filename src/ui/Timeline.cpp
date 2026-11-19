@@ -1847,6 +1847,17 @@ namespace carthage::ui
         }
     }
 
+    Timeline::WheelScroll Timeline::wheelScroll (bool shift, const MouseWheelDetails& w) noexcept
+    {
+        if (shift)
+            return { true, w.deltaY != 0.0f ? w.deltaY : w.deltaX };
+
+        if (std::abs (w.deltaX) > std::abs (w.deltaY))
+            return { true, w.deltaX };   // a trackpad's sideways swipe
+
+        return { false, w.deltaY };
+    }
+
     void Timeline::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& w)
     {
         if (e.mods.isAltDown())
@@ -1865,8 +1876,7 @@ namespace carthage::ui
             return;
         }
 
-        const bool sideways = e.mods.isShiftDown() || std::abs (w.deltaX) > std::abs (w.deltaY);
-        const auto delta = sideways ? (e.mods.isShiftDown() ? w.deltaY : w.deltaX) : w.deltaY;
+        const auto [sideways, delta] = wheelScroll (e.mods.isShiftDown(), w);
 
         if (sideways)
             setScrollBeat (scrollBeat - static_cast<double> (delta) * 400.0 / pixelsPerBeat);
@@ -2050,5 +2060,10 @@ namespace carthage::ui
         g.fillAll (theme::bg);
         g.setColour (theme::bg2);
         g.fillRect (0, 0, headerWidth, rulerHeight);
+
+        // The corner under the lane names belongs to them: the time scrollbar starts at their
+        // border, not under them (owner, 4f).
+        const auto area = lanesArea();
+        g.fillRect (0, area.getBottom(), headerWidth, getHeight() - area.getBottom());
     }
 }

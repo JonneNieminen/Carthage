@@ -218,3 +218,7 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Owner asked for reversed samples to look reversed: the editor and the lanes draw them mirrored
   (Tracktion's offset already counts from the file's end), shape points mirror with them, clicks
   play the clip's reversed file. Checked in the app on the demo; undo restores both.
+- Owner's 4f checks: all pass but the wheel (Shift + scroll did nothing on the lanes: macOS sends
+  a Shift wheel turn as deltaX, the lanes read deltaY; fixed, `Timeline::wheelScroll` tested), the
+  time scrollbar's track under the lane names (corner painted), and the fade line crossing into the
+  controls (the waveform's drawing is clipped to it). Sliders already took Shift (checked by test).

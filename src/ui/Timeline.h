@@ -91,6 +91,12 @@ namespace carthage::ui
         void setZoom (double newPixelsPerBeat, double aroundBeat);
         void setScrollBeat (double beat);
 
+        /** What a plain or Shift wheel over the lanes does: scroll sideways (in time) or down, and by
+            how much. Shift is sideways; macOS already delivers a mouse wheel's turn with Shift as
+            deltaX, other systems in deltaY, and both count (owner, 4f wheel check). */
+        struct WheelScroll { bool sideways; float delta; };
+        static WheelScroll wheelScroll (bool shift, const juce::MouseWheelDetails&) noexcept;
+
         /** Beats and pixels, in this component's coordinates. */
         double beatAtX (float x) const noexcept;
         float xAtBeat (double beat) const noexcept;

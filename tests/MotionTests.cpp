@@ -1,4 +1,5 @@
 #include <ui/Controls.h>
+#include <ui/Timeline.h>
 
 using namespace carthage;
 
@@ -11,6 +12,63 @@ namespace
         bool isPlaying() const override   { return playing; }
     };
 }
+
+/** The wheel over a value control (W37), with what macOS sends: Shift turns a mouse wheel's
+    turn into a sideways scroll, so the delta arrives in deltaX with deltaY at zero. */
+class WheelTests final : public juce::UnitTest
+{
+public:
+    WheelTests() : juce::UnitTest ("The wheel over a value control", "ui") {}
+
+    void runTest() override
+    {
+        const auto wheel = [] (ui::ValueSlider& slider, juce::ModifierKeys mods, float dx, float dy)
+        {
+            const juce::MouseEvent e (juce::Desktop::getInstance().getMainMouseSource(), {}, mods, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                      &slider, &slider, juce::Time::getCurrentTime(), {}, juce::Time::getCurrentTime(), 0, false);
+            juce::MouseWheelDetails details {};
+            details.deltaX = dx;
+            details.deltaY = dy;
+            slider.mouseWheelMove (e, details);
+        };
+
+        beginTest ("Shift with a mouse wheel still adjusts, in finer steps");
+        {
+            ui::ValueSlider slider (0.0);
+            slider.setRange (-48.0, 12.0, 0.01);
+            slider.setValue (0.0);
+            slider.setSize (200, 24);
+            wheel (slider, {}, 0.0f, 0.1f);
+            const auto plain = slider.getValue();
+            expect (plain > 0.0, "the wheel raises the value");
+
+            slider.setValue (0.0);
+            wheel (slider, juce::ModifierKeys::shiftModifier, 0.1f, 0.0f);   // as macOS sends it
+            const auto fine = slider.getValue();
+            expect (fine > 0.0, "Shift + wheel raises it too");
+            expect (fine < plain, "and by less");
+        }
+
+        beginTest ("Shift + wheel over the lanes scrolls in time");
+        {
+            juce::MouseWheelDetails macShift {};
+            macShift.deltaX = 0.2f;   // macOS: the turn arrives sideways, deltaY 0
+            const auto mac = ui::Timeline::wheelScroll (true, macShift);
+            expect (mac.sideways && mac.delta > 0.0f, "the turn as macOS sends it moves in time");
+
+            juce::MouseWheelDetails winShift {};
+            winShift.deltaY = 0.2f;   // elsewhere it stays in deltaY
+            const auto win = ui::Timeline::wheelScroll (true, winShift);
+            expect (win.sideways && win.delta > 0.0f);
+
+            juce::MouseWheelDetails plain {};
+            plain.deltaY = 0.2f;
+            expect (! ui::Timeline::wheelScroll (false, plain).sideways, "without Shift it scrolls the lanes down");
+        }
+    }
+};
+
+static WheelTests wheelTests;
 
 class MotionTests final : public juce::UnitTest
 {

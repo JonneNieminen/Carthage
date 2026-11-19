@@ -42,6 +42,8 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   its name. Settings > Browser can fit a dropped loop to the project's tempo.
 
 ### Changed
+- Shift with a mouse wheel scrolls the lanes in time on macOS; the time scrollbar starts at the
+  lane names' border; a fade past the waveform's edge no longer draws over the editor's controls.
 - A reversed sample is drawn reversed, in the sample editor and on the lanes; its shape points
   mirror with it, and clicking the waveform plays it reversed from there.
 - Switches slide, the chosen tool cross-fades and the sample editor rises into place when it

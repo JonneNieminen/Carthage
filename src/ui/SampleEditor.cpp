@@ -629,6 +629,10 @@ namespace carthage::ui
 
         if (thumbnail.getTotalLength() > 0.0)
         {
+            // Everything about the waveform stays inside it: a clip longer than its file puts
+            // its end and fade past the edge, and they must not draw over the controls (owner).
+            const Graphics::ScopedSaveState insideWave (g);
+            g.reduceClipRegion (waveArea);
             const auto s = sound();
             // Drawn to its own loudest peak (up to 8x), so a quiet take is still readable, then
             // grown or shrunk by the sample's gain, so the gain can be seen (owner).
