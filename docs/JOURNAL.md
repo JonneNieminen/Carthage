@@ -174,4 +174,8 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   timeline time. Then the owner's 4e checks and report.
 - Found: Tracktion's Renderer::renderToFile hangs in the headless unit-test binary (no message
   loop to finish on). Do the envelope's time-base check in carthage-bench, which has one.
+- Also tried in the bench (on the message thread, useThread true): renderToFile returned false.
+  Next session: read tracktion_Renderer.cpp for what renderToFile needs (a free playback context?
+  the track mask's indexing?) before building the envelope on clip-plugin automation; or check
+  the time base without rendering, by reading the curve the ClipNode is given.
 
