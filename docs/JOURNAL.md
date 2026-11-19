@@ -172,4 +172,6 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   works with Reverse; Tracktion's ClipEffects are disabled on reversed clips), its volume
   automated; first check with an offline render whether a clip plugin's curve runs in clip or
   timeline time. Then the owner's 4e checks and report.
+- Found: Tracktion's Renderer::renderToFile hangs in the headless unit-test binary (no message
+  loop to finish on). Do the envelope's time-base check in carthage-bench, which has one.
 
