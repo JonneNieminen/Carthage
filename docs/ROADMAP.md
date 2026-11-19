@@ -14,7 +14,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
 | 3. Plugin manager and scanning | Verified (2026-11-18) |
-| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19); 4d, 4e and 4f done (2026-11-19/20); next 4g (loop region) |
+| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19); 4d to 4g done (2026-11-19/20; the piano roll's loop with phase 6); next phase 5 |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
 | 7. Help page, icon and polish | Not started |
@@ -634,9 +634,34 @@ Exit checks:
 - [x] Set, change, loop and clear by mouse in the running app; one undo step each (2026-11-20, a
       real mouse drag on the demo: bar 3 to 5, the edge to 6, playback wrapped at bar 6; L off and
       on; Cmd+Z one step; double-click clears; Cmd+Z restores, looping; EditingTests)
-- [ ] Owner's checks in the running app
+- [x] Owner's checks in the running app (2026-11-20: all nine pass)
 
-Report: _not written yet_
+Report:
+
+### Report — phase 4g (2026-11-20, c60edfe)
+Works:        Drag across the ruler to draw a loop region; it snaps like everything else (Cmd
+              bypasses). Its edges drag; a double-click on it clears it; a click still moves the
+              playhead. Playback loops it while looping is on: L or the loop button by the metronome
+              turns it on and off, and the region turns grey when off. Setting, changing and clearing
+              are one undo step each; Cmd+L (loop selection) uses the same region; the region is
+              saved, in beats (W46).
+Tested:       - Owner in the running app: all nine 4g checks pass.
+              - EditingTests: set in either order, a drag as one step, clear, undo of each (an undone
+                clear loops again), looping off is no undo step, no looping without a region, an
+                empty region refused, a pre-4g project's transport loop adopted.
+              - In the app with a real mouse drag: bar 3 to 5, the edge to 6; from 4 s, 8 s of
+                playing read 6.3 s on the clock (wrapped at bar 6); L, double-click, Cmd+Z.
+Measured:     Nothing new to measure: looping is Tracktion's transport.
+Not done:     - Drawing the region on the lanes with a modifier: every modifier there already has a
+                job (Ctrl-click is a right-click on macOS, Cmd bypasses snap, Option stretches, Shift
+                adds to the selection). Asked of the owner.
+              - The piano roll's loop region: with phase 6, on the shared grid code.
+              - A drag on the ruler no longer scrubs the playhead (it draws the loop).
+Also fixed:   Shift + wheel on a slider ran backwards on macOS (JUCE reads a sideways wheel as
+              -deltaX); found when CI showed the 4f wheel test passing by luck. The 4f report's
+              "Shift wheel on sliders" line was wrong until this.
+Decisions:    W46.
+Needs owner:  The lanes modifier question; then the go-ahead for phase 5 (mixer, Cmd+R export).
 
 ## Phase 5 — Mixer, insert Lines, per-channel I/O
 
