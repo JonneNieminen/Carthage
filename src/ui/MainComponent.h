@@ -4,6 +4,7 @@
 #include "PluginBrowser.h"
 #include "SampleBrowser.h"
 #include "StartScreen.h"
+#include "CommandPalette.h"
 #include "ProjectTabs.h"
 #include "SettingsPanel.h"
 #include "Timeline.h"
@@ -84,8 +85,7 @@ namespace carthage::ui
         int layoutSlots();
         bool keepPluginOnTop();
 
-        /** Cmd/Ctrl+K: the app shows the command palette. */
-        std::function<void()> onCommandPalette;
+
         juce::ValueTree getLayout() const;
         void applyLayout (const juce::ValueTree&);
 
@@ -114,6 +114,7 @@ namespace carthage::ui
         PluginBrowser browser;
         SampleBrowser samples;
         StartScreen startScreen { session };
+        CommandPalette palette { commands };
         bool browserOpen = true, panelShowsSamples = false;
         juce::TextButton samplesTab { "Samples" }, pluginsTab { "Plugins" };
         int panelWidth = PluginBrowser::preferredWidth;

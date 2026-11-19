@@ -507,6 +507,8 @@ namespace carthage::ui
         addChildComponent (timelineAway);
         addChildComponent (timelineBack);
         addChildComponent (startScreen);
+        addChildComponent (palette);
+        palette.setOwnCommand (cmd::commandPalette);
 
         // Tabs: a click brings a project forward; closing asks to save, as Cmd/Ctrl+W does.
         addAndMakeVisible (tabs);
@@ -732,7 +734,7 @@ namespace carthage::ui
             case cmd::windowSignal:     toggleDetached (View::signal); return true;
             case cmd::windowSettings:   toggleDetached (View::settings); return true;
             case cmd::defaultLayout:    defaultLayout(); setStatus ("Back to the default layout"); return true;
-            case cmd::commandPalette:   if (onCommandPalette) onCommandPalette(); return true;
+            case cmd::commandPalette:   if (palette.isVisible()) palette.close(); else palette.open(); return true;
             case cmd::keepPluginOnTop:
                 props().setValue ("keepPluginOnTop", ! keepPluginOnTop());
                 if (pluginWindow != nullptr) pluginWindow->setAlwaysOnTop (keepPluginOnTop());

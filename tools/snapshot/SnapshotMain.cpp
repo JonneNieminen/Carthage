@@ -216,6 +216,15 @@ namespace
             onMessageThreadVoid ([this, temp] { session->newProject (temp.getChildFile ("Second song")); });
             capture (outDir.getChildFile ("tabs.png"));
 
+            // Phase 4c: the command palette, and the main window with the timeline in its own.
+            onMessageThreadVoid ([this] { commands.invokeDirectly (app::commands::commandPalette, false); });
+            capture (outDir.getChildFile ("palette.png"));
+            onMessageThreadVoid ([this] { commands.invokeDirectly (app::commands::commandPalette, false); });   // Cmd+K again closes it
+            onMessageThreadVoid ([this] { content->setDetached (ui::MainComponent::View::timeline, true);
+                                          content->setDetached (ui::MainComponent::View::plugins, true); });
+            capture (outDir.getChildFile ("views-away.png"));
+            onMessageThreadVoid ([this] { content->defaultLayout(); });
+
             onMessageThreadVoid ([this] { content->toggleSettings(); });
             Thread::sleep (300);
             capture (outDir.getChildFile ("settings.png"));
