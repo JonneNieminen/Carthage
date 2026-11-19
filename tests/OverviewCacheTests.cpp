@@ -1,4 +1,5 @@
 #include <ui/Controls.h>
+#include <engine/AudioFormats.h>
 
 using namespace carthage;
 
@@ -26,7 +27,7 @@ public:
         }
 
         juce::AudioFormatManager formats;
-        formats.registerBasicFormats();
+        carthage::audio::registerReadable (formats);
         const auto cacheFolder = folder.getChildFile ("Overviews");
 
         beginTest ("A finished overview is written to disk");

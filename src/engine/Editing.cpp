@@ -1,4 +1,5 @@
 #include "Editing.h"
+#include "AudioFormats.h"
 
 #include <limits>
 #include <set>
@@ -29,7 +30,7 @@ namespace carthage::editing
 
             if (cached <= 0.0)
             {
-                static auto formats = [] { auto f = std::make_unique<juce::AudioFormatManager>(); f->registerBasicFormats(); return f; }();
+                static auto formats = [] { auto f = std::make_unique<juce::AudioFormatManager>(); carthage::audio::registerReadable (*f); return f; }();
 
                 std::unique_ptr<juce::AudioFormatReader> reader (formats->createReaderFor (file));
 

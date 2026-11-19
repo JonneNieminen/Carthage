@@ -1,4 +1,5 @@
 #include "SampleAnalysis.h"
+#include "AudioFormats.h"
 #include "Trace.h"
 
 #include <juce_dsp/juce_dsp.h>
@@ -278,7 +279,7 @@ namespace carthage::engine
         std::optional<SampleLibrary::Analysis> analyseFile (const juce::File& file)
         {
             juce::AudioFormatManager formats;
-            formats.registerBasicFormats();
+            carthage::audio::registerReadable (formats);
             const std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
 
             if (reader == nullptr || reader->sampleRate <= 0.0 || reader->lengthInSamples <= 0)

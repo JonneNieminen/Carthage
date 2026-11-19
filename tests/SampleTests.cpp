@@ -2,6 +2,7 @@
 #include <engine/SampleLibrary.h>
 #include <engine/RealtimeCheck.h>
 #include <engine/SamplePreview.h>
+#include <engine/AudioFormats.h>
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
@@ -124,6 +125,19 @@ public:
         writeSine (library.getChildFile ("Loops/Bass loop 120.wav"), 0.2);
         library.getChildFile ("Loops/notes.txt").replaceWithText ("not a sound");
         library.getChildFile ("Drums/.hidden.wav").replaceWithText ("hidden");
+
+        beginTest ("Carthage reads its five formats only: a damaged CAF that spins JUCE's CoreAudio reader is refused at once");
+        {
+            juce::AudioFormatManager formats;
+            audio::registerReadable (formats);
+            expectEquals (formats.getNumKnownFormats(), 5);
+
+            const juce::File spin (juce::String (CARTHAGE_SOURCE_DIR) + "/tools/fuzz/seeds/audio/caf-spin");
+            const auto t0 = juce::Time::getMillisecondCounterHiRes();
+            std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (std::make_unique<juce::FileInputStream> (spin)));
+            expect (reader == nullptr, "not a format Carthage reads");
+            expectLessThan (juce::Time::getMillisecondCounterHiRes() - t0, 1000.0);
+        }
 
         beginTest ("It starts empty; an added folder is read with every folder under it");
         {

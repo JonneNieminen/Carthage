@@ -79,6 +79,16 @@ three on macOS on every push, and fails on any finding.
   runs the tests with out-of-bounds, use-after-free and undefined-behaviour checks; any report stops
   the run. As in the RTSan build, timing is not judged there: the release build's tests check it.
 - **RealTimeSanitizer**: the `rtsan` preset's tests, above.
+- **Fuzzing** (libFuzzer with ASan, Homebrew LLVM). `tools/fuzz` holds a target for the project
+  reader and one for the audio readers; any input must open, or be refused with a message, without
+  a crash or a bad read. CI runs each for a minute from `tools/fuzz/seeds`. Locally:
+
+  ```bash
+  cmake --preset fuzz && cmake --build --preset fuzz --target carthage_fuzz_project carthage_fuzz_audio
+  build/fuzz/tools/fuzz/carthage_fuzz_audio_artefacts/RelWithDebInfo/carthage_fuzz_audio -max_total_time=600 corpus/audio tools/fuzz/seeds/audio
+  ```
+
+  A crashing input is saved as `crash-…`; it becomes a test once fixed.
 
 ## Measuring
 

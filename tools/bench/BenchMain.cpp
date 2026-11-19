@@ -37,6 +37,7 @@
 // holding --click-out.
 
 #include "WorkgroupJoins.h"
+#include <engine/AudioFormats.h>
 
 #include <engine/Editing.h>
 #include <engine/Session.h>
@@ -1090,7 +1091,7 @@ namespace
             // emphasis (set above) the click node plays the little click on every beat.
             const auto rate = onMessageThread ([this] { return session->getCallback().getSampleRate(); });
             AudioFormatManager formats;
-            formats.registerBasicFormats();
+            carthage::audio::registerReadable (formats);
 
             std::unique_ptr<AudioFormatReader> clickReader (formats.createReaderFor (
                 std::make_unique<MemoryInputStream> (tracktion::TracktionBinaryData::littleclick_wav, static_cast<size_t> (tracktion::TracktionBinaryData::littleclick_wavSize), false)));

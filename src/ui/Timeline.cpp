@@ -1,4 +1,5 @@
 #include "Timeline.h"
+#include <engine/AudioFormats.h>
 #include "SampleBrowser.h"
 
 namespace carthage::ui
@@ -1038,7 +1039,7 @@ namespace carthage::ui
         : session (s), editState (s.getEdit().state),
           thumbnailCache (64, s.getFolders().settings.getChildFile ("Overviews"))
     {
-        formats.registerBasicFormats();
+        carthage::audio::registerReadable (formats);
         ruler = std::make_unique<Ruler> (*this);
         headers = std::make_unique<Headers> (*this);
         lanes = std::make_unique<Lanes> (*this);

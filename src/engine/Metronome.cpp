@@ -1,4 +1,5 @@
 #include "Metronome.h"
+#include "AudioFormats.h"
 
 #include <cmath>
 #include <numbers>
@@ -112,7 +113,7 @@ namespace carthage::metronome
         if (sound == Sound::custom)
         {
             juce::AudioFormatManager formats;
-            formats.registerBasicFormats();
+            carthage::audio::registerReadable (formats);
             std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (customFile));
 
             if (reader == nullptr)

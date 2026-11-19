@@ -21,6 +21,14 @@ if(CARTHAGE_RTSAN)
     target_compile_definitions(carthage_sanitizers INTERFACE CARTHAGE_RTSAN=1)
 endif()
 
+# Fuzzing: every Carthage, JUCE and Tracktion object reports coverage to libFuzzer, and ASan
+# watches memory; the fuzz targets themselves link libFuzzer's main (tools/fuzz).
+if(CARTHAGE_FUZZ)
+    target_compile_options(carthage_sanitizers INTERFACE -fsanitize=fuzzer-no-link,address -fno-omit-frame-pointer)
+    target_link_options(carthage_sanitizers INTERFACE -fsanitize=address)
+    target_compile_definitions(carthage_sanitizers INTERFACE CARTHAGE_FUZZ=1)
+endif()
+
 # AddressSanitizer + UndefinedBehaviorSanitizer: out-of-bounds, use-after-free, leaks of the
 # sanitizer's kind, signed overflow, misaligned or null access. Any report fails the run.
 if(CARTHAGE_ASAN)

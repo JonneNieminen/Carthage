@@ -87,6 +87,7 @@ jobs:
           - { name: clang-tidy, preset: release, kind: tidy }
           - { name: ASan and UBSan tests, preset: asan, kind: test }
           - { name: RTSan tests, preset: rtsan, kind: test }
+          - { name: Fuzzing, preset: fuzz, kind: fuzz }
     runs-on: macos-26
     timeout-minutes: 90
     env:
@@ -117,7 +118,29 @@ jobs:
 
       # Builds first, so generated headers exist and the analysis sees what the compiler sees.
       - name: Build
+        if: matrix.kind != 'fuzz'
         run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Build fuzz targets
+        if: matrix.kind == 'fuzz'
+        run: cmake --build --preset fuzz --target carthage_fuzz_project carthage_fuzz_audio
+
+      # A minute each from the seeds; a crash fails the job and the input is uploaded below.
+      - name: Fuzz
+        if: matrix.kind == 'fuzz'
+        run: |
+          for t in project audio; do
+            exe=$(find build/fuzz/tools/fuzz -type f -name "carthage_fuzz_$t" -perm -u+x | head -1)
+            mkdir -p "fuzz-corpus/$t" fuzz-crashes
+            "$exe" -max_total_time=60 -timeout=10 -rss_limit_mb=4096 -artifact_prefix=fuzz-crashes/ "fuzz-corpus/$t" "tools/fuzz/seeds/$t"
+          done
+
+      - name: Keep a crashing input
+        if: failure() && matrix.kind == 'fuzz'
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-crashes
+          path: fuzz-crashes
 
       - name: clang-tidy
         if: matrix.kind == 'tidy'

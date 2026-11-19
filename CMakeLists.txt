@@ -38,6 +38,7 @@ endif()
 
 option(CARTHAGE_RTSAN "Build with Clang's RealTimeSanitizer (needs a Clang that supports it)" OFF)
 option(CARTHAGE_ASAN "Build with AddressSanitizer and UndefinedBehaviorSanitizer (Clang or GCC)" OFF)
+option(CARTHAGE_FUZZ "Build the fuzz targets (needs Homebrew LLVM's libFuzzer: the fuzz preset)" OFF)
 option(CARTHAGE_TESTS "Build the unit and engine tests" ON)
 
 include(cmake/CarthageOptions.cmake)
@@ -56,6 +57,10 @@ include(cmake/Updaters.cmake)   # Sparkle / WinSparkle release archives, pinned 
 add_subdirectory(src)
 add_subdirectory(tools/bench)
 add_subdirectory(tools/snapshot)
+
+if(CARTHAGE_FUZZ)
+    add_subdirectory(tools/fuzz)
+endif()
 
 if(CARTHAGE_TESTS)
     enable_testing()

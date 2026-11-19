@@ -1,4 +1,5 @@
 #include <engine/TakeRecorder.h>
+#include <engine/AudioFormats.h>
 
 #include <thread>
 
@@ -51,7 +52,7 @@ public:
             expectWithinAbsoluteError (result.firstBlockStreamTime, 10.0, 1.0e-12);
 
             juce::AudioFormatManager formats;
-            formats.registerBasicFormats();
+            carthage::audio::registerReadable (formats);
             std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
             expect (reader != nullptr);
 

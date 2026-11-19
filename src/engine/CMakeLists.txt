@@ -15,6 +15,7 @@ add_library(carthage_engine STATIC
     Metronome.cpp Metronome.h
     Log.cpp Log.h
     Trace.cpp Trace.h
+    AudioFormats.h
     Session.cpp Session.h
     TakePlacement.h
     TakeRecorder.cpp TakeRecorder.h)

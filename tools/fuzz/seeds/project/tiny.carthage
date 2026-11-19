@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EDIT appVersion="Carthage" projectID="0/0" creationTime="0"><CARTHAGE formatVersion="1" id="fuzz"><VIEW pixelsPerBeat="24"/></CARTHAGE><TEMPOSEQUENCE><TEMPO startBeat="0.0" bpm="120.0" curve="1.0"/><TIMESIG numerator="4" denominator="4" startBeat="0.0"/></TEMPOSEQUENCE><TRACK id="1001" name="Lane 1"><AUDIOCLIP name="Take" start="0.5" length="2.0" offset="0.0" source="../Recordings/Take 1.wav"/></TRACK></EDIT>

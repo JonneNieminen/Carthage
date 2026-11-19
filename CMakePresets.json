@@ -36,6 +36,21 @@
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
     },
     {
+      "name": "fuzz",
+      "displayName": "Fuzz targets (Homebrew LLVM: libFuzzer + ASan)",
+      "description": "Builds tools/fuzz. Needs a Clang with libFuzzer: brew install llvm.",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CARTHAGE_FUZZ": "ON",
+        "CARTHAGE_TESTS": "OFF",
+        "CMAKE_C_COMPILER": "/opt/homebrew/opt/llvm/bin/clang",
+        "CMAKE_CXX_COMPILER": "/opt/homebrew/opt/llvm/bin/clang++",
+        "CMAKE_OBJCXX_COMPILER": "/opt/homebrew/opt/llvm/bin/clang++"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+    },
+    {
       "name": "asan",
       "displayName": "AddressSanitizer + UBSan",
       "description": "Debug-info build with -fsanitize=address,undefined, for the tests (macOS, Apple Clang).",
@@ -48,7 +63,8 @@
     { "name": "debug", "configurePreset": "debug" },
     { "name": "release", "configurePreset": "release" },
     { "name": "rtsan", "configurePreset": "rtsan" },
-    { "name": "asan", "configurePreset": "asan" }
+    { "name": "asan", "configurePreset": "asan" },
+    { "name": "fuzz", "configurePreset": "fuzz" }
   ],
   "testPresets": [
     { "name": "debug", "configurePreset": "debug", "output": { "outputOnFailure": true } },

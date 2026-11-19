@@ -1,10 +1,11 @@
 #include "SamplePreview.h"
+#include "AudioFormats.h"
 
 namespace carthage::engine
 {
     SamplePreview::SamplePreview() : juce::Thread ("Carthage preview")
     {
-        formats.registerBasicFormats();   // WAV, AIFF, FLAC, Ogg, MP3 (JUCE_USE_MP3AUDIOFORMAT)
+        carthage::audio::registerReadable (formats);
         startThread (juce::Thread::Priority::normal);
     }
 

@@ -10,17 +10,15 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - **Phases 1 to 4c are verified** (reports in ROADMAP). **Phase 4d is in progress** (the owner said
   "Start phase 4d"); then 4e (sample editor), 4f (design pass), phase 5 (mixer). The owner's list is
   F22, the answers W38, the C++ rules W39 (AGENTS.md "C++ practices").
-- **4d done so far:** clang-tidy with zero findings and CI jobs for clang-tidy, ASan/UBSan
-  (`asan` preset) and RTSan tests; dependabot for Actions; toolbar tool icons with keys, master
-  level, load meter hidden by default (Settings > Load); lanes rename/add/delete/mute/solo; rename a
-  project from its tab; tempo figure with tap tempo.
-- **4d still to do, in this order:** the tempo-change question (stretch / move with the beat / leave
-  in time, with Remember); wheel scroll and zoom on both axes plus lane height (W38 keys); panels
-  resizable by their border; UI size 75-150 % (Cmd+= / - / 0); Cmd+W on a view window; rename
-  layouts; copyable tooltips; FL-style paste and right-click delete switches; plugin check at first
-  launch only; metronome; export logs, crash report, project versions, undo list, project notes;
-  fuzzing the readers, signposts, waveform overviews cached on disk; then the owner's checks and the
-  4d report. The toolbar is full at 1280 pt (min window 960): the UI-size work should make it fold.
+- **4d: every deliverable is built** (ROADMAP 4d list ticked). The owner asked to keep going and
+  do one larger hands-on test run at the end. **Next: the owner's 4d checks** (a checklist of
+  every item, run in the app), then the 4d report, then 4e (sample editor). Not yet tried by the
+  owner: toolbar (icons, master level, tempo and Tap, metronome K), lanes, tab rename, the tempo
+  question, Option-scroll lane height, panel edge, UI size, Cmd+W in view windows, layout names,
+  copyable tooltips, FL switches, plugin check at first launch, metronome sounds, Export log, the
+  crash report, notes, versions, undo history.
+- **Rule learnt:** run the full clang-tidy pass (AGENTS.md "Commands") before every push; CI's
+  tidy job failed twice on new test files that were not re-checked.
 - **In hand, not finished:**
   - The owner's `~/Library/Application Support/Carthage/Samples.xml` points at the generated test
     pack `build/samples-test` (six sounds of known key and tempo) for the 4b checks. Remove that
@@ -113,4 +111,17 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   TapTempo) and a bench check (`carthage-bench projects`: rename). Renaming moves the old folder to
   the bin, and the bench run puts two temp folders there too.
 - Not yet checked by the owner in the app.
+
+### 2026-11-19 (phase 4d, part 2)
+
+- Built: the tempo question (editing::setTempo/followTempo: Tracktion's setBpm remaps the edit,
+  Carthage sets it without the remap and places clips itself), lane height, panel edge, UI size
+  with a folding toolbar, Cmd+W on view windows, layout names, copyable tooltips, FL-style
+  switches, first-launch plugin check, metronome (synthesized sounds written as WAVs for
+  Tracktion's click track), log + Export log + crash report, undo history, notes (in the edit
+  state), versions (Versions/ folder, restore in place), overviews on disk, signposts, fuzzing.
+- Fuzzing found JUCE's CoreAudio reader spinning on a damaged CAF; Carthage now registers only its
+  five formats (W40). Known gap: Tracktion's clip reader still has CoreAudio (not patched).
+- Tracktion facts found: mute/solo are outside undo; Click::setClickWaveFile is internal (set
+  SettingID::clickTrackSampleBig/Small); a freshly loaded edit's changed flag clears ~200 ms later.
 
