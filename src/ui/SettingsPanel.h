@@ -51,6 +51,9 @@ namespace carthage::ui
         /** Scrolls the body so the Updates section is in view. */
         void showUpdatesSection()    { viewport.setViewPosition (0, updatesHeading.getY() - 8); }
 
+        /** Puts `text` in the Settings search (the snapshot tool shows a search this way). */
+        void setSearch (const juce::String& text)   { find.setText (text, true); }
+
         /** Scrolls the body so the keyboard shortcuts are in view. */
         void showShortcutsSection()  { viewport.setViewPosition (0, shortcutsHeading.getY() - 8); }
 
@@ -62,6 +65,8 @@ namespace carthage::ui
     private:
         engine::Session& session;
 
+        juce::TextEditor find;   // Settings search (W41): filters the body
+        juce::Label noMatch;
         juce::Label title, interfaceHeading, recordingHeading, latencyHeading, loadHeading, updatesHeading, updatesHint, shortcutsHeading,
                     projectsHeading, copySamplesHint;
         juce::ToggleButton copySamples { "Copy samples into the project" };

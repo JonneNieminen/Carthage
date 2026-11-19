@@ -21,6 +21,10 @@ namespace carthage::ui
 
         /** The height its rows need at the width it has. */
         int getIdealHeight() const noexcept   { return idealHeight; }
+
+        /** Settings' own search (W41): puts `text` in this editor's search, and says whether any
+            command matches it. */
+        bool showMatching (const juce::String& text);
         std::function<void()> onHeightChanged;
 
         /** The search text changed (after the rows were laid out again). */

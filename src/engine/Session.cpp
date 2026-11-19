@@ -615,6 +615,10 @@ namespace carthage::engine
         for (int i = existing; i < lanes.size(); ++i)
             lanes[i]->setName ("Lane " + juce::String (i + 1));
 
+        // A new project's metronome marks the first beat of the bar (the tick-tock's deeper tock).
+        if (existing == 0)
+            edit.clickTrackEmphasiseBars = true;
+
         // An untouched untitled tab gives its place to this one.
         int index = static_cast<int> (projects.size());
 

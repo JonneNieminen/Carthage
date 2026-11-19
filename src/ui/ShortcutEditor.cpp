@@ -386,4 +386,19 @@ namespace carthage::ui
     }
 
     void ShortcutEditor::resized()   { layout(); }
+
+    bool ShortcutEditor::showMatching (const String& text)
+    {
+        if (search.getText() != text)
+        {
+            search.setText (text, false);
+            layout();
+        }
+
+        for (auto* row : rows)
+            if (text.isEmpty() || row->searchText.containsIgnoreCase (text))
+                return true;
+
+        return false;
+    }
 }

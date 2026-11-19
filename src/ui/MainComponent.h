@@ -142,6 +142,7 @@ namespace carthage::ui
         SampleBrowser samples;
         StartScreen startScreen { session };
         CommandPalette palette { commands };
+        CommandPalette viewsPalette { commands };   // Cmd/Ctrl+J (W41)
         bool browserOpen = true, panelShowsSamples = false;
         juce::TextButton samplesTab { "Samples" }, pluginsTab { "Plugins" };
         int panelWidth = PluginBrowser::preferredWidth;

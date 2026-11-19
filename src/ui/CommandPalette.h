@@ -20,6 +20,13 @@ namespace carthage::ui
         /** The command that opens the palette: not listed in it. */
         void setOwnCommand (juce::CommandID id)   { own = id; }
 
+        /** Lists only these commands (the views palette, Cmd/Ctrl+J, W41), with its own prompt. */
+        void setOnly (juce::Array<juce::CommandID> ids, const juce::String& prompt)
+        {
+            only = std::move (ids);
+            search.setTextToShowWhenEmpty (prompt, theme::faint);
+        }
+
         void paint (juce::Graphics&) override;
         void resized() override;
         /** A click elsewhere takes the keyboard away from it: it closes. */
@@ -32,6 +39,7 @@ namespace carthage::ui
         juce::ListBox list;
         juce::Array<juce::CommandID> shown;
         juce::CommandID own = 0;
+        juce::Array<juce::CommandID> only;
 
         void filter();
         void run (int row);

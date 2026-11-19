@@ -78,7 +78,8 @@ namespace carthage::ui
         {
             const auto* info = manager.getCommandForIndex (i);
 
-            if (info == nullptr || info->commandID == StandardApplicationCommandIDs::quit || info->commandID == own)
+            if (info == nullptr || info->commandID == StandardApplicationCommandIDs::quit || info->commandID == own
+                 || (! only.isEmpty() && ! only.contains (info->commandID)))
                 continue;
 
             ApplicationCommandInfo now (info->commandID);

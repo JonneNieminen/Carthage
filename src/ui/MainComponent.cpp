@@ -574,6 +574,9 @@ namespace carthage::ui
         addChildComponent (startScreen);
         addChildComponent (palette);
         palette.setOwnCommand (cmd::commandPalette);
+        addChildComponent (viewsPalette);
+        viewsPalette.setOwnCommand (cmd::viewsPalette);
+        viewsPalette.setOnly (cmd::views(), String::fromUTF8 ("Go to a view\xe2\x80\xa6"));
 
         // Tabs: a click brings a project forward; closing asks to save, as Cmd/Ctrl+W does.
         addAndMakeVisible (tabs);
@@ -1061,7 +1064,8 @@ namespace carthage::ui
             case cmd::windowSignal:     toggleDetached (View::signal); return true;
             case cmd::windowSettings:   toggleDetached (View::settings); return true;
             case cmd::defaultLayout:    defaultLayout(); setStatus ("Back to the default layout"); return true;
-            case cmd::commandPalette:   if (palette.isVisible()) palette.close(); else palette.open(); return true;
+            case cmd::commandPalette:   viewsPalette.close(); if (palette.isVisible()) palette.close(); else palette.open(); return true;
+            case cmd::viewsPalette:     palette.close(); if (viewsPalette.isVisible()) viewsPalette.close(); else viewsPalette.open(); return true;
             case cmd::uiLarger:         setUiScale (uiScale() + 0.125); return true;
             case cmd::uiSmaller:        setUiScale (uiScale() - 0.125); return true;
             case cmd::uiActualSize:     setUiScale (1.0); return true;

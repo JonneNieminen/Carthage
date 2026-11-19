@@ -66,6 +66,9 @@ namespace carthage::app
             uiLarger, uiSmaller, uiActualSize,
             toggleMetronome, undoHistory, exportLog, projectNotes, restoreVersion,
             addLaneBelow, moveLaneUp, moveLaneDown,
+            viewsPalette,
+            showTabFirst,                                // showTabFirst + 0..8: Cmd+1 to Cmd+9
+            afterTabs = showTabFirst + 9,
         };
 
         /** Layout slots there can be; Settings chooses how many are offered (F21). */
@@ -88,7 +91,23 @@ namespace carthage::app
                      windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings,
                      defaultLayout, commandPalette, keepPluginOnTop, lanesTaller, lanesShorter,
                      uiLarger, uiSmaller, uiActualSize, toggleMetronome, undoHistory, exportLog, projectNotes, restoreVersion,
-                     addLaneBelow, moveLaneUp, moveLaneDown };
+                     addLaneBelow, moveLaneUp, moveLaneDown, viewsPalette };
+        }
+
+        /** Cmd/Ctrl+1 to 9: the project tabs; 9 is always the last tab (W41). */
+        inline juce::Array<juce::CommandID> tabs()
+        {
+            juce::Array<juce::CommandID> ids;
+            for (int i = 0; i < 9; ++i)
+                ids.add (showTabFirst + i);
+            return ids;
+        }
+
+        /** What the views palette lists (W41). */
+        inline juce::Array<juce::CommandID> views()
+        {
+            return { sampleBrowser, pluginBrowser, audioSettings, keyboardShortcuts, projectNotes, startScreen,
+                     windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings, defaultLayout };
         }
 
         /** The layout commands, recall then save, slot 1 first. */
@@ -103,9 +122,14 @@ namespace carthage::app
         /** Commands the application itself performs, whatever window is in front. */
         inline juce::Array<juce::CommandID> application()
         {
-            return { checkForUpdates, newProject, openProject, saveProject, saveProjectAs, closeProject,
-                     minimiseWindow, toggleFullScreen, nextProject, previousProject, collectSamples,
-                     startScreen, saveAsTemplate };
+            juce::Array<juce::CommandID> ids { checkForUpdates, newProject, openProject, saveProject, saveProjectAs, closeProject,
+                                               minimiseWindow, toggleFullScreen, nextProject, previousProject, collectSamples,
+                                               startScreen, saveAsTemplate };
+
+            for (int i = 0; i < 9; ++i)
+                ids.add (showTabFirst + i);   // Cmd/Ctrl+1 to 9 (W41)
+
+            return ids;
         }
 
         /** Name, description, category and default keys. Flags (enabled, ticked) are added by the
@@ -216,6 +240,7 @@ namespace carthage::app
                 case commandPalette:  info.setInfo (juce::String::fromUTF8 ("Find a command\xe2\x80\xa6"), "Type to find any command and run it", "Window", 0); info.addDefaultKeypress ('k', primary); break;
                 case lanesTaller:     info.setInfo ("Taller lanes", "Make every lane taller (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('+', primary | juce::ModifierKeys::altModifier); info.addDefaultKeypress ('=', primary | juce::ModifierKeys::altModifier); break;
                 case lanesShorter:    info.setInfo ("Shorter lanes", "Make every lane shorter (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('-', primary | juce::ModifierKeys::altModifier); break;
+                case viewsPalette:    info.setInfo (juce::String::fromUTF8 ("Go to a view\xe2\x80\xa6"), "Type to find a view and bring it forward, or put it in its own window", "Window", 0); info.addDefaultKeypress ('j', primary); break;
                 case addLaneBelow:    info.setInfo ("Add lane", "Add a lane below the current lane (the one whose name you clicked last)", "Lanes", 0); info.addDefaultKeypress ('n', primary | juce::ModifierKeys::altModifier); break;
                 case moveLaneUp:      info.setInfo ("Move lane up", "Move the current lane one place up", "Lanes", 0); info.addDefaultKeypress (KP::upKey, primary); break;
                 case moveLaneDown:    info.setInfo ("Move lane down", "Move the current lane one place down", "Lanes", 0); info.addDefaultKeypress (KP::downKey, primary); break;
@@ -258,7 +283,14 @@ namespace carthage::app
                     info.setInfo ("Measure latency", "Measure the round trip through a cable from an output to an input", "Settings", 0);
                     break;
                 default:
-                    if (id >= recallLayoutFirst && id < saveLayoutFirst)
+                    if (id >= showTabFirst && id < afterTabs)
+                    {
+                        const auto n = id - showTabFirst + 1;
+                        info.setInfo (n == 9 ? juce::String ("Last project tab") : "Project tab " + juce::String (n),
+                                      n == 9 ? juce::String ("Bring the last tab forward") : "Bring tab " + juce::String (n) + " forward", "Window", 0);
+                        info.addDefaultKeypress ('0' + n, primary);
+                    }
+                    else if (id >= recallLayoutFirst && id < saveLayoutFirst)
                     {
                         const auto n = id - recallLayoutFirst + 1;
                         info.setInfo ("Layout " + juce::String (n), "Put the windows where layout " + juce::String (n) + " has them", "Layouts", 0);

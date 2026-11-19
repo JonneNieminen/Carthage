@@ -412,6 +412,19 @@ namespace carthage::app
 
         bool perform (const InvocationInfo& info) override
         {
+            if (info.commandID >= commands::showTabFirst && info.commandID < commands::afterTabs)
+            {
+                // Cmd+1 to Cmd+8 the tab at that place, Cmd+9 always the last (W41).
+                const auto n = info.commandID - commands::showTabFirst;
+                const auto count = session->getNumProjects();
+                const auto index = n == 8 ? count - 1 : n;
+
+                if (index < count)
+                    report (session->showProject (index));
+
+                return true;
+            }
+
             switch (info.commandID)
             {
                 case commands::checkForUpdates:

@@ -234,6 +234,9 @@ namespace
             onMessageThreadVoid ([this] { content->toggleSettings(); });
             Thread::sleep (300);
             capture (outDir.getChildFile ("settings.png"));
+            onMessageThreadVoid ([this] { content->getSettings().setSearch ("metronome"); });
+            capture (outDir.getChildFile ("settings-search.png"));
+            onMessageThreadVoid ([this] { content->getSettings().setSearch ({}); });
             onMessageThreadVoid ([this] { content->getSettings().setBetaUpdates (true, true, {});
                                           content->getSettings().showUpdatesSection(); });
             capture (outDir.getChildFile ("settings-updates.png"));

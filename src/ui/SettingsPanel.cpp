@@ -23,6 +23,16 @@ namespace carthage::ui
         styleLabel (title, theme::textLg, theme::text, true);
         title.setText ("Settings", dontSendNotification);
 
+        find.setTextToShowWhenEmpty (String::fromUTF8 ("Find a setting\xe2\x80\xa6"), theme::faint);
+        find.setFont (theme::uiFont (theme::textMd));
+        find.setIndents (theme::space2, 6);
+        find.onTextChange = [this] { viewport.setViewPosition (0, 0); resized(); };
+        find.onEscapeKey = [this] { find.clear(); resized(); };
+        addAndMakeVisible (find);
+        styleLabel (noMatch, theme::textMd, theme::muted);
+        noMatch.setJustificationType (Justification::topLeft);
+        body.addChildComponent (noMatch);
+
         for (auto [label, text] : { std::pair { &interfaceHeading, "Interface" }, { &recordingHeading, "Recording" },
                                     { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" }, { &timelineHeading, "Timeline" }, { &metronomeHeading, "Metronome" }, { &windowsHeading, "Windows" },
                                     { &updatesHeading, "Updates" },
@@ -30,6 +40,7 @@ namespace carthage::ui
         {
             styleLabel (*label, theme::textSm, theme::muted, true);
             label->setText (text, dontSendNotification);
+            body.addAndMakeVisible (*label);   // every heading lives in the scrolling body
         }
 
         for (auto [label, text] : { std::pair { &inputDeviceLabel, "Input" }, { &outputDeviceLabel, "Output" },
@@ -561,104 +572,177 @@ namespace carthage::ui
         title.setBounds (top);
         outer.removeFromTop (theme::space1);
 
+        find.setBounds (outer.removeFromTop (rowHeight));
+        outer.removeFromTop (theme::space2);
+
         // The body is as tall as its rows; the viewport scrolls it when the window is shorter.
         viewport.setBounds (outer.withX (1).withRight (getWidth()));
         const auto bodyWidth = viewport.getWidth() - theme::space4 - viewport.getScrollBarThickness();
         auto r = Rectangle<int> (theme::space4 - 1, 0, bodyWidth - theme::space4 + 1, 10000);
         const auto startY = r.getY();
+        const auto query = find.getText().trim();
 
-        const auto heading = [&] (Label& l)
+        // Each line knows its words (label, button text, tooltip), so the search can keep it or
+        // hide it (W41). A heading that matches keeps its whole section.
+        struct Line
         {
-            r.removeFromTop (theme::space4);
-            l.setBounds (r.removeFromTop (20));
-            r.removeFromTop (theme::space1);
+            std::vector<Component*> parts;
+            int height = 0;
+            std::function<void (Rectangle<int>)> place;
         };
 
-        const auto row = [&] (Label& l, Component& c)
+        struct Section
         {
-            auto line = r.removeFromTop (rowHeight);
-            l.setBounds (line.removeFromLeft (labelWidth));
-            c.setBounds (line);
-            r.removeFromTop (theme::space1);
+            Label* heading = nullptr;
+            std::vector<Line> lines;
         };
 
-        heading (interfaceHeading);
-        row (inputDeviceLabel, inputDevice);
-        row (outputDeviceLabel, outputDevice);
-        row (rateLabel, rate);
-        row (bufferLabel, buffer);
-
-        heading (recordingHeading);
-        row (formatLabel, format);
-
-        heading (latencyHeading);
-        row (reportedLabel, reportedValue);
-        row (measuredLabel, measuredValue);
-        loopHint.setBounds (r.removeFromTop (48));
-        row (loopOutLabel, loopOut);
-        row (loopInLabel, loopIn);
-        auto actions = r.removeFromTop (rowHeight);
-        measureButton.setBounds (actions.removeFromLeft (96));
-        r.removeFromTop (theme::space2);
-        useMeasured.setBounds (r.removeFromTop (rowHeight));
-
-        heading (loadHeading);
-        row (cpuLabel, cpuValue);
-        row (threadLabel, threadValue);
-        auto drops = r.removeFromTop (rowHeight);
-        dropoutsLabel.setBounds (drops.removeFromLeft (labelWidth));
-        resetDropouts.setBounds (drops.removeFromRight (64));
-        dropoutsValue.setBounds (drops);
-        showLoad.setBounds (r.removeFromTop (rowHeight));
-
-        heading (projectsHeading);
-        row (atLaunchLabel, atLaunch);
-        row (tempoFollowLabel, tempoFollow);
-        copySamples.setBounds (r.removeFromTop (rowHeight));
-        copySamplesHint.setBounds (r.removeFromTop (50));
-
-        heading (windowsHeading);
-        row (slotsLabel, slots);
-        row (uiScaleLabel, uiScale);
-
-        heading (browserHeading);
-        row (panelWidthLabel, panelWidth);
-        row (textSizeLabel, textSize);
-        playWhileHeld.setBounds (r.removeFromTop (rowHeight));
-        fitLoops.setBounds (r.removeFromTop (rowHeight));
-        checkPlugins.setBounds (r.removeFromTop (rowHeight));
-
-        heading (metronomeHeading);
-        row (clickSoundLabel, clickSound);
-        row (clickLevelLabel, clickLevel);
-        clickAccent.setBounds (r.removeFromTop (rowHeight));
-        clickWhileRecording.setBounds (r.removeFromTop (rowHeight));
-
-        heading (timelineHeading);
-        row (beatShadingLabel, beatShading);
-        clickPlaces.setBounds (r.removeFromTop (rowHeight));
-        rightClickDeletes.setBounds (r.removeFromTop (rowHeight));
-
-        heading (updatesHeading);
+        const auto wordsOf = [] (Component* c)
         {
-            auto line = r.removeFromTop (rowHeight);
-            versionLabel.setBounds (line.removeFromLeft (labelWidth));
-            checkNow.setBounds (line.removeFromRight (96));
-            versionValue.setBounds (line);
-            r.removeFromTop (theme::space1);
-        }
-        betaUpdates.setBounds (r.removeFromTop (rowHeight));
+            String words;
+            if (auto* l = dynamic_cast<Label*> (c))                words << l->getText() << " ";
+            if (auto* b = dynamic_cast<Button*> (c))               words << b->getButtonText() << " ";
+            if (auto* t = dynamic_cast<SettableTooltipClient*> (c)) words << t->getTooltip() << " ";
+            if (auto* cb = dynamic_cast<ComboBox*> (c))            for (int i = 0; i < cb->getNumItems(); ++i) words << cb->getItemText (i) << " ";
+            return words;
+        };
+
+        const auto matches = [&] (const Line& line)
+        {
+            if (query.isEmpty())
+                return true;
+
+            String words;
+            for (auto* c : line.parts) words << wordsOf (c);
+
+            for (const auto& word : StringArray::fromTokens (query, true))
+                if (! words.containsIgnoreCase (word))
+                    return false;
+
+            return true;
+        };
+
+        const auto row = [] (Label& l, Component& c) -> Line
+        {
+            return { { &l, &c }, rowHeight + theme::space1, [&l, &c] (Rectangle<int> line)
+            {
+                line = line.withHeight (rowHeight);
+                l.setBounds (line.removeFromLeft (labelWidth));
+                c.setBounds (line);
+            } };
+        };
+
+        const auto whole = [] (Component& c, int height) -> Line
+        {
+            return { { &c }, height, [&c] (Rectangle<int> line) { c.setBounds (line); } };
+        };
+
+        std::vector<Section> sections;
+        sections.push_back ({ &interfaceHeading, { row (inputDeviceLabel, inputDevice), row (outputDeviceLabel, outputDevice),
+                                                   row (rateLabel, rate), row (bufferLabel, buffer) } });
+        sections.push_back ({ &recordingHeading, { row (formatLabel, format) } });
+        sections.push_back ({ &latencyHeading, { row (reportedLabel, reportedValue), row (measuredLabel, measuredValue),
+                                                 Line { { &loopHint, &loopOutLabel, &loopOut, &loopInLabel, &loopIn, &measureButton },
+                                                        48 + 2 * (rowHeight + theme::space1) + rowHeight + theme::space2,
+                                                        [this] (Rectangle<int> b)
+                                                        {
+                                                            loopHint.setBounds (b.removeFromTop (48));
+                                                            for (auto [l, c] : { std::pair<Label*, Component*> { &loopOutLabel, &loopOut }, { &loopInLabel, &loopIn } })
+                                                            {
+                                                                auto line = b.removeFromTop (rowHeight);
+                                                                l->setBounds (line.removeFromLeft (labelWidth));
+                                                                c->setBounds (line);
+                                                                b.removeFromTop (theme::space1);
+                                                            }
+                                                            measureButton.setBounds (b.removeFromTop (rowHeight).removeFromLeft (96));
+                                                        } },
+                                                 whole (useMeasured, rowHeight) } });
+        sections.push_back ({ &loadHeading, { row (cpuLabel, cpuValue), row (threadLabel, threadValue),
+                                              Line { { &dropoutsLabel, &dropoutsValue, &resetDropouts }, rowHeight, [this] (Rectangle<int> line)
+                                                     {
+                                                         dropoutsLabel.setBounds (line.removeFromLeft (labelWidth));
+                                                         resetDropouts.setBounds (line.removeFromRight (64));
+                                                         dropoutsValue.setBounds (line);
+                                                     } },
+                                              whole (showLoad, rowHeight) } });
+        sections.push_back ({ &projectsHeading, { row (atLaunchLabel, atLaunch), row (tempoFollowLabel, tempoFollow),
+                                                  Line { { &copySamples, &copySamplesHint }, rowHeight + 50, [this] (Rectangle<int> b)
+                                                         {
+                                                             copySamples.setBounds (b.removeFromTop (rowHeight));
+                                                             copySamplesHint.setBounds (b);
+                                                         } } } });
+        sections.push_back ({ &windowsHeading, { row (slotsLabel, slots), row (uiScaleLabel, uiScale) } });
+        sections.push_back ({ &browserHeading, { row (panelWidthLabel, panelWidth), row (textSizeLabel, textSize),
+                                                 whole (playWhileHeld, rowHeight), whole (fitLoops, rowHeight), whole (checkPlugins, rowHeight) } });
+        sections.push_back ({ &metronomeHeading, { row (clickSoundLabel, clickSound), row (clickLevelLabel, clickLevel),
+                                                   whole (clickAccent, rowHeight), whole (clickWhileRecording, rowHeight) } });
+        sections.push_back ({ &timelineHeading, { row (beatShadingLabel, beatShading), whole (clickPlaces, rowHeight), whole (rightClickDeletes, rowHeight) } });
         const auto hintHeight = updatesHint.getText().isEmpty() ? 0 : 36;
-        updatesHint.setBounds (r.removeFromTop (hintHeight));
+        sections.push_back ({ &updatesHeading, { Line { { &versionLabel, &versionValue, &checkNow }, rowHeight + theme::space1, [this] (Rectangle<int> line)
+                                                        {
+                                                            line = line.withHeight (rowHeight);
+                                                            versionLabel.setBounds (line.removeFromLeft (labelWidth));
+                                                            checkNow.setBounds (line.removeFromRight (96));
+                                                            versionValue.setBounds (line);
+                                                        } },
+                                                 whole (betaUpdates, rowHeight), whole (updatesHint, hintHeight) } });
 
-        heading (shortcutsHeading);
-        shortcuts.setBounds (r.withHeight (shortcuts.getIdealHeight()));   // it reports a new height if it needs one
-        r.removeFromTop (shortcuts.getIdealHeight());
+        bool anyShown = false;
 
-        // At least tall enough to scroll the shortcuts to the top: a search that leaves few rows
-        // would otherwise shrink the body, and the viewport would slide the search box down.
-        body.setSize (bodyWidth, std::max (r.getY() - startY + theme::space4,
-                                           shortcutsHeading.getY() - 8 + viewport.getHeight()));
+        for (auto& section : sections)
+        {
+            const auto headingMatches = query.isNotEmpty() && section.heading->getText().containsIgnoreCase (query);
+            std::vector<const Line*> shown;
+
+            for (const auto& line : section.lines)
+            {
+                const auto keep = headingMatches || matches (line);
+
+                for (auto* c : line.parts)
+                    c->setVisible (keep);
+
+                if (keep)
+                    shown.push_back (&line);
+            }
+
+            section.heading->setVisible (! shown.empty());
+
+            if (shown.empty())
+                continue;
+
+            anyShown = true;
+            r.removeFromTop (theme::space4);
+            section.heading->setBounds (r.removeFromTop (20));
+            r.removeFromTop (theme::space1);
+
+            for (const auto* line : shown)
+                line->place (r.removeFromTop (line->height));
+        }
+
+        // The shortcuts take the same search into their own list.
+        const auto shortcutsShown = shortcuts.showMatching (query) || shortcutsHeading.getText().containsIgnoreCase (query);
+        shortcutsHeading.setVisible (shortcutsShown);
+        shortcuts.setVisible (shortcutsShown);
+
+        if (shortcutsShown)
+        {
+            anyShown = true;
+            r.removeFromTop (theme::space4);
+            shortcutsHeading.setBounds (r.removeFromTop (20));
+            r.removeFromTop (theme::space1);
+            shortcuts.setBounds (r.withHeight (shortcuts.getIdealHeight()));   // it reports a new height if it needs one
+            r.removeFromTop (shortcuts.getIdealHeight());
+        }
+
+        noMatch.setVisible (! anyShown);
+        noMatch.setText ("No setting matches \"" + query + "\". Try another word, or clear the search with Escape.", dontSendNotification);
+        noMatch.setBounds (Rectangle<int> (theme::space4 - 1, theme::space4, bodyWidth - theme::space4, 60));
+
+        // While searching, the body is as tall as what it shows. Otherwise at least tall enough to
+        // scroll the shortcuts to the top: a shortcut search that leaves few rows would shrink
+        // the body, and the viewport would slide the search box down.
+        body.setSize (bodyWidth, query.isNotEmpty() ? std::max (r.getY() - startY + theme::space4, 80)
+                                                    : std::max (r.getY() - startY + theme::space4, shortcutsHeading.getY() - 8 + viewport.getHeight()));
     }
 
     void SettingsPanel::setInWindow (bool inWindow)
