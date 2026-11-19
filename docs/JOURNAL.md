@@ -7,9 +7,9 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 
 ## Now (2026-11-19)
 
-- **Phases 1 to 4c are verified** (reports in ROADMAP). **Next:** the owner gives a long list of new
-  features; ask questions about it on a questions page (an artifact, as for F20 / W30), place the
-  answers on the roadmap (maybe a phase of their own), then phase 5 (mixer) after the go-ahead.
+- **Phases 1 to 4c are verified** (reports in ROADMAP). **Next: phase 4d** (polish, workflow,
+  tooling), then 4e (sample editor), 4f (design pass), then phase 5 (mixer); the owner's list is F22,
+  the answers W38, the C++ rules W39 (AGENTS.md "C++ practices"). Wait for the owner's go-ahead.
 - **In hand, not finished:**
   - The owner's `~/Library/Application Support/Carthage/Samples.xml` points at the generated test
     pack `build/samples-test` (six sounds of known key and tempo) for the 4b checks. Remove that
@@ -88,3 +88,7 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   ideas). Questions are on https://claude.ai/artifact/ADos2N5cAn7KMqsGRGALiq ; answers are in its
   database, collection `answers` (read with ArtifactData list). Next: read the answers, write the
   decisions (F22+) and the roadmap placement, then build.
+- **2026-11-19 (answers).** All recommended answers chosen, plus notes (logs on Windows too; master
+  volume takes a typed value; the sample editor's waveform plays on click). Recorded as F22, W38;
+  ROADMAP 4d, 4e, 4f and additions to 5, 6 and after 7. Owner asked for C++ best practices fitting
+  this project: AGENTS.md "C++ practices", W39, enforced by clang-tidy, sanitizers and RTSan in CI (4d).

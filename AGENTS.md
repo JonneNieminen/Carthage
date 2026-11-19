@@ -6,7 +6,7 @@ through amp sims, arranging on a timeline, writing in a piano roll, mixing and m
 to be faster, smoother and more reliable than FL Studio on an ARM Mac: efficiency and minimalism
 first, no gimmicks.
 
-**State of the repo:** phases 1–4 (4a, 4b, 4c) verified (2026-11-19); next: the owner's new feature list goes on the roadmap, then phase 5. Read `docs/JOURNAL.md` first: where work stands and what is in hand. The build system, the engine layer, the phase 1 app (audio
+**State of the repo:** phases 1–4 (4a, 4b, 4c) verified (2026-11-19); next: phases 4d, 4e and 4f (the owner's list, F22), then phase 5. Read `docs/JOURNAL.md` first: where work stands and what is in hand. The build system, the engine layer, the phase 1 app (audio
 settings, one input monitored through one plugin, takes recorded to clips), the plugin scanner, the
 timeline with its tools, projects with autosave, the shortcut editor, tests and the measuring tool
 exist. See `docs/ROADMAP.md` for what is verified.
@@ -164,6 +164,40 @@ build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench takes 
 - Do not add a dependency the brief does not name without asking.
 - Paths to user folders come from one place in `app/`; the help page lists them from there.
 - Windows is a real target: no macOS-only API outside a platform file, and CI builds both.
+
+### C++ practices (DECISIONS W39)
+Written for this project's needs: a real-time audio thread, JUCE's message thread, Tracktion's object
+lifetimes, two compilers (Apple Clang, MSVC) and warnings as errors. Tools enforce what they can
+(warnings, `.clang-tidy`, sanitizers, RTSan); the rest is review.
+- **Ownership is visible in the type.** Values first; `std::unique_ptr` for sole ownership;
+  `std::shared_ptr` only for a lifetime truly shared across threads (an `alive` token, a snapshot
+  handed to a worker); JUCE/Tracktion reference-counted pointers only where their APIs require them.
+  No naked `new`/`delete`, except into a JUCE API that takes ownership (`setContentOwned`, an
+  `OwnedArray`), named so at the call.
+- **RAII for everything that must be undone**: listeners added in a constructor are removed in the
+  destructor, temporary state uses `juce::ScopedValueSetter`, locks and FIFO regions use their scoped
+  objects (and never also the manual call: see the preview FIFO fix, 2026-11-18).
+- **Real-time code** (anything reached from an audio callback) is `noexcept`, allocates, locks, logs
+  and throws nothing, and touches only what `prepare` made ready. Atomics name their memory order when
+  it is not the default; data crosses threads through lock-free FIFOs and atomics only.
+- **Threads**: the message thread owns the model and the UI. Work from another thread returns with
+  `MessageManager::callAsync`, guarded by a `std::weak_ptr` token or `Component::SafePointer`; never
+  capture a raw `this` into anything that can outlive it.
+- **Errors**: expected failures are values (`juce::Result`, `std::optional`, `std::expected`) and
+  results that matter are `[[nodiscard]]`; exceptions never cross a JUCE, Tracktion or plugin callback
+  and are never used on the audio thread.
+- **Types say what things are**: `enum class`, `const` by default, `constexpr` for constants,
+  `std::span` and `std::string_view` at plain-C++ boundaries and `juce::String` inside JUCE's,
+  explicit casts (the conversion warnings demand them), no macros of our own beyond configuration, no
+  global mutable state and no singletons of our own.
+- **Small and plain**: functions do one thing; prefer free functions and plain structs to class
+  hierarchies; templates and concepts only where they remove real duplication; headers include what
+  they use and forward-declare the rest.
+- **Newest where both compilers have it**: use C++26/23 features only once the pinned Apple Clang and
+  CI's MSVC both compile them (CI proves it); otherwise the C++20 equivalent.
+- **Measure, then optimise**: frame time (`CARTHAGE_FRAME_LOG`), the bench, Instruments; no
+  allocation or disk access while painting; cache what is drawn often.
+- **Every bug fix comes with a test that fails without it**; every engine change has a headless test.
 
 ### Safety
 - Never commit secrets. The Sparkle private key exists only as the `SPARKLE_ED_PRIVATE_KEY` GitHub secret; the agent never generates, reads or prints it. `APPLE_*` likewise.

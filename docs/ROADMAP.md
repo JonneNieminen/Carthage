@@ -14,7 +14,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
 | 3. Plugin manager and scanning | Verified (2026-11-18) |
-| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19) |
+| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19); next 4d (polish, workflow, tooling), 4e (sample editor), 4f (design pass) |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
 | 7. Help page, icon and polish | Not started |
@@ -457,6 +457,62 @@ Decisions:    F21.
 Needs owner:  The owner's next list of features (to be placed on the roadmap), then phase 5.
 
 
+### Phase 4d — polish, workflow and tooling
+
+Deliver (F22, W38, W39):
+- [ ] App-wide UI size (Settings 75-150 %, Cmd+= / Cmd+- / Cmd+0); rename layouts; Cmd+W on a view's
+      window sends it back
+- [ ] Tooltips on every tool; Cmd+C copies a showing tooltip, Copy tooltip on right-click
+- [ ] Toolbar: icons with their letters, space used well; the CPU bar hidden by default (Settings);
+      a master volume slider beside the transport that also takes a typed value
+- [ ] Lanes: Lane 1, 2… renamable; add, delete, mute and solo from the lane header
+- [ ] Projects renamed from their tabs (asks first); tap tempo; a question when the tempo changes
+      (stretch, move with the beat, leave in time; remember the choice)
+- [ ] Panels resizable by their border, double-click fits the longest text
+- [ ] Wheel: scroll on both axes and zoom time and lane height in every grid; lane-height shortcut
+- [ ] FL-style paste-by-click and right-click delete as Settings switches (off)
+- [ ] Metronome: built-in wooden click, hi-hat and cowbell, or your own sound
+- [ ] Plugin check at the first launch only, then a Settings switch (off)
+- [ ] Export logs (file or clipboard, macOS and Windows), a local crash report offered after a crash,
+      project versions, an undo history list, project notes
+- [ ] Tooling: `.clang-tidy` with no findings in Carthage's code, RTSan, AddressSanitizer and UBSan in
+      CI, fuzzing the project and sample readers, signposts, waveform overviews cached on disk;
+      dependabot for GitHub Actions
+
+Exit checks:
+- [ ] Every item exercised in the running app by the owner
+- [ ] CI runs clang-tidy, the sanitizers and RTSan on every push, and is green
+- [ ] Frame time and RTSan unchanged from 4c
+
+Report: _not written yet_
+
+### Phase 4e — the sample editor
+
+Deliver (F22, W38):
+- [ ] Double-click a clip: the sample editor with its waveform (click to play from there, as in the
+      browser), key and tempo, gain, a volume envelope, fades, reverse, start and end, pitch,
+      time-stretch and Fit to tempo
+- [ ] Edits belong to the sample: every clip of it follows; Make unique splits one off and names it
+      ("Kick", "Kick (2)"); key and tempo shown on every clip on the grid
+- [ ] Fit one sample to the tempo: Option while dropping, the right-click menu, the editor
+
+Exit checks:
+- [ ] An edit changes every clip of the sample and undoes in one step; Make unique leaves the others
+- [ ] Owner's checks in the running app
+
+Report: _not written yet_
+
+### Phase 4f — the design pass
+
+Deliver (F22, W38):
+- [ ] A refinement of the whole UI: type (a bundled open-licence typeface, once the owner approves the
+      choice), icons, spacing, motion that answers actions; same theme and density
+
+Exit checks:
+- [ ] Before and after snapshots of every screen; owner's approval
+
+Report: _not written yet_
+
 ## Phase 5 — Mixer, insert Lines, per-channel I/O
 
 Brief features: 3, 4, 5.
@@ -470,6 +526,10 @@ Deliver:
 - [ ] Plugin delay compensation across the whole graph; low-latency monitoring mode
 - [ ] **Proposed here, owner to confirm (O5):** metronome, count-in, loop recording with takes, punch in/out
 - [ ] **Owner's addition (F19, W30):** plugin presets in one format for one plugin or a whole Insert Line, in a folder the user chooses; opening .vstpreset and .aupreset, and other DAWs' presets as far as their formats allow
+- [ ] **Owner's list (F22, W38):** plugins in their own processes except the live input chain,
+      grouped automatically by crash history (on by default; your own grouping when off); presets
+      under each plugin in the browser and from folders onto channels; the master volume becomes the
+      master fader's twin
 - [ ] **Owner's ideas (F20):** CPU use per plugin; running chosen plugins in their own process; a tuner on the main view; recording the processed sound beside the dry one; take comping; freeze; stems export; MIDI learn
 
 Exit checks:
@@ -488,6 +548,7 @@ Brief feature: 7.
 Deliver:
 - [ ] FL-style piano roll on the shared grid and snap system
 - [ ] Draw, paint, slice and delete tools; velocity lane; quantize; note length presets; scale highlighting; ghost notes from other patterns
+- [ ] **Owner's list (F22):** scales to pick and snap notes to; swing for the project, the piano roll and each piano-roll channel
 - [ ] Drives third-party instruments
 
 Exit checks:
@@ -516,6 +577,15 @@ Exit checks:
 - [ ] A full song made end to end: guitar tracked through an amp sim, drums and samples on the timeline, a melody in the piano roll, mixed and exported
 
 Report: _not written yet_
+
+---
+
+## After phase 7
+
+- [ ] **Owner's list (F22, W38):** a help assistant that knows Carthage: on-device (Apple's model on
+      macOS 26+, an optional downloaded model elsewhere), reading Carthage's own measurements (levels,
+      clipping, CPU, the plugin chain, settings), the help pages and the project, to answer "why is my
+      kick clipping?"
 
 ---
 
