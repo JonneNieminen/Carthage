@@ -78,3 +78,13 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   layout; recall was cut off by the screen locking.
 - **2026-11-19 (4c verified).** Owner: "4c checks pass with flying colors". Report written (frame
   hitches up to ~0.1 s only when native windows open or move). Waiting for the owner's feature list.
+- **2026-11-19 (feature list).** The owner sent a long list (UI scale, layout renaming, Cmd+W for view
+  windows, copyable tooltips, plugin scan at first launch only, lane names, toolbar icons, export
+  logs, tap tempo, tempo-change question, a UI refinement pass, rename projects from tabs, swing,
+  FL-style paste and right-click delete, resizable panels, easier lane add/delete/mute, wheel zoom
+  and scroll on both axes, metronome, a sample editor with shared edits and Make unique, fit one
+  sample to tempo, presets in the plugin browser, master volume slider, a local AI helper, CPU bar
+  hidden by default, plugins in their own processes with automatic grouping, dependabot, efficiency
+  ideas). Questions are on https://claude.ai/artifact/ADos2N5cAn7KMqsGRGALiq ; answers are in its
+  database, collection `answers` (read with ArtifactData list). Next: read the answers, write the
+  decisions (F22+) and the roadmap placement, then build.
