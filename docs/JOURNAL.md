@@ -159,3 +159,17 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   playback starts (one run: 4 s, 46 late frames, worst 50 ms), CI run 44565369503 was queued.
 - Next after the owner's go-ahead: phase 4e, the sample editor.
 
+### 2026-11-19 (phase 4e in progress)
+
+- Owner: 4d closed, wheel check moved to 4f; go-ahead for 4e. W42 (editor answers), W43 (loop
+  region = 4g and phase 6; Cmd+R export moved to phase 5).
+- 4e done so far: sample model (SampleEdits: sample per file until Make unique, shared edits,
+  tested), the editor panel (double-click a clip; Escape/Cmd+W/clip again close; waveform click
+  plays from there; gain, pitch, fades, reverse, start/end, Fit to tempo, Make unique), key and
+  tempo on clips (memory cache, never the disk while painting), Option-drop fit, clip right-click
+  menu.
+- 4e left: the volume envelope. Plan: a VolumeAndPan plugin in the clip's own plugin list (live,
+  works with Reverse; Tracktion's ClipEffects are disabled on reversed clips), its volume
+  automated; first check with an offline render whether a clip plugin's curve runs in clip or
+  timeline time. Then the owner's 4e checks and report.
+
