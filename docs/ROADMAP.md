@@ -627,7 +627,7 @@ Deliver (owner, 2026-11-19):
 - [x] A loop region drawn on the main grid: drag across the ruler to set it, drag its edges to
       change it, and it snaps like everything else (Cmd bypasses); playback loops it when looping
       is on (L, or the loop button); a double-click on it clears it (W46). Not on the lanes with a
-      modifier: every modifier there already has a job (asked of the owner)
+      modifier: every modifier there already has a job; the owner chose the ruler only
 - [ ] The same loop region in the piano roll (built with phase 6, on the shared grid code)
 
 Exit checks:
@@ -654,14 +654,14 @@ Tested:       - Owner in the running app: all nine 4g checks pass.
 Measured:     Nothing new to measure: looping is Tracktion's transport.
 Not done:     - Drawing the region on the lanes with a modifier: every modifier there already has a
                 job (Ctrl-click is a right-click on macOS, Cmd bypasses snap, Option stretches, Shift
-                adds to the selection). Asked of the owner.
+                adds to the selection). The owner chose the ruler only (2026-11-20).
               - The piano roll's loop region: with phase 6, on the shared grid code.
               - A drag on the ruler no longer scrubs the playhead (it draws the loop).
 Also fixed:   Shift + wheel on a slider ran backwards on macOS (JUCE reads a sideways wheel as
               -deltaX); found when CI showed the 4f wheel test passing by luck. The 4f report's
               "Shift wheel on sliders" line was wrong until this.
 Decisions:    W46.
-Needs owner:  The lanes modifier question; then the go-ahead for phase 5 (mixer, Cmd+R export).
+Needs owner:  The go-ahead for phase 5 (mixer, Cmd+R export).
 
 ## Phase 5 — Mixer, insert Lines, per-channel I/O
 

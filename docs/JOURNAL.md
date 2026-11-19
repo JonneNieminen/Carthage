@@ -8,7 +8,7 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 ## Now (2026-11-19)
 
 - **Phases 1 to 4g are verified** (reports in ROADMAP). **Next: phase 5** (mixer, Cmd+R export)
-  after the owner's go-ahead. Open: a lanes modifier for the loop region (owner's call).
+  after the owner's go-ahead. The loop region stays on the ruler only (owner, 2026-11-20).
 - **Open:** CI's Windows job on the 4f motion code (Motion_win.cpp) had not finished when the 4f
   report was written; check `gh run list` before the next code push.
 - The owner's macOS Zoom gesture was on Cmd + scroll and swallowed Carthage's zoom; they moved it.
