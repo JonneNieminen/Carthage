@@ -11,7 +11,7 @@ namespace carthage::ui
     class IconButton final : public juce::Button
     {
     public:
-        enum class Glyph { record, play, stop, toStart, settings, close, popOut, popIn };
+        enum class Glyph { record, play, stop, toStart, settings, close, popOut, popIn, metronome };
 
         explicit IconButton (Glyph);
 

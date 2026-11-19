@@ -472,7 +472,7 @@ Deliver (F22, W38, W39):
       mixer's panels follow in phase 5)
 - [x] Wheel: scroll on both axes and zoom time and lane height in every grid; lane-height shortcut
 - [x] FL-style paste-by-click and right-click delete as Settings switches (off)
-- [ ] Metronome: built-in wooden click, hi-hat and cowbell, or your own sound
+- [x] Metronome: built-in wooden click, hi-hat and cowbell, or your own sound
 - [x] Plugin check at the first launch only, then a Settings switch (off)
 - [ ] Export logs (file or clipboard, macOS and Windows), a local crash report offered after a crash,
       project versions, an undo history list, project notes

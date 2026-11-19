@@ -55,6 +55,7 @@ namespace carthage::app
             // Added after the layouts, so the ids above stay as saved.
             lanesTaller = afterLayouts, lanesShorter,
             uiLarger, uiSmaller, uiActualSize,
+            toggleMetronome,
         };
 
         /** Layout slots there can be; Settings chooses how many are offered (F21). */
@@ -76,7 +77,7 @@ namespace carthage::app
                      copyClips, cutClips, pasteClips, sampleBrowser,
                      windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings,
                      defaultLayout, commandPalette, keepPluginOnTop, lanesTaller, lanesShorter,
-                     uiLarger, uiSmaller, uiActualSize };
+                     uiLarger, uiSmaller, uiActualSize, toggleMetronome };
         }
 
         /** The layout commands, recall then save, slot 1 first. */
@@ -204,6 +205,7 @@ namespace carthage::app
                 case commandPalette:  info.setInfo (juce::String::fromUTF8 ("Find a command\xe2\x80\xa6"), "Type to find any command and run it", "Window", 0); info.addDefaultKeypress ('k', primary); break;
                 case lanesTaller:     info.setInfo ("Taller lanes", "Make every lane taller (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('=', primary | juce::ModifierKeys::altModifier); break;
                 case lanesShorter:    info.setInfo ("Shorter lanes", "Make every lane shorter (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('-', primary | juce::ModifierKeys::altModifier); break;
+                case toggleMetronome: info.setInfo ("Metronome", "Hear a click on every beat while playing and recording", "Transport", 0); info.addDefaultKeypress ('k', 0); break;
                 case uiLarger:        info.setInfo ("Larger interface", "Make everything in Carthage larger, up to 150 %", "View", 0); info.addDefaultKeypress ('=', primary); break;
                 case uiSmaller:       info.setInfo ("Smaller interface", "Make everything in Carthage smaller, down to 75 %", "View", 0); info.addDefaultKeypress ('-', primary); break;
                 case uiActualSize:    info.setInfo ("Actual size", "Interface at 100 %", "View", 0); info.addDefaultKeypress ('0', primary); break;

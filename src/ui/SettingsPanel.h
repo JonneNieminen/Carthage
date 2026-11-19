@@ -65,6 +65,14 @@ namespace carthage::ui
                     projectsHeading, copySamplesHint;
         juce::ToggleButton copySamples { "Copy samples into the project" };
         juce::Label atLaunchLabel, tempoFollowLabel, timelineHeading;
+
+        juce::Label metronomeHeading, clickSoundLabel, clickLevelLabel;
+        juce::ComboBox clickSound;
+        ValueSlider clickLevel { 100.0 };   // %, Tracktion's own range 20-100
+        juce::ToggleButton clickAccent { "Accent the first beat of each bar" };
+        juce::ToggleButton clickWhileRecording { "Only while recording" };
+        std::unique_ptr<juce::FileChooser> clickChooser;
+        void chooseOwnClick();
         juce::ToggleButton clickPlaces { "Click an empty spot to place the last clip" };
         juce::ToggleButton rightClickDeletes { "Right-click deletes a clip" };
         juce::ComboBox atLaunch, tempoFollow;

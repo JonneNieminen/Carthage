@@ -89,6 +89,11 @@ namespace carthage::engine
                 onPluginsChanged();
         };
 
+        // The metronome's sound, written afresh each launch (a few kB), so a new build's sounds
+        // replace the old files. A custom file that has gone falls back to the wooden click.
+        if (setMetronomeSound (getMetronomeSound(), getMetronomeCustomFile()).failed())
+            setMetronomeSound (metronome::Sound::wood);
+
         sampleLibrary = std::make_unique<SampleLibrary> (folders.settings);
         sampleAnalyser = std::make_unique<SampleAnalyser> (*sampleLibrary);
         sampleLibrary->onIndexed = [this] { sampleAnalyser->update(); };
@@ -1125,6 +1130,44 @@ namespace carthage::engine
     void Session::setFitLoopsToTempo (bool fit)
     {
         engine->getPropertyStorage().getPropertiesFile().setValue ("fitLoopsToTempo", fit);
+    }
+
+    bool Session::isMetronomeOn() const     { return front().edit->clickTrackEnabled.get(); }
+
+    void Session::setMetronomeOn (bool on)
+    {
+        front().edit->clickTrackEnabled = on;
+    }
+
+    metronome::Sound Session::getMetronomeSound() const
+    {
+        return static_cast<metronome::Sound> (juce::jlimit (0, 3, engine->getPropertyStorage().getPropertiesFile().getIntValue ("metronomeSound", 0)));
+    }
+
+    juce::File Session::getMetronomeCustomFile() const
+    {
+        return juce::File (engine->getPropertyStorage().getPropertiesFile().getValue ("metronomeFile"));
+    }
+
+    juce::Result Session::setMetronomeSound (metronome::Sound sound, const juce::File& customFile)
+    {
+        auto r = metronome::use (*engine, sound, customFile, folders.settings.getChildFile ("Metronome"));
+
+        if (r.wasOk())
+        {
+            auto& props = engine->getPropertyStorage().getPropertiesFile();
+            props.setValue ("metronomeSound", static_cast<int> (sound));
+            props.setValue ("metronomeFile", sound == metronome::Sound::custom ? customFile.getFullPathName() : juce::String());
+
+            // The click track reads its sounds when playback is prepared: prepare it again, but
+            // never under a take (the new sound is then heard from the next start).
+            if (! isRecording())
+                for (auto& p : projects)
+                    if (p->edit != nullptr)
+                        p->edit->restartPlayback();
+        }
+
+        return r;
     }
 
     bool Session::getCheckPluginsAtLaunch() const    { return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("checkPluginsAtLaunch", false); }

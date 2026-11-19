@@ -327,6 +327,23 @@ namespace carthage::ui
                 }
                 break;
             }
+            case Glyph::metronome:
+            {
+                // A metronome: a tapering body, its base, and the arm leaning over.
+                const auto h = s * 0.5f;
+                Path body;
+                body.startNewSubPath (c.x - h * 0.35f, c.y - h);
+                body.lineTo (c.x + h * 0.35f, c.y - h);
+                body.lineTo (c.x + h * 0.75f, c.y + h);
+                body.lineTo (c.x - h * 0.75f, c.y + h);
+                body.closeSubPath();
+                g.strokePath (body, roundStroke);
+                Path arm;
+                arm.startNewSubPath (c.x, c.y + h * 0.55f);
+                arm.lineTo (c.x + h * 0.85f, c.y - h * 0.85f);
+                g.strokePath (arm, roundStroke);
+                break;
+            }
             case Glyph::popOut:
             case Glyph::popIn:
             {

@@ -442,6 +442,7 @@ namespace carthage::ui
         recordButton.onClick = [this] { commands.invokeDirectly (cmd::record, false); };
         playButton.onClick = [this] { commands.invokeDirectly (cmd::playStop, false); };
         toStartButton.onClick = [this] { commands.invokeDirectly (cmd::returnToStart, false); };
+        metronomeButton.onClick = [this] { commands.invokeDirectly (cmd::toggleMetronome, false); };
         settingsButton.onClick = [this] { commands.invokeDirectly (cmd::audioSettings, false); };
 
         styleFigure (timeLabel, theme::textXl);
@@ -455,7 +456,7 @@ namespace carthage::ui
         latencyWords.setTooltip (latencyLabel.getTooltip());
         loadMeter.setTooltip ("Audio-thread load: the bar is the average, the figure the worst recent block");
 
-        for (auto* comp : std::initializer_list<Component*> { &recordButton, &playButton, &toStartButton, &timeLabel,
+        for (auto* comp : std::initializer_list<Component*> { &recordButton, &playButton, &toStartButton, &metronomeButton, &timeLabel,
                                                               &loadMeter, &latencyLabel, &latencyWords, &settingsButton,
                                                               signalRow.get(), &timeline, &statusLabel })
             addAndMakeVisible (comp);
@@ -685,6 +686,7 @@ namespace carthage::ui
         recordButton.setTooltip (cmd::tooltip (commands, cmd::record));
         playButton.setTooltip (cmd::tooltip (commands, cmd::playStop));
         toStartButton.setTooltip (cmd::tooltip (commands, cmd::returnToStart));
+        metronomeButton.setTooltip (cmd::tooltip (commands, cmd::toggleMetronome) + ". Its sound and level are in Settings.");
         settingsButton.setTooltip (cmd::tooltip (commands, cmd::audioSettings));
         snapButton.setTooltip (cmd::tooltip (commands, cmd::toggleGrid));
         signalRow->refreshTooltips();
@@ -736,6 +738,7 @@ namespace carthage::ui
             case cmd::windowSignal:      info.setTicked (isDetached (View::signal)); break;
             case cmd::windowSettings:    info.setTicked (isDetached (View::settings)); break;
             case cmd::keepPluginOnTop:   info.setTicked (keepPluginOnTop()); break;
+            case cmd::toggleMetronome:   info.setTicked (session.isMetronomeOn()); break;
             case cmd::copyClips:         info.setActive (! timeline.getSelectedClips().isEmpty() || showingTooltip().isNotEmpty()); break;
             case cmd::cutClips:
             case cmd::duplicateClips:
@@ -810,6 +813,12 @@ namespace carthage::ui
             case cmd::record:           toggleRecord(); return true;
             case cmd::playStop:         togglePlay(); return true;
             case cmd::returnToStart:    if (! session.isRecording()) session.returnToStart(); return true;
+            case cmd::toggleMetronome:
+                session.setMetronomeOn (! session.isMetronomeOn());
+                updateTransportButtons();
+                settings.refresh();
+                commands.commandStatusChanged();
+                return true;
             case cmd::toggleMonitoring: session.setMonitoring (! session.isMonitoring()); return true;
             case cmd::choosePlugin:     choosePlugin(); return true;
             case cmd::pluginBrowser:    showPanel (false, true); return true;
@@ -973,6 +982,7 @@ namespace carthage::ui
         playButton.setGlyph (playing ? IconButton::Glyph::stop : IconButton::Glyph::play);
         playButton.setLit (theme::accent, playing);
         toStartButton.setEnabled (! session.isRecording());
+        metronomeButton.setLit (theme::accent, session.isMetronomeOn());   // live: it sounds when playing
         signalRow->setRecording (session.isRecording());
     }
 
@@ -1501,17 +1511,17 @@ namespace carthage::ui
         // needed parts go first, each still a tooltip or a menu item away.
         struct Fold { bool words, masterLabel, load, master, tap; int time, grid, tool; };
         constexpr auto wide = ToolButton::width, narrow = ToolButton::narrowWidth;
-        const Fold folds[] = { { true,  true,  true,  true,  true,  104, 116, wide },
-                               { false, false, true,  true,  true,  104, 116, wide },
+        const Fold folds[] = { { true,  true,  true,  true,  true,  100, 104, wide },
+                               { false, false, true,  true,  true,  100, 104, wide },
                                { false, false, false, true,  true,  100, 92,  wide },
                                { false, false, false, false, false, 100, 92,  wide },
                                { false, false, false, false, false, 100, 92,  narrow } };
         const auto widthOf = [this] (const Fold& f)
         {
-            return 3 * 36 + 2 * theme::space1 + theme::space4 + f.time + theme::space2 + 80
-                   + (f.tap ? theme::space1 + 40 : 0) + theme::space4
-                   + (f.master ? (f.masterLabel ? 46 : 0) + 100 + theme::space4 : 0)
-                   + toolButtons.size() * (f.tool + 2) + theme::space3 + f.grid + theme::space1 + 56
+            return 4 * 36 + 3 * theme::space1 + theme::space2 + f.time + theme::space2 + 80
+                   + (f.tap ? theme::space1 + 40 : 0) + theme::space3
+                   + (f.master ? (f.masterLabel ? 46 : 0) + 100 + theme::space3 : 0)
+                   + toolButtons.size() * (f.tool + 1) + theme::space3 + f.grid + theme::space1 + 56
                    + 36 + theme::space4 + (f.words ? 64 + theme::space1 : 0) + 64 + theme::space2
                    + (f.load && showsLoad() ? 140 : 0);
         };
@@ -1524,7 +1534,9 @@ namespace carthage::ui
         playButton.setBounds (top.removeFromLeft (36));
         top.removeFromLeft (theme::space1);
         toStartButton.setBounds (top.removeFromLeft (36));
-        top.removeFromLeft (theme::space4);
+        top.removeFromLeft (theme::space1);
+        metronomeButton.setBounds (top.removeFromLeft (36));
+        top.removeFromLeft (theme::space2);
         timeLabel.setBounds (top.removeFromLeft (fold.time));
         top.removeFromLeft (theme::space2);
         tempo.setBounds (top.removeFromLeft (80).withSizeKeepingCentre (80, 26));
@@ -1534,7 +1546,7 @@ namespace carthage::ui
             top.removeFromLeft (theme::space1);
             tapButton.setBounds (top.removeFromLeft (40).withSizeKeepingCentre (40, 26));
         }
-        top.removeFromLeft (theme::space4);
+        top.removeFromLeft (theme::space3);
 
         masterLabel.setVisible (fold.master && fold.masterLabel);
         masterVolume.setVisible (fold.master);
@@ -1543,14 +1555,14 @@ namespace carthage::ui
             if (fold.masterLabel)
                 masterLabel.setBounds (top.removeFromLeft (46));
             masterVolume.setBounds (top.removeFromLeft (100).withSizeKeepingCentre (100, 24));
-            top.removeFromLeft (theme::space4);
+            top.removeFromLeft (theme::space3);
         }
 
         for (auto* b : toolButtons)
         {
             b->setShowsKey (fold.tool == ToolButton::width);
             b->setBounds (top.removeFromLeft (fold.tool).withSizeKeepingCentre (fold.tool, ToolButton::height));
-            top.removeFromLeft (2);
+            top.removeFromLeft (1);
         }
 
         top.removeFromLeft (theme::space3);

@@ -111,6 +111,7 @@ namespace carthage::ui
         IconButton recordButton { IconButton::Glyph::record };
         IconButton playButton { IconButton::Glyph::play };
         IconButton toStartButton { IconButton::Glyph::toStart };
+        IconButton metronomeButton { IconButton::Glyph::metronome };
         IconButton settingsButton { IconButton::Glyph::settings };
         juce::Label timeLabel, latencyLabel, latencyWords, statusLabel;
         LoadMeter loadMeter;

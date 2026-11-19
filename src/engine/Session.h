@@ -4,6 +4,7 @@
 #include "Autosave.h"
 #include "Editing.h"
 #include "LatencyProbe.h"
+#include "Metronome.h"
 #include "PluginLibrary.h"
 #include "PluginScan.h"
 #include "Project.h"
@@ -176,6 +177,16 @@ namespace carthage::engine
             right-drag deletes every clip it crosses). */
         /** Settings (W38): plugins are checked at the first launch; after that only when asked
             (Rescan), unless this is on. */
+        /** The metronome (W38): on or off, level, accent and recording-only belong to the project
+            (Tracktion keeps them in the edit); the sound is app-wide, written into the settings
+            folder's Metronome folder. setMetronomeSound fails, keeping the old sound, if a custom
+            file can't be read. */
+        bool isMetronomeOn() const;
+        void setMetronomeOn (bool);
+        metronome::Sound getMetronomeSound() const;
+        juce::File getMetronomeCustomFile() const;
+        juce::Result setMetronomeSound (metronome::Sound, const juce::File& customFile = {});
+
         bool getCheckPluginsAtLaunch() const;
         void setCheckPluginsAtLaunch (bool);
 

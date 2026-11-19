@@ -24,7 +24,7 @@ namespace carthage::ui
         title.setText ("Settings", dontSendNotification);
 
         for (auto [label, text] : { std::pair { &interfaceHeading, "Interface" }, { &recordingHeading, "Recording" },
-                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" }, { &timelineHeading, "Timeline" }, { &windowsHeading, "Windows" },
+                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" }, { &timelineHeading, "Timeline" }, { &metronomeHeading, "Metronome" }, { &windowsHeading, "Windows" },
                                     { &updatesHeading, "Updates" },
                                     { &shortcutsHeading, "Keyboard shortcuts" } })
         {
@@ -165,6 +165,39 @@ namespace carthage::ui
             session.setAtLaunch (atLaunch.getSelectedId() == 2 ? A::lastSession : atLaunch.getSelectedId() == 3 ? A::emptyProject : A::startScreen);
         };
 
+        styleLabel (clickSoundLabel, theme::textMd, theme::muted);
+        clickSoundLabel.setText ("Sound", dontSendNotification);
+        clickSound.addItem ("Wooden click", 1);
+        clickSound.addItem ("Hi-hat", 2);
+        clickSound.addItem ("Cowbell", 3);
+        clickSound.addItem (String::fromUTF8 ("Your own sound\xe2\x80\xa6"), 4);
+        clickSound.setTooltip ("What the metronome plays. The first beat of a bar is louder and a little brighter.");
+        clickSound.onChange = [this]
+        {
+            const auto id = clickSound.getSelectedId();
+
+            if (id == 4)
+                chooseOwnClick();
+            else if (id >= 1)
+                session.setMetronomeSound (static_cast<metronome::Sound> (id - 1));
+        };
+
+        styleLabel (clickLevelLabel, theme::textMd, theme::muted);
+        clickLevelLabel.setText ("Level", dontSendNotification);
+        clickLevel.setSliderStyle (Slider::LinearHorizontal);
+        clickLevel.setTextBoxStyle (Slider::TextBoxRight, false, 52, 22);
+        clickLevel.setRange (20.0, 100.0, 1.0);
+        clickLevel.setTextValueSuffix (" %");
+        clickLevel.setTooltip ("How loud the metronome is, for this project");
+        clickLevel.onValueChange = [this] { session.getEdit().clickTrackGain = static_cast<float> (clickLevel.getValue() / 100.0); };
+        clickAccent.setTooltip ("The first beat of each bar plays the louder, brighter sound. For this project.");
+        clickAccent.onClick = [this] { session.getEdit().clickTrackEmphasiseBars = clickAccent.getToggleState(); };
+        clickWhileRecording.setTooltip ("The metronome sounds only while recording, not while playing back. For this project.");
+        clickWhileRecording.onClick = [this] { session.getEdit().clickTrackRecordingOnly = clickWhileRecording.getToggleState(); };
+
+        for (auto* c : std::initializer_list<Component*> { &clickSoundLabel, &clickSound, &clickLevelLabel, &clickLevel, &clickAccent, &clickWhileRecording })
+            body.addAndMakeVisible (c);
+
         checkPlugins.setToggleState (session.getCheckPluginsAtLaunch(), dontSendNotification);
         checkPlugins.setTooltip ("Off: plugins are checked at the first launch, then when you press Rescan in the plugin browser. "
                                  "On: new or updated plugins are checked each time Carthage opens.");
@@ -282,9 +315,35 @@ namespace carthage::ui
         refresh();
     }
 
+    void SettingsPanel::chooseOwnClick()
+    {
+        const auto previous = session.getMetronomeCustomFile();
+        clickChooser = std::make_unique<FileChooser> ("Choose a sound for the metronome", previous.existsAsFile() ? previous : File(),
+                                                      "*" + engine::SamplePreview::extensions().joinIntoString (";*"));
+        clickChooser->launchAsync (FileBrowserComponent::openMode | FileBrowserComponent::canSelectFiles,
+                                   [safe = SafePointer<SettingsPanel> (this)] (const FileChooser& fc)
+        {
+            if (safe == nullptr)
+                return;
+
+            if (const auto file = fc.getResult(); file.existsAsFile())
+            {
+                if (auto r = safe->session.setMetronomeSound (metronome::Sound::custom, file); r.failed())
+                    AlertWindow::showMessageBoxAsync (MessageBoxIconType::WarningIcon, "Not used", r.getErrorMessage());
+            }
+
+            safe->refresh();   // shows the sound in use, whichever it is
+        });
+    }
+
     void SettingsPanel::refresh()
     {
         atLaunch.setSelectedId (1 + static_cast<int> (session.getAtLaunch()), dontSendNotification);
+        clickSound.setSelectedId (1 + static_cast<int> (session.getMetronomeSound()), dontSendNotification);
+        clickLevel.setValue (session.getEdit().getClickTrackVolume() * 100.0, dontSendNotification);
+        clickAccent.setToggleState (session.getEdit().clickTrackEmphasiseBars.get(), dontSendNotification);
+        clickWhileRecording.setToggleState (session.getEdit().clickTrackRecordingOnly.get(), dontSendNotification);
+
         const auto follow = session.getTempoFollow();
         tempoFollow.setSelectedId (follow ? 2 + static_cast<int> (*follow) : 1, dontSendNotification);
 
@@ -551,6 +610,12 @@ namespace carthage::ui
         playWhileHeld.setBounds (r.removeFromTop (rowHeight));
         fitLoops.setBounds (r.removeFromTop (rowHeight));
         checkPlugins.setBounds (r.removeFromTop (rowHeight));
+
+        heading (metronomeHeading);
+        row (clickSoundLabel, clickSound);
+        row (clickLevelLabel, clickLevel);
+        clickAccent.setBounds (r.removeFromTop (rowHeight));
+        clickWhileRecording.setBounds (r.removeFromTop (rowHeight));
 
         heading (timelineHeading);
         clickPlaces.setBounds (r.removeFromTop (rowHeight));
