@@ -55,6 +55,7 @@ namespace carthage::ui
         void projectStateChanged()
         {
             tabs.refresh();
+            updateTransportButtons();   // the loop button follows the loop region and its undo (4g)
 
             if (sampleEditor.isVisible())
                 sampleEditor.refresh();
@@ -162,6 +163,7 @@ namespace carthage::ui
         IconButton playButton { IconButton::Glyph::play };
         IconButton toStartButton { IconButton::Glyph::toStart };
         IconButton metronomeButton { IconButton::Glyph::metronome };
+        IconButton loopButton { IconButton::Glyph::loop };
         IconButton settingsButton { IconButton::Glyph::settings };
         juce::Label timeLabel, latencyLabel, latencyWords, statusLabel;
         LoadMeter loadMeter;

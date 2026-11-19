@@ -413,6 +413,28 @@ namespace carthage::ui
                 }
                 break;
             }
+            case Glyph::loop:
+            {
+                // Two arcs chasing each other round, each with its arrowhead: play it again.
+                const auto rad = s * 0.42f;
+                Path top, bottom;
+                top.addCentredArc (c.x, c.y, rad, rad * 0.8f, 0.0f, -MathConstants<float>::halfPi * 1.15f, MathConstants<float>::halfPi * 0.85f, true);
+                bottom.addCentredArc (c.x, c.y, rad, rad * 0.8f, 0.0f, MathConstants<float>::halfPi * 0.85f, MathConstants<float>::halfPi * 2.85f, true);
+                g.strokePath (top, roundStroke);
+                g.strokePath (bottom, roundStroke);
+                const auto head = [&] (Point<float> tip, float dir)
+                {
+                    Path p;
+                    p.startNewSubPath (tip.translated (-3.0f * dir, -3.0f));
+                    p.lineTo (tip);
+                    p.lineTo (tip.translated (-3.0f * dir, 3.0f));
+                    g.strokePath (p, roundStroke);
+                };
+                head (top.getCurrentPosition(), 1.0f);
+                head (bottom.getCurrentPosition(), -1.0f);
+                break;
+            }
+
             case Glyph::metronome:
             {
                 // A metronome: a tapering body, its base, and the arm leaning over.

@@ -11,6 +11,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- A loop region: drag on the ruler to set it, drag its edges to change it, double-click it to
+  clear it; it snaps to the grid. L or the new loop button turns looping on and off. Each change
+  is one undo step.
 - Views in their own windows: the samples, plugins, timeline, signal path and Settings each move to
   a window of their own and back, by the button on the view or Cmd+Option+S, P, T, I and comma;
   closing that window brings the view back. Window layouts: save where every window is with

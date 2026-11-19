@@ -157,9 +157,66 @@ public:
 
             editing::begin (*edit, "Add marker");
             expect (editing::addMarker (*edit, 4.0) != nullptr);
-            editing::setLoopRange (*edit, 8.0, 4.0);
-            near (edit->getTransport().getLoopRange().getStart().inSeconds(), 2.0, "loop starts at beat 4");
-            near (edit->getTransport().getLoopRange().getEnd().inSeconds(), 4.0, "and ends at beat 8");
+        }
+
+        beginTest ("The loop region: set, change and clear, one undo step each (4g)");
+        {
+            auto& transport = edit->getTransport();
+            const auto loopSeconds = [&] { return std::pair (transport.getLoopRange().getStart().inSeconds(), transport.getLoopRange().getEnd().inSeconds()); };
+            editing::clearLoopRegion (*edit);
+            um.clearUndoHistory();
+
+            editing::begin (*edit, "Loop region");
+            editing::setLoopRegion (*edit, 8.0, 4.0);   // either order
+            expect (editing::loopRegion (*edit).has_value() && editing::isLooping (*edit), "set: it loops");
+            near (loopSeconds().first, 2.0, "the transport loops from beat 4 (120 bpm)");
+            near (loopSeconds().second, 4.0, "to beat 8");
+
+            editing::begin (*edit, "Loop end");
+            editing::setLoopRegion (*edit, 4.0, 6.0);
+            editing::setLoopRegion (*edit, 4.0, 12.0);   // a drag: many moves, one step
+            near (loopSeconds().second, 6.0, "changed: the end follows");
+
+            editing::begin (*edit, "Clear loop");
+            editing::clearLoopRegion (*edit);
+            expect (! editing::loopRegion (*edit) && ! editing::isLooping (*edit), "cleared: no region, not looping");
+            expect (transport.getLoopRange().getLength() == tracktion::TimeDuration(), "and the transport has no loop");
+
+            um.undo();
+            editing::syncLoop (*edit);   // what the session's hook does after an undo
+            expect (editing::isLooping (*edit), "undoing the clear brings the loop back, looping");
+            near (loopSeconds().second, 6.0, "as it was");
+
+            um.undo();
+            editing::syncLoop (*edit);
+            near (loopSeconds().second, 4.0, "undoing the drag is one step back to beat 8");
+
+            um.undo();
+            editing::syncLoop (*edit);
+            expect (! editing::loopRegion (*edit) && ! editing::isLooping (*edit), "undoing the set leaves none");
+
+            editing::setLooping (*edit, true);
+            expect (! editing::isLooping (*edit), "without a region it cannot loop");
+
+            editing::begin (*edit, "Loop region");
+            editing::setLoopRegion (*edit, 0.0, 4.0);
+            editing::setLooping (*edit, false);
+            expect (editing::loopRegion (*edit).has_value() && ! editing::isLooping (*edit), "looping turns off and the region stays");
+            expect (um.getUndoDescription() == "Loop region", "turning looping off is not an undo step");
+
+            editing::setLoopRegion (*edit, 3.0, 3.0);
+            expect (editing::loopRegion (*edit).value_or (editing::LoopRegion {}).to == 4.0, "an empty region is not set");
+        }
+
+        beginTest ("A project from before 4g keeps its transport's loop (4g)");
+        {
+            editing::clearLoopRegion (*edit);
+            edit->getTransport().setLoopRange ({ tracktion::TimePosition::fromSeconds (1.0), tracktion::TimePosition::fromSeconds (3.0) });
+            editing::adoptTransportLoop (*edit);
+            const auto r = editing::loopRegion (*edit).value_or (editing::LoopRegion {});
+            near (r.from, 2.0, "beat 2");
+            near (r.to, 6.0, "to beat 6");
+            editing::clearLoopRegion (*edit);
         }
 
         beginTest ("Copy and paste into another project, in another folder and tempo (W30)");

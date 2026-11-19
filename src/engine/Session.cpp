@@ -558,6 +558,8 @@ namespace carthage::engine
         : session (s), edit (std::move (e)), file (f), recordings (project::recordingsIn (f.getParentDirectory())),
           info (std::move (i)), untitled (isUntitled)
     {
+        editing::adoptTransportLoop (*edit);   // a project from before 4g keeps its loop (4g)
+        editing::syncLoop (*edit);
     }
 
     Session::Project::~Project()
@@ -575,6 +577,9 @@ namespace carthage::engine
     {
         // Clips moved, trimmed or undone take their envelopes with them (4e).
         editing::syncEnvelopes (*edit);
+
+        // The transport's loop points follow the region after an edit or an undo (4g).
+        editing::syncLoop (*edit);
 
         // An edit: autosave after the next pause (W30).
         ++changeCount;

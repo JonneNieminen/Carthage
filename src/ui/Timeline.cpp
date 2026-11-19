@@ -18,11 +18,15 @@ namespace carthage::ui
     }
 
     //==============================================================================================
-    /** Bars and beats, labelled where there is room; a click moves the playhead. */
-    class Timeline::Ruler final : public Component
+    /** Bars and beats, labelled where there is room. A click moves the playhead; a drag draws the
+        loop region, its edges drag, and a double-click on it clears it (4g). */
+    class Timeline::Ruler final : public Component, public SettableTooltipClient
     {
     public:
-        explicit Ruler (Timeline& t) : timeline (t) {}
+        explicit Ruler (Timeline& t) : timeline (t)
+        {
+            setTooltip ("Click to move the playhead. Drag to set the loop region; drag its edges to change it; double-click it to clear it.");
+        }
 
         void paint (Graphics& g) override
         {
@@ -30,6 +34,21 @@ namespace carthage::ui
             g.fillAll (theme::bg2);
             g.setColour (theme::line);
             g.fillRect (0.0f, r.getBottom() - 1.0f, r.getWidth(), 1.0f);
+
+            // The loop region under the numbers: the accent while it loops (live), quiet when off.
+            if (const auto region = editing::loopRegion (timeline.session.getEdit()))
+            {
+                const auto x0 = timeline.xAtBeat (region->from) - static_cast<float> (getX());
+                const auto x1 = timeline.xAtBeat (region->to) - static_cast<float> (getX());
+                const auto on = editing::isLooping (timeline.session.getEdit());
+                const auto band = Rectangle<float> (x0, 0.0f, x1 - x0, r.getHeight() - 1.0f);
+                g.setColour (on ? theme::accent.withAlpha (0.18f) : theme::hover);
+                g.fillRect (band);
+                g.setColour (on ? theme::accent : theme::muted);
+                g.fillRect (band.withHeight (3.0f));
+                g.fillRect (band.withWidth (2.0f));
+                g.fillRect (band.withX (x1 - 2.0f).withWidth (2.0f));
+            }
 
             const auto bar = timeline.beatsPerBar();
             const auto ppb = timeline.pixelsPerBeat;
@@ -72,16 +91,96 @@ namespace carthage::ui
             }
         }
 
-        void mouseDown (const MouseEvent& e) override   { moveTo (e); }
-        void mouseDrag (const MouseEvent& e) override   { moveTo (e); }
+        void mouseMove (const MouseEvent& e) override
+        {
+            setMouseCursor (edgeAt (e.x) != Grab::none ? MouseCursor::LeftRightResizeCursor : MouseCursor::NormalCursor);
+        }
+
+        void mouseDown (const MouseEvent& e) override
+        {
+            dragged = false;
+            grab = Grab::none;
+            // The end that stays put while the other moves; a new region grows from the click.
+            fixed = snapped (beatAt (e.x), e.mods);
+
+            if (const auto region = editing::loopRegion (timeline.session.getEdit()))
+            {
+                grab = edgeAt (e.x);
+
+                if (grab == Grab::from)    fixed = region->to;
+                else if (grab == Grab::to) fixed = region->from;
+            }
+        }
+
+        void mouseDrag (const MouseEvent& e) override
+        {
+            if (! dragged)
+            {
+                if (e.getDistanceFromDragStart() < 4)
+                    return;   // still a click
+
+                dragged = true;
+                editing::begin (timeline.session.getEdit(), grab == Grab::from ? "Loop start" : grab == Grab::to ? "Loop end" : "Loop region");
+            }
+
+            editing::setLoopRegion (timeline.session.getEdit(), fixed, snapped (beatAt (e.x), e.mods));   // one undo step per drag
+            repaint();
+            timeline.repaintLanes();
+        }
+
+        void mouseUp (const MouseEvent& e) override
+        {
+            if (! dragged)
+                moveTo (e);
+
+            dragged = false;
+            grab = Grab::none;
+        }
+
+        void mouseDoubleClick (const MouseEvent& e) override
+        {
+            const auto beat = beatAt (e.x);
+
+            if (const auto region = editing::loopRegion (timeline.session.getEdit()); region && beat >= region->from && beat <= region->to)
+            {
+                editing::begin (timeline.session.getEdit(), "Clear loop");
+                editing::clearLoopRegion (timeline.session.getEdit());
+                repaint();
+                timeline.repaintLanes();
+            }
+        }
 
     private:
         Timeline& timeline;
+        enum class Grab { none, from, to } grab = Grab::none;
+        double fixed = 0.0;
+        bool dragged = false;
+
+        double beatAt (int x) const   { return std::max (0.0, timeline.beatAtX (static_cast<float> (x + getX()))); }
+
+        /** Snaps like everything else on the grid; Cmd bypasses it, as on the lanes. */
+        double snapped (double beat, ModifierKeys mods) const
+        {
+            return std::max (0.0, time::snap (beat, timeline.grid, timeline.snapTargets ({}), timeline.beatsPerBar(),
+                                              timeline.pixelsPerBeat, mods.isCommandDown()).beat);
+        }
+
+        Grab edgeAt (int x) const
+        {
+            if (const auto region = editing::loopRegion (timeline.session.getEdit()))
+            {
+                const auto px = static_cast<float> (x + getX());
+
+                if (std::abs (px - timeline.xAtBeat (region->from)) <= 5.0f)   return Grab::from;
+                if (std::abs (px - timeline.xAtBeat (region->to)) <= 5.0f)     return Grab::to;
+            }
+
+            return Grab::none;
+        }
 
         void moveTo (const MouseEvent& e)
         {
-            const auto beat = std::max (0.0, timeline.beatAtX (static_cast<float> (e.x + getX())));
-            timeline.session.getEdit().getTransport().setPosition (tracktion::TimePosition::fromSeconds (timeline.beatsToSeconds (beat)));
+            timeline.session.getEdit().getTransport().setPosition (tracktion::TimePosition::fromSeconds (timeline.beatsToSeconds (beatAt (e.x))));
         }
     };
 
@@ -504,6 +603,18 @@ namespace carthage::ui
                                         static_cast<float> (clip.getHeight()));
                     }
                 }
+            }
+
+            // The loop region, while it loops: a faint wash and its edges, under the grid (4g).
+            if (const auto region = editing::loopRegion (timeline.session.getEdit()); region && editing::isLooping (timeline.session.getEdit()))
+            {
+                const auto x0 = timeline.xAtBeat (region->from) - static_cast<float> (getX());
+                const auto x1 = timeline.xAtBeat (region->to) - static_cast<float> (getX());
+                g.setColour (theme::accent.withAlpha (0.04f));
+                g.fillRect (x0, static_cast<float> (clip.getY()), x1 - x0, static_cast<float> (clip.getHeight()));
+                g.setColour (theme::accent.withAlpha (0.35f));
+                g.fillRect (x0, static_cast<float> (clip.getY()), 1.0f, static_cast<float> (clip.getHeight()));
+                g.fillRect (x1 - 1.0f, static_cast<float> (clip.getY()), 1.0f, static_cast<float> (clip.getHeight()));
             }
 
             // Grid lines: bars stronger than the grid's own steps. Drawn at least 10 px apart (the
@@ -1778,6 +1889,20 @@ namespace carthage::ui
         editing::addMarker (session.getEdit(), playheadBeat());
     }
 
+    void Timeline::valueTreePropertyChanged (ValueTree& tree, const Identifier&)
+    {
+        repaintLanes();
+
+        if (tree == editState)   // the loop region lives on the edit itself (4g), and undo changes it
+            ruler->repaint();
+    }
+
+    void Timeline::loopChanged()
+    {
+        ruler->repaint();
+        repaintLanes();
+    }
+
     void Timeline::loopSelection()
     {
         const auto clips = getSelectedClips();
@@ -1794,8 +1919,7 @@ namespace carthage::ui
         }
 
         editing::begin (session.getEdit(), "Loop selection");
-        editing::setLoopRange (session.getEdit(), from, to);
-        session.getEdit().getTransport().looping = true;
+        editing::setLoopRegion (session.getEdit(), from, to);
         ruler->repaint();
     }
 

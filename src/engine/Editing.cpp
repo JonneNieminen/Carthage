@@ -624,11 +624,92 @@ namespace carthage::editing
             c->disabled = anyPlaying;
     }
 
-    void setLoopRange (Edit& edit, double startBeat, double endBeat)
+    namespace
     {
+        const juce::Identifier loopFromProp ("carthageLoopFrom"), loopToProp ("carthageLoopTo");
+        constexpr double shortestLoop = 1.0 / 960.0;   // a tick
+    }
+
+    std::optional<LoopRegion> loopRegion (const Edit& edit)
+    {
+        const auto& state = edit.state;
+
+        if (! state.hasProperty (loopFromProp) || ! state.hasProperty (loopToProp))
+            return std::nullopt;
+
+        const LoopRegion r { static_cast<double> (state[loopFromProp]), static_cast<double> (state[loopToProp]) };
+        return r.to - r.from >= shortestLoop ? std::optional (r) : std::nullopt;
+    }
+
+    void setLoopRegion (Edit& edit, double fromBeat, double toBeat)
+    {
+        const auto from = std::max (0.0, std::min (fromBeat, toBeat));
+        const auto to = std::max (fromBeat, toBeat);
+
+        if (to - from < shortestLoop)
+            return;
+
+        auto* um = &edit.getUndoManager();
+        edit.state.setProperty (loopFromProp, from, um);
+        edit.state.setProperty (loopToProp, to, um);
+        syncLoop (edit);
+        edit.getTransport().looping.setValue (true, nullptr);
+    }
+
+    void clearLoopRegion (Edit& edit)
+    {
+        auto* um = &edit.getUndoManager();
+        edit.state.removeProperty (loopFromProp, um);
+        edit.state.removeProperty (loopToProp, um);
+        syncLoop (edit);
+    }
+
+    void setLooping (Edit& edit, bool on)
+    {
+        edit.getTransport().looping.setValue (on && loopRegion (edit).has_value(), nullptr);
+    }
+
+    bool isLooping (const Edit& edit)
+    {
+        return loopRegion (edit).has_value() && const_cast<Edit&> (edit).getTransport().looping.get();
+    }
+
+    void syncLoop (Edit& edit)
+    {
+        auto& transport = edit.getTransport();
+        const auto had = transport.getLoopRange().getLength() > TimeDuration();
+
+        if (const auto r = loopRegion (edit))
+        {
+            auto& t = edit.tempoSequence;
+            const TimeRange times (t.toTime (BeatPosition::fromBeats (r->from)), t.toTime (BeatPosition::fromBeats (r->to)));
+
+            if (transport.getLoopRange() != times)
+                transport.setLoopRange (times);
+
+            if (! had)
+                transport.looping.setValue (true, nullptr);   // an undone clear brings the loop back
+        }
+        else if (had || transport.looping.get())
+        {
+            transport.setLoopRange ({});
+            transport.looping.setValue (false, nullptr);
+        }
+    }
+
+    void adoptTransportLoop (Edit& edit)
+    {
+        if (edit.state.hasProperty (loopFromProp))
+            return;
+
+        const auto range = edit.getTransport().getLoopRange();
+
+        if (range.getLength() <= TimeDuration())
+            return;
+
         auto& t = edit.tempoSequence;
-        edit.getTransport().setLoopRange ({ t.toTime (BeatPosition::fromBeats (std::min (startBeat, endBeat))),
-                                            t.toTime (BeatPosition::fromBeats (std::max (startBeat, endBeat))) });
+        edit.state.setProperty (loopFromProp, t.toBeats (range.getStart()).inBeats(), nullptr);
+        edit.state.setProperty (loopToProp, t.toBeats (range.getEnd()).inBeats(), nullptr);
     }
 
     MarkerClip* addMarker (Edit& edit, double beat)

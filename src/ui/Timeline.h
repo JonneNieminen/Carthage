@@ -73,6 +73,9 @@ namespace carthage::ui
         void moveCurrentLane (int delta);
         void loopSelection();
 
+        /** Looping turned on or off from outside (the loop button, L): the region's look follows. */
+        void loopChanged();
+
         /** Once per frame: where the playhead is, and the start of the take in progress (if any). */
         void setPlayhead (double seconds, std::optional<double> recordingFrom);
 
@@ -209,6 +212,6 @@ namespace carthage::ui
         void scrollBarMoved (juce::ScrollBar*, double newRangeStart) override;
         void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override             { repaintLanes(); }
         void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override      { repaintLanes(); }
-        void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override { repaintLanes(); }
+        void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
     };
 }

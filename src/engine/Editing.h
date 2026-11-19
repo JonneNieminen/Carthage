@@ -2,6 +2,7 @@
 
 #include <tracktion_engine/tracktion_engine.h>
 
+#include <optional>
 #include <vector>
 
 namespace carthage::editing
@@ -94,7 +95,34 @@ namespace carthage::editing
         from (clamped to the lanes the edit has); returns the new clips. */
     Clips paste (tracktion::Edit&, const Copied&, double atBeat);
 
-    void setLoopRange (tracktion::Edit&, double startBeat, double endBeat);
+    /** The loop region (4g): a range of beats kept in the edit with undo, so setting, changing
+        and clearing it are each one undo step. Tracktion's transport keeps its loop points outside
+        undo, so it follows the region (syncLoop) rather than holding it. In beats, so a tempo
+        change keeps the region on its bars. */
+    struct LoopRegion
+    {
+        double from = 0.0, to = 0.0;
+    };
+
+    std::optional<LoopRegion> loopRegion (const tracktion::Edit&);
+
+    /** Sets the region (either order; at least a tick long) and turns looping on. */
+    void setLoopRegion (tracktion::Edit&, double fromBeat, double toBeat);
+
+    /** Removes the region; looping turns off. */
+    void clearLoopRegion (tracktion::Edit&);
+
+    /** Looping on or off, kept with the region (outside undo, as the transport is). Without a
+        region there is nothing to loop and it stays off. */
+    void setLooping (tracktion::Edit&, bool);
+    bool isLooping (const tracktion::Edit&);
+
+    /** Puts the transport's loop points where the region is, after any edit or undo; a region
+        that comes back (an undone clear) loops again. */
+    void syncLoop (tracktion::Edit&);
+
+    /** A project from before 4g keeps the loop points it had on its transport as its region. */
+    void adoptTransportLoop (tracktion::Edit&);
     tracktion::MarkerClip* addMarker (tracktion::Edit&, double beat);
 
     /** Makes the edit find clip files the way Tracktion writes their paths (DECISIONS W32). The

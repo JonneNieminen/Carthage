@@ -7,8 +7,8 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 
 ## Now (2026-11-19)
 
-- **Phases 1 to 4f are verified** (reports in ROADMAP). **Next: 4g (loop region)**, once the
-  owner gives the go-ahead; then phase 5 (mixer, Cmd+R export). The owner's 4f choices are W45.
+- **Phases 1 to 4f are verified** (reports in ROADMAP). **4g (loop region) is built** (W46);
+  next: the owner's 4g checks, the 4g report, then phase 5 (mixer, Cmd+R export).
 - **Open:** CI's Windows job on the 4f motion code (Motion_win.cpp) had not finished when the 4f
   report was written; check `gh run list` before the next code push.
 - The owner's macOS Zoom gesture was on Cmd + scroll and swallowed Carthage's zoom; they moved it.
@@ -218,3 +218,12 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   time scrollbar's track under the lane names (corner painted), and the fade line crossing into the
   controls (the waveform's drawing is clipped to it). Sliders already took Shift (checked by test).
 - Owner retested: all pass. 4f report written. Next: the go-ahead for 4g.
+
+### 2026-11-20 (phase 4g, loop region)
+
+- The region lives on the edit with undo (W46), the transport follows (`editing::syncLoop`, run by
+  the session after every edit). Ruler: click moves the playhead, drag draws, edges drag, double-
+  click clears; L and a loop button toggle looping. The piano-roll part waits for phase 6.
+- The background drag tool delivers its press late (partway along the path), so ruler drags looked
+  wrong with it; a real press (full-screen control, owner present) placed the region exactly.
+- Open for the owner: a modifier for drawing the region on the lanes (all are taken there).

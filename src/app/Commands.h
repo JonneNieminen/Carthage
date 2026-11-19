@@ -64,7 +64,7 @@ namespace carthage::app
             // Added after the layouts, so the ids above stay as saved.
             lanesTaller = afterLayouts, lanesShorter,
             uiLarger, uiSmaller, uiActualSize,
-            toggleMetronome, undoHistory, exportLog, projectNotes, restoreVersion,
+            toggleMetronome, toggleLoop, undoHistory, exportLog, projectNotes, restoreVersion,
             addLaneBelow, moveLaneUp, moveLaneDown,
             viewsPalette,
             showTabFirst,                                // showTabFirst + 0..8: Cmd+1 to Cmd+9
@@ -90,7 +90,7 @@ namespace carthage::app
                      copyClips, cutClips, pasteClips, sampleBrowser,
                      windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings,
                      defaultLayout, commandPalette, keepPluginOnTop, lanesTaller, lanesShorter,
-                     uiLarger, uiSmaller, uiActualSize, toggleMetronome, undoHistory, exportLog, projectNotes, restoreVersion,
+                     uiLarger, uiSmaller, uiActualSize, toggleMetronome, toggleLoop, undoHistory, exportLog, projectNotes, restoreVersion,
                      addLaneBelow, moveLaneUp, moveLaneDown, viewsPalette };
         }
 
@@ -249,6 +249,7 @@ namespace carthage::app
                 case exportLog:       info.setInfo (juce::String::fromUTF8 ("Export log\xe2\x80\xa6"), "Save or copy Carthage's log, to send with a problem report", "Help", 0); break;
                 case undoHistory:     info.setInfo (juce::String::fromUTF8 ("Undo history\xe2\x80\xa6"), "Every step you can undo, newest first: choose one to go back to before it", "Edit", 0); info.addDefaultKeypress ('z', primary | juce::ModifierKeys::altModifier); break;
                 case toggleMetronome: info.setInfo ("Metronome", "Hear a click on every beat while playing and recording", "Transport", 0); info.addDefaultKeypress ('k', 0); break;
+                case toggleLoop:      info.setInfo ("Loop playback", "Play the loop region over and over (drag on the ruler to set one)", "Transport", 0); info.addDefaultKeypress ('l', 0); break;
                 case uiLarger:        info.setInfo ("Larger interface", "Make everything in Carthage larger, up to 150 %", "View", 0);
                                       info.addDefaultKeypress ('+', primary);   // + is its own key on many keyboards (Finnish, German…)
                                       info.addDefaultKeypress ('=', primary);   // and shares one with = on US ones

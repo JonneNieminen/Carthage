@@ -624,13 +624,16 @@ Needs owner:  The go-ahead for 4g (loop region).
 ### Phase 4g — loop region
 
 Deliver (owner, 2026-11-19):
-- [ ] A loop region drawn on the main grid: drag across the ruler (or with a modifier on the lanes)
-      to set it, drag its edges to change it, and it snaps like everything else; playback loops it
-      when looping is on; a double-click on it clears it
+- [x] A loop region drawn on the main grid: drag across the ruler to set it, drag its edges to
+      change it, and it snaps like everything else (Cmd bypasses); playback loops it when looping
+      is on (L, or the loop button); a double-click on it clears it (W46). Not on the lanes with a
+      modifier: every modifier there already has a job (asked of the owner)
 - [ ] The same loop region in the piano roll (built with phase 6, on the shared grid code)
 
 Exit checks:
-- [ ] Set, change, loop and clear by mouse in the running app; one undo step each
+- [x] Set, change, loop and clear by mouse in the running app; one undo step each (2026-11-20, a
+      real mouse drag on the demo: bar 3 to 5, the edge to 6, playback wrapped at bar 6; L off and
+      on; Cmd+Z one step; double-click clears; Cmd+Z restores, looping; EditingTests)
 - [ ] Owner's checks in the running app
 
 Report: _not written yet_
