@@ -192,3 +192,12 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   region).
 - Not yet run: an RTSan soak with clip envelopes playing (the soak records; add a playback case).
 
+### 2026-11-19 (4e, the owner's additions)
+
+- Built: rename a sample; "Key: …" apart from the clip count; bend drag direction flipped,
+  double-click straightens, Ctrl halves drag speed; waveforms scale with gain (editor and clips);
+  preview volume figure; formant shift (W44: FormantPlugin on the clip, Signalsmith direct,
+  latency compensated; bench `clip-formant`; RTSan-clean test); lane colours (Colour submenu,
+  kept in the lane); Cmd+M minimises the front window. Editor layout tidy is listed for 4f.
+- Checks page has the 4e items (e-*), including these. Next: read results, fix, 4e report.
+
