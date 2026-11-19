@@ -83,6 +83,9 @@ namespace carthage::app
                     m.addSeparator();
                     for (auto id : { commands::addMarker, commands::loopSelection, commands::toggleGrid })
                         m.addCommandItem (&commands, id);
+                    m.addSeparator();
+                    for (auto id : { commands::lanesTaller, commands::lanesShorter })
+                        m.addCommandItem (&commands, id);
                     break;
                 case 5:
                     for (auto id : commands::tools())

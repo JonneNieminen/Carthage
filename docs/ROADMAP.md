@@ -469,7 +469,7 @@ Deliver (F22, W38, W39):
 - [x] Projects renamed from their tabs (asks first); tap tempo; a question when the tempo changes
       (stretch, move with the beat, leave in time; remember the choice)
 - [ ] Panels resizable by their border, double-click fits the longest text
-- [ ] Wheel: scroll on both axes and zoom time and lane height in every grid; lane-height shortcut
+- [x] Wheel: scroll on both axes and zoom time and lane height in every grid; lane-height shortcut
 - [ ] FL-style paste-by-click and right-click delete as Settings switches (off)
 - [ ] Metronome: built-in wooden click, hi-hat and cowbell, or your own sound
 - [ ] Plugin check at the first launch only, then a Settings switch (off)

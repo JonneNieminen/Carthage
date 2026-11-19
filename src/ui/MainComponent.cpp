@@ -795,6 +795,8 @@ namespace carthage::ui
             case cmd::windowSettings:   toggleDetached (View::settings); return true;
             case cmd::defaultLayout:    defaultLayout(); setStatus ("Back to the default layout"); return true;
             case cmd::commandPalette:   if (palette.isVisible()) palette.close(); else palette.open(); return true;
+            case cmd::lanesTaller:      timeline.setLaneHeight (timeline.getLaneHeight() + Timeline::laneHeightStep); return true;
+            case cmd::lanesShorter:     timeline.setLaneHeight (timeline.getLaneHeight() - Timeline::laneHeightStep); return true;
             case cmd::keepPluginOnTop:
                 props().setValue ("keepPluginOnTop", ! keepPluginOnTop());
                 if (pluginWindow != nullptr) pluginWindow->setAlwaysOnTop (keepPluginOnTop());

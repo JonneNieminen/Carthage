@@ -51,6 +51,9 @@ namespace carthage::app
             recallLayoutFirst,                          // recallLayoutFirst + 0..8: layouts 1-9
             saveLayoutFirst = recallLayoutFirst + 9,    // saveLayoutFirst + 0..8
             afterLayouts = saveLayoutFirst + 9,
+
+            // Added after the layouts, so the ids above stay as saved.
+            lanesTaller = afterLayouts, lanesShorter,
         };
 
         /** Layout slots there can be; Settings chooses how many are offered (F21). */
@@ -71,7 +74,7 @@ namespace carthage::app
                      nudgeLeft, nudgeRight, addMarker, loopSelection, keyboardShortcuts,
                      copyClips, cutClips, pasteClips, sampleBrowser,
                      windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings,
-                     defaultLayout, commandPalette, keepPluginOnTop };
+                     defaultLayout, commandPalette, keepPluginOnTop, lanesTaller, lanesShorter };
         }
 
         /** The layout commands, recall then save, slot 1 first. */
@@ -197,6 +200,8 @@ namespace carthage::app
                 case windowSettings:  info.setInfo ("Settings in its own window", "Move Settings to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress (',', primary | juce::ModifierKeys::altModifier); break;
                 case defaultLayout:   info.setInfo ("Default layout", "Every view back in the main window, as Carthage starts", "Layouts", 0); info.addDefaultKeypress ('0', primary | juce::ModifierKeys::altModifier); break;
                 case commandPalette:  info.setInfo (juce::String::fromUTF8 ("Find a command\xe2\x80\xa6"), "Type to find any command and run it", "Window", 0); info.addDefaultKeypress ('k', primary); break;
+                case lanesTaller:     info.setInfo ("Taller lanes", "Make every lane taller (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('=', primary | juce::ModifierKeys::altModifier); break;
+                case lanesShorter:    info.setInfo ("Shorter lanes", "Make every lane shorter (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('-', primary | juce::ModifierKeys::altModifier); break;
                 case keepPluginOnTop: info.setInfo ("Keep plugin windows on top", "Plugin windows stay above Carthage's own windows", "Plugin", 0); break;
                 case startScreen:
                     info.setInfo ("Start screen", "Recent projects and templates", "File", 0);

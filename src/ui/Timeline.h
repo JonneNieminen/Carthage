@@ -91,7 +91,12 @@ namespace carthage::ui
         void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
         void mouseMagnify (const juce::MouseEvent&, float scale) override;
 
-        static constexpr int rulerHeight = 28, headerWidth = 168, laneHeight = 72;
+        static constexpr int rulerHeight = 28, headerWidth = 168;
+
+        /** Lane height (W38): Option + scroll, Option+Cmd+= / -; saved with the view. */
+        static constexpr int defaultLaneHeight = 72, minLaneHeight = 40, maxLaneHeight = 240, laneHeightStep = 12;
+        int getLaneHeight() const noexcept   { return laneHeight; }
+        void setLaneHeight (int newHeight, std::optional<int> keepLaneAtY = {});
         static constexpr double minPixelsPerBeat = 0.5, maxPixelsPerBeat = 2000.0;
 
     private:
@@ -110,6 +115,7 @@ namespace carthage::ui
         double pixelsPerBeat = 24.0;
         double scrollBeat = 0.0;
         int scrollY = 0;
+        int laneHeight = defaultLaneHeight;
 
         std::shared_ptr<const editing::Copied> copied;
 
