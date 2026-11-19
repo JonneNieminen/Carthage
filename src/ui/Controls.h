@@ -70,6 +70,10 @@ namespace carthage::ui
     public:
         PanelEdge();
 
+        /** For a panel under something (the sample editor): the edge runs across, dragging it up
+            makes the panel taller. */
+        void setAlongTop (bool along)   { alongTop = along; setMouseCursor (along ? juce::MouseCursor::UpDownResizeCursor : juce::MouseCursor::LeftRightResizeCursor); }
+
         /** The panel's width now; a drag reports the width plus the distance dragged. */
         std::function<int()> getCurrentWidth;
         std::function<void (int newWidth)> onResize;
@@ -87,6 +91,7 @@ namespace carthage::ui
 
     private:
         int widthAtStart = 0;
+        bool alongTop = false;
     };
 
     /** Peak meter with a held peak, in a recessed well: ok below -18 dBFS, warn to -6, clip above. */

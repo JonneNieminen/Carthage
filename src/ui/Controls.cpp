@@ -138,7 +138,7 @@ namespace carthage::ui
         if (isMouseOverOrDragging())
         {
             g.setColour (isMouseButtonDown() ? theme::accent : theme::lineStrong);
-            g.fillRect (getLocalBounds().withSizeKeepingCentre (2, getHeight()));
+            g.fillRect (alongTop ? getLocalBounds().withSizeKeepingCentre (getWidth(), 2) : getLocalBounds().withSizeKeepingCentre (2, getHeight()));
         }
     }
 
@@ -151,7 +151,7 @@ namespace carthage::ui
     void PanelEdge::mouseDrag (const MouseEvent& e)
     {
         if (onResize)
-            onResize (widthAtStart + e.getDistanceFromDragStartX());
+            onResize (widthAtStart + (alongTop ? -e.getDistanceFromDragStartY() : e.getDistanceFromDragStartX()));
     }
 
     void PanelEdge::mouseDoubleClick (const MouseEvent&)

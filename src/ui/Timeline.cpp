@@ -995,6 +995,12 @@ namespace carthage::ui
             timeline.selectOnly (inside);
         }
 
+        void mouseDoubleClick (const MouseEvent& e) override
+        {
+            if (const auto hit = clipAt (e.getPosition()); hit.clip != nullptr && timeline.onClipDoubleClicked)
+                timeline.onClipDoubleClicked (*hit.clip);
+        }
+
         void mouseUp (const MouseEvent& e) override
         {
             if (drag == Drag::zoomRange)

@@ -28,7 +28,7 @@ namespace carthage::engine
         void prepare (double deviceSampleRate);
 
         /** Message thread. Starts `file` from the beginning, replacing anything playing. */
-        void play (const juce::File&);
+        void play (const juce::File&, double fromSeconds = 0.0);   ///< from a point: the sample editor's click (W42)
         void stop();
 
         /** Message thread. Volume of the preview alone, in dB (-60 is silent). */
@@ -53,6 +53,7 @@ namespace carthage::engine
         // Requests, message thread -> reader.
         std::mutex requestLock;
         juce::File requested, current;
+        double requestedStart = 0.0;   // seconds into the file; under requestLock
         std::atomic<int> requestNumber { 0 };
         juce::WaitableEvent wake;
 

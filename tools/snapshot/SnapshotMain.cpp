@@ -307,6 +307,15 @@ namespace
                 // Shading inside the beat (W41), on halves.
                 onMessageThreadVoid ([this] { session->setBeatShading (2); content->getTimeline().gridChanged(); });
                 capture (outDir.getChildFile ("take-shading.png"));
+
+                // The sample editor on the take (W42).
+                onMessageThreadVoid ([this]
+                {
+                    if (auto* c = tracktion::getAudioTracks (session->getEdit()).getFirst()->getClips().getFirst())
+                        content->getTimeline().onClipDoubleClicked (*c);
+                });
+                Thread::sleep (600);   // its waveform reads in the background
+                capture (outDir.getChildFile ("sample-editor.png"));
                 onMessageThreadVoid ([this] { session->setBeatShading (0); content->getTimeline().gridChanged(); });
             }
 

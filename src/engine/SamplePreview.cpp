@@ -30,11 +30,12 @@ namespace carthage::engine
         }
     }
 
-    void SamplePreview::play (const juce::File& file)
+    void SamplePreview::play (const juce::File& file, double fromSeconds)
     {
         {
             const std::scoped_lock lock (requestLock);
             requested = file;
+            requestedStart = std::max (0.0, fromSeconds);
         }
 
         requestNumber.fetch_add (1);
@@ -143,21 +144,23 @@ namespace carthage::engine
                 }
 
                 juce::File file;
+                double from = 0.0;
                 {
                     const std::scoped_lock lock (requestLock);
                     file = requested;
+                    from = requestedStart;
                     current = file;
                 }
 
                 reader.reset (file == juce::File() ? nullptr : formats.createReaderFor (file));
-                readPosition = 0;
+                readPosition = reader != nullptr ? std::clamp (static_cast<juce::int64> (from * reader->sampleRate), juce::int64 { 0 }, reader->lengthInSamples) : 0;
                 framesHeard.store (0);
                 sourceDone.store (reader == nullptr);
 
                 if (const auto deviceRate = rate.load(); reader != nullptr && deviceRate > 0.0)
                 {
                     ratio = reader->sampleRate / deviceRate;
-                    framesTotal.store (static_cast<juce::int64> (static_cast<double> (reader->lengthInSamples) / ratio));
+                    framesTotal.store (static_cast<juce::int64> (static_cast<double> (reader->lengthInSamples - readPosition) / ratio));
                     for (auto& i : interpolators) i.reset();
                     active.store (true);
                 }

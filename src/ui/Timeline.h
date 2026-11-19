@@ -47,6 +47,9 @@ namespace carthage::ui
         void clearSelection();
         std::function<void()> onSelectionChanged;
 
+        /** A double-click on a clip: the window opens the sample editor for it (W42). */
+        std::function<void (tracktion::Clip&)> onClipDoubleClicked;
+
         /** The edit operations the keyboard drives, each one named undo step. */
         void splitAtPlayhead();
         void duplicateSelection();

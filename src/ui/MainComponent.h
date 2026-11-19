@@ -7,6 +7,7 @@
 #include "StartScreen.h"
 #include "CommandPalette.h"
 #include "ProjectTabs.h"
+#include "SampleEditor.h"
 #include "SettingsPanel.h"
 #include "Timeline.h"
 #include "UpdateBanner.h"
@@ -46,7 +47,15 @@ namespace carthage::ui
         void toggleSettings();
 
         /** The open projects changed (name, unsaved state, order): the tab strip follows. */
-        void projectStateChanged()   { tabs.refresh(); }
+        /** After any edit, undo or save: the tabs, and the sample editor, which shows the sound as
+            it is now (or closes if its clip is gone). */
+        void projectStateChanged()
+        {
+            tabs.refresh();
+
+            if (sampleEditor.isVisible())
+                sampleEditor.refresh();
+        }
 
         /** Shows a problem the user has to fix outside Carthage, in the status line. */
         void showProblem (const juce::String& text)    { setStatus (text, theme::warn); }
@@ -117,6 +126,13 @@ namespace carthage::ui
 
     private:
         std::unique_ptr<juce::FileChooser> logChooser;   // Export log's Save
+
+        // The sample editor under the lanes (W42).
+        SampleEditor sampleEditor;   // built from the constructor's session (declared before the member)
+        PanelEdge sampleEditorEdge;
+        int sampleEditorHeight = SampleEditor::defaultHeight;
+        void openSampleEditor (tracktion::Clip&);
+        void closeSampleEditor();
         std::unique_ptr<engine::SettingsTest> settingsTest;
         void offerRecommendation (const engine::SettingsTest::Recommendation&, bool atFirstLaunch);
 

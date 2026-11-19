@@ -578,7 +578,10 @@ namespace carthage::ui
 
     //==============================================================================================
     MainComponent::MainComponent (engine::Session& s, ApplicationCommandManager& c)
-        : session (s), commands (c), timeline (s), settings (s, c, cmd::inMenuOrder()), browser (s), samples (s)
+        : sampleEditor (s),
+          sampleEditorHeight (jlimit (SampleEditor::minHeight, SampleEditor::maxHeight,
+                                      s.getEngine().getPropertyStorage().getPropertiesFile().getIntValue ("sampleEditorHeight", SampleEditor::defaultHeight))),
+          session (s), commands (c), timeline (s), settings (s, c, cmd::inMenuOrder()), browser (s), samples (s)
     {
         signalRow = std::make_unique<SignalRow> (session, commands);
         signalRow->onRemove = [this] { closePluginWindow(); session.removePlugin(); signalRow->setMessage ({}, false); };
@@ -644,6 +647,29 @@ namespace carthage::ui
         settings.onShowLoadChanged = [this] (bool) { resized(); };
         settings.onBeatShadingChanged = [this] { timeline.gridChanged(); };
         settings.onRunSettingsTest = [this] { runSettingsTest (false); };
+
+        addChildComponent (sampleEditor);
+        addChildComponent (sampleEditorEdge);
+        sampleEditorEdge.setAlongTop (true);
+        sampleEditorEdge.setTooltip ("Drag to make the sample editor taller or shorter");
+        sampleEditorEdge.getCurrentWidth = [this] { return sampleEditorHeight; };
+        sampleEditorEdge.onResize = [this] (int h)
+        {
+            sampleEditorHeight = jlimit (SampleEditor::minHeight, SampleEditor::maxHeight, h);
+            this->props().setValue ("sampleEditorHeight", sampleEditorHeight);
+            resized();
+        };
+        sampleEditorEdge.onFit = [this] { sampleEditorEdge.onResize (SampleEditor::defaultHeight); };
+        sampleEditor.onClose = [this] { closeSampleEditor(); };
+        sampleEditor.onStatus = [this] (const String& text) { setStatus (text); };
+        timeline.onClipDoubleClicked = [this] (tracktion::Clip& c)
+        {
+            // The same clip again closes it (W42).
+            if (sampleEditor.isVisible() && sampleEditor.getClipID() == c.itemID)
+                closeSampleEditor();
+            else
+                openSampleEditor (c);
+        };
         showPanel (panelShowsSamples, false);
 
         // Views in their own windows (F21): a pop-out button on each, the way back on its window.
@@ -695,6 +721,7 @@ namespace carthage::ui
                     toggleNotes();
                 else
                     refreshNotes();
+            closeSampleEditor();   // its clip belonged to the other project
             }
         };
         tabs.onRename = [this] (int index)
@@ -1098,6 +1125,25 @@ namespace carthage::ui
                        + String (r.parallelChecks) + " checks at once)");
             settings.refresh();
         }), true);
+    }
+
+    void MainComponent::openSampleEditor (tracktion::Clip& c)
+    {
+        sampleEditor.setVisible (true);
+        sampleEditorEdge.setVisible (true);
+        resized();
+        sampleEditor.show (c);
+    }
+
+    void MainComponent::closeSampleEditor()
+    {
+        if (! sampleEditor.isVisible())
+            return;
+
+        sampleEditor.setVisible (false);
+        sampleEditorEdge.setVisible (false);
+        resized();
+        timeline.grabKeyboardFocus();
     }
 
     void MainComponent::exportLog()
@@ -1721,6 +1767,13 @@ namespace carthage::ui
 
     bool MainComponent::closeFrontWindow()
     {
+        // The sample editor, while it is in front, closes first (W42).
+        if (sampleEditor.isVisible() && sampleEditor.hasKeyboardFocus (true))
+        {
+            closeSampleEditor();
+            return true;
+        }
+
         auto* front = TopLevelWindow::getActiveTopLevelWindow();
 
         if (front == nullptr)
@@ -2084,6 +2137,14 @@ namespace carthage::ui
         timelineAway.setVisible (! timelineHere);
         timelineBack.setVisible (! timelineHere);
         popTimeline.setVisible (timelineHere);
+
+        if (sampleEditor.isVisible())
+        {
+            const auto editorArea = r.removeFromBottom (std::min (sampleEditorHeight, r.getHeight() - 120));
+            sampleEditor.setBounds (editorArea);
+            sampleEditorEdge.setBounds (editorArea.getX(), editorArea.getY() - PanelEdge::thickness / 2, editorArea.getWidth(), PanelEdge::thickness);
+            sampleEditorEdge.toFront (false);
+        }
 
         if (timelineHere)
         {
