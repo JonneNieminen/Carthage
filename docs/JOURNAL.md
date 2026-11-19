@@ -215,4 +215,6 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   `ui::Switch` replaces every `juce::ToggleButton`. MotionTests cover the rules.
 - The owner let me quit the older Carthage; in the new build the editor opens in place and the
   Reverse switch lands right both ways. 4f checks (f-*) are on the checks page.
-
+- Owner asked for reversed samples to look reversed: the editor and the lanes draw them mirrored
+  (Tracktion's offset already counts from the file's end), shape points mirror with them, clicks
+  play the clip's reversed file. Checked in the app on the demo; undo restores both.

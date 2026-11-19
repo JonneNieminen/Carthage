@@ -94,7 +94,13 @@ namespace carthage::ui
         void readControls();
         void analyse();
 
-        float xAt (double seconds) const;
+        float xAt (double seconds) const;   // seconds as drawn: as the sample plays
+
+        /** Drawn time and file time: the same, or mirrored when the sample is reversed. The
+            envelope keeps file time, so a shape stays on the sound when it is reversed. */
+        double fileTimeAt (double shown) const;
+        double shownAt (double fileTime) const;
+        void playFrom (double shown);
         double secondsAt (float x) const;
         Grab grabAt (juce::Point<int>) const;
 

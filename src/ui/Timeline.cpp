@@ -608,7 +608,20 @@ namespace carthage::ui
                     const auto gain = juce::Decibels::decibelsToGain (wave->getGainDB());
                     g.saveState();
                     g.reduceClipRegion (visible.toNearestInt());
-                    thumb.drawChannels (g, visible.toNearestInt(), visFrom, visTo, gain);
+
+                    if (wave->getIsReversed())
+                    {
+                        // Reversed, the offset counts from the file's end (Tracktion), and the
+                        // waveform is drawn mirrored, as it plays (owner).
+                        const auto length = thumb.getTotalLength();
+                        g.addTransform (AffineTransform (-1.0f, 0.0f, 2.0f * visible.getCentreX(), 0.0f, 1.0f, 0.0f));
+                        thumb.drawChannels (g, visible.toNearestInt(), length - visTo, length - visFrom, gain);
+                    }
+                    else
+                    {
+                        thumb.drawChannels (g, visible.toNearestInt(), visFrom, visTo, gain);
+                    }
+
                     g.restoreState();
                 }
             }

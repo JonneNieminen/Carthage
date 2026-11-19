@@ -334,6 +334,23 @@ namespace
                 });
                 Thread::sleep (300);
                 capture (outDir.getChildFile ("sample-editor-shape.png"));
+
+                // Reversed (owner, 4f): the waveform and the shape drawn mirrored, here and on the lane.
+                onMessageThreadVoid ([this]
+                {
+                    if (auto* c = tracktion::getAudioTracks (session->getEdit()).getFirst()->getClips().getFirst())
+                    {
+                        carthage::editing::begin (session->getEdit(), "Reverse sample");
+                        auto sound = carthage::editing::soundOf (*c);
+                        sound.reversed = true;
+                        carthage::editing::setSound (*c, sound);
+                        session->getEdit().getUndoManager().dispatchPendingMessages();
+                    }
+
+                    content->projectStateChanged();
+                });
+                Thread::sleep (300);
+                capture (outDir.getChildFile ("sample-editor-reversed.png"));
                 onMessageThreadVoid ([this] { session->setBeatShading (0); content->getTimeline().gridChanged(); });
             }
 

@@ -83,8 +83,7 @@ namespace carthage::ui
         playButton.setTooltip ("Play the sample from where it starts. Click the waveform to play from that point.");
         playButton.onClick = [this]
         {
-            if (file.existsAsFile())
-                session.getPreview().play (file, sound().start);
+            playFrom (sound().start);
         };
         addAndMakeVisible (playButton);
 
@@ -311,6 +310,39 @@ namespace carthage::ui
         return std::clamp (static_cast<double> (t), 0.0, 1.0) * fileSeconds;
     }
 
+    double SampleEditor::fileTimeAt (double shown) const
+    {
+        // A reversed sample is drawn as it plays: its file time runs from the right.
+        return sound().reversed ? fileSeconds - shown : shown;
+    }
+
+    double SampleEditor::shownAt (double fileTime) const
+    {
+        return sound().reversed ? fileSeconds - fileTime : fileTime;
+    }
+
+    void SampleEditor::playFrom (double shown)
+    {
+        // Reversed, the clip's own reversed file plays (Tracktion renders it), so the sound
+        // heard is the sound drawn; until it is ready, the original from the same sound.
+        if (auto* audio = dynamic_cast<tracktion::AudioClipBase*> (clip()); audio != nullptr && sound().reversed)
+        {
+            if (const auto reversedFile = audio->getPlaybackFile().getFile(); reversedFile.existsAsFile() && reversedFile != file)
+            {
+                session.getPreview().play (reversedFile, shown);
+                return;
+            }
+
+            if (file.existsAsFile())
+                session.getPreview().play (file, fileTimeAt (shown));
+
+            return;
+        }
+
+        if (file.existsAsFile())
+            session.getPreview().play (file, shown);
+    }
+
     float SampleEditor::yForGain (float level) const
     {
         const auto area = waveArea.toFloat().reduced (0.0f, 6.0f);
@@ -325,7 +357,7 @@ namespace carthage::ui
 
     Point<float> SampleEditor::pointXY (const editing::EnvelopePoint& p) const
     {
-        return { xAt (p.time), yForGain (p.gainDb <= -60.0f ? 0.0f : Decibels::decibelsToGain (p.gainDb)) };
+        return { xAt (shownAt (p.time)), yForGain (p.gainDb <= -60.0f ? 0.0f : Decibels::decibelsToGain (p.gainDb)) };
     }
 
     Point<float> SampleEditor::handleXY (int segment)
@@ -335,7 +367,7 @@ namespace carthage::ui
         const auto& b = envelope[static_cast<size_t> (segment) + 1];
         const auto t = (a.time + b.time) * 0.5;
         auto* c = clip();
-        return { xAt (t), yForGain (c != nullptr ? editing::envelopeGainAt (*c, t) : 1.0f) };
+        return { xAt (shownAt (t)), yForGain (c != nullptr ? editing::envelopeGainAt (*c, t) : 1.0f) };
     }
 
     int SampleEditor::pointAt (Point<int> p) const
@@ -431,12 +463,12 @@ namespace carthage::ui
             beginGesture ("Add point");
             const auto s = sound();
             const auto level = gainForY (static_cast<float> (e.y));
-            const editing::EnvelopePoint added { secondsAt (static_cast<float> (e.x)), level <= 0.001f ? -60.0f : Decibels::gainToDecibels (level), 0.0f };
+            const editing::EnvelopePoint added { fileTimeAt (secondsAt (static_cast<float> (e.x))), level <= 0.001f ? -60.0f : Decibels::gainToDecibels (level), 0.0f };
 
-            if (envelope.empty())
+            if (envelope.empty())   // the points are kept in file time, so they stay with the sound
             {
-                envelope.push_back ({ s.start, 0.0f, 0.0f });
-                envelope.push_back ({ s.start + s.length, 0.0f, 0.0f });
+                envelope.push_back ({ fileTimeAt (s.start), 0.0f, 0.0f });
+                envelope.push_back ({ fileTimeAt (s.start + s.length), 0.0f, 0.0f });
             }
 
             envelope.push_back (added);
@@ -462,8 +494,8 @@ namespace carthage::ui
         }
 
         // A click plays from there, as in the browser.
-        if (waveArea.contains (e.getPosition()) && file.existsAsFile())
-            session.getPreview().play (file, secondsAt (static_cast<float> (e.x)));
+        if (waveArea.contains (e.getPosition()))
+            playFrom (secondsAt (static_cast<float> (e.x)));
     }
 
     void SampleEditor::mouseDrag (const MouseEvent& e)
@@ -479,7 +511,8 @@ namespace carthage::ui
             const auto lo = dragPoint > 0 ? envelope[static_cast<size_t> (dragPoint) - 1].time + 0.001 : 0.0;
             const auto hi = dragPoint + 1 < static_cast<int> (envelope.size()) ? envelope[static_cast<size_t> (dragPoint) + 1].time - 0.001 : fileSeconds;
             const auto secondsPerPixel = fileSeconds / std::max (1, waveArea.getWidth());
-            p.time = std::clamp (p.time + static_cast<double> (step.x) * secondsPerPixel, lo, std::max (lo, hi));
+            const auto towards = sound().reversed ? -1.0 : 1.0;   // drawn mirrored when reversed
+            p.time = std::clamp (p.time + towards * static_cast<double> (step.x) * secondsPerPixel, lo, std::max (lo, hi));
             const auto y = pointXY (p).y + step.y;
             const auto level = gainForY (y);
             p.gainDb = level <= 0.001f ? -60.0f : Decibels::gainToDecibels (level);
@@ -600,8 +633,12 @@ namespace carthage::ui
             // Drawn to its own loudest peak (up to 8x), so a quiet take is still readable, then
             // grown or shrunk by the sample's gain, so the gain can be seen (owner).
             const auto zoom = std::clamp (0.9f / std::max (0.001f, thumbnail.getApproximatePeak()), 1.0f, 8.0f) * Decibels::decibelsToGain (s.gainDb);
+            // Reversed, the waveform is drawn mirrored, as it plays (owner).
+            const auto mirror = s.reversed ? AffineTransform (-1.0f, 0.0f, 2.0f * waveArea.toFloat().getCentreX(), 0.0f, 1.0f, 0.0f)
+                                           : AffineTransform();
             g.saveState();
             g.reduceClipRegion (waveArea.reduced (2));
+            g.addTransform (mirror);
             g.setColour (theme::faint);
             thumbnail.drawChannels (g, waveArea.reduced (2), 0.0, thumbnail.getTotalLength(), zoom);
             g.restoreState();
@@ -610,6 +647,7 @@ namespace carthage::ui
             const auto playing = Rectangle<float> (x0, static_cast<float> (waveArea.getY()), x1 - x0, static_cast<float> (waveArea.getHeight()));
             g.saveState();
             g.reduceClipRegion (playing.toNearestInt());
+            g.addTransform (mirror);
             g.setColour (theme::text.withAlpha (0.85f));
             thumbnail.drawChannels (g, waveArea.reduced (2), 0.0, thumbnail.getTotalLength(), zoom);
             g.restoreState();
@@ -651,7 +689,7 @@ namespace carthage::ui
 
                     for (int x = from; x <= to; x += 2)
                     {
-                        const Point<float> p (static_cast<float> (x), yForGain (editing::envelopeGainAt (*c, secondsAt (static_cast<float> (x)))));
+                        const Point<float> p (static_cast<float> (x), yForGain (editing::envelopeGainAt (*c, fileTimeAt (secondsAt (static_cast<float> (x))))));
                         if (x == from) line.startNewSubPath (p); else line.lineTo (p);
                     }
 
