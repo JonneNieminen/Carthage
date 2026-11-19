@@ -92,4 +92,22 @@ namespace carthage::editing
     /** Lanes in order: the edit's audio tracks. */
     juce::Array<tracktion::AudioTrack*> lanes (tracktion::Edit&);
     int laneOf (const tracktion::Clip&);
+
+    /** "Lane N" with the lowest N no lane already uses. */
+    juce::String nextLaneName (tracktion::Edit&);
+
+    /** Adds a lane below `after` (or at the end), named by nextLaneName; one undo step. */
+    tracktion::AudioTrack* addLane (tracktion::Edit&, tracktion::AudioTrack* after = nullptr);
+
+    /** Deletes a lane and its clips; one undo step. The caller keeps the recording lane and the
+        last lane (canDeleteLane). */
+    void deleteLane (tracktion::AudioTrack&);
+    bool canDeleteLane (tracktion::AudioTrack&, const tracktion::AudioTrack& recordingLane);
+
+    /** One undo step. An empty or blank name keeps the old one. */
+    void renameLane (tracktion::AudioTrack&, const juce::String&);
+
+    /** Not undo steps: Tracktion keeps mute and solo out of the undo history, as mixers do. */
+    void setLaneMuted (tracktion::AudioTrack&, bool);
+    void setLaneSoloed (tracktion::AudioTrack&, bool);
 }

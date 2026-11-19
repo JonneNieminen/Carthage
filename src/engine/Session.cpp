@@ -575,16 +575,14 @@ namespace carthage::engine
         auto& edit = *p->edit;
         edit.playInStopEnabled = true;    // the graph runs while stopped, so the input is always heard
 
-        // Eight lanes; the first holds the guitar input and its takes.
+        // A new project has eight lanes, Lane 1 to Lane 8 (W38); one opened keeps the lanes it was
+        // saved with, so a deleted lane stays deleted. The first lane records the input.
         const auto existing = isNew ? 0 : tracktion::getAudioTracks (edit).size();
-        edit.ensureNumberOfAudioTracks (8);
+        edit.ensureNumberOfAudioTracks (existing == 0 ? 8 : existing);
         const auto lanes = tracktion::getAudioTracks (edit);
         p->track = lanes.getFirst();
 
-        if (existing == 0)
-            p->track->setName ("Guitar");
-
-        for (int i = std::max (1, existing); i < lanes.size(); ++i)
+        for (int i = existing; i < lanes.size(); ++i)
             lanes[i]->setName ("Lane " + juce::String (i + 1));
 
         // An untouched untitled tab gives its place to this one.

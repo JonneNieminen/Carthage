@@ -58,6 +58,9 @@ namespace carthage::ui
         bool canPaste() const noexcept      { return copied != nullptr && copied->count() > 0; }
         void nudgeSelection (int steps);
         void addMarkerAtPlayhead();
+
+        /** Adds a lane below `after` (or at the end) and scrolls to it. */
+        void addLane (tracktion::AudioTrack* after = nullptr);
         void loopSelection();
 
         /** Once per frame: where the playhead is, and the start of the take in progress (if any). */
@@ -121,6 +124,7 @@ namespace carthage::ui
         std::unique_ptr<Playhead> playhead;
         std::unique_ptr<RecordingRegion> recording;
         juce::ScrollBar hScroll { false }, vScroll { true };
+        juce::TextButton addLaneButton { "Add lane" };   // in the corner above the lane headers
 
         double lastPlayheadSeconds = -1.0;
         std::optional<double> lastRecordingFrom;

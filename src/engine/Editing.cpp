@@ -177,6 +177,69 @@ namespace carthage::editing
 
     juce::Array<AudioTrack*> lanes (Edit& edit)   { return getAudioTracks (edit); }
 
+    juce::String nextLaneName (Edit& edit)
+    {
+        std::set<int> used;
+
+        for (auto* t : lanes (edit))
+            if (const auto name = t->getName(); name.startsWith ("Lane ") && name.substring (5).containsOnly ("0123456789"))
+                used.insert (name.substring (5).getIntValue());
+
+        int n = 1;
+        while (used.contains (n))
+            ++n;
+
+        return "Lane " + juce::String (n);
+    }
+
+    AudioTrack* addLane (Edit& edit, AudioTrack* after)
+    {
+        edit.getUndoManager().beginNewTransaction ("Add lane");
+        const auto name = nextLaneName (edit);
+        auto all = lanes (edit);
+        Track* preceding = after != nullptr ? after : all.getLast();
+        auto lane = edit.insertNewAudioTrack (TrackInsertPoint (nullptr, preceding), nullptr);
+
+        if (lane == nullptr)
+            return nullptr;
+
+        lane->setName (name);
+        return lane.get();
+    }
+
+    bool canDeleteLane (AudioTrack& lane, const AudioTrack& recordingLane)
+    {
+        return &lane != &recordingLane && lanes (lane.edit).size() > 1;
+    }
+
+    void deleteLane (AudioTrack& lane)
+    {
+        auto& edit = lane.edit;
+        edit.getUndoManager().beginNewTransaction ("Delete lane");
+        edit.deleteTrack (&lane);
+    }
+
+    void renameLane (AudioTrack& lane, const juce::String& name)
+    {
+        const auto trimmed = name.trim();
+
+        if (trimmed.isEmpty() || trimmed == lane.getName())
+            return;
+
+        lane.edit.getUndoManager().beginNewTransaction ("Rename lane");
+        lane.setName (trimmed);
+    }
+
+    void setLaneMuted (AudioTrack& lane, bool muted)
+    {
+        lane.setMute (muted);
+    }
+
+    void setLaneSoloed (AudioTrack& lane, bool soloed)
+    {
+        lane.setSolo (soloed);
+    }
+
     int laneOf (const Clip& c)
     {
         return lanes (c.edit).indexOf (dynamic_cast<AudioTrack*> (c.getTrack()));

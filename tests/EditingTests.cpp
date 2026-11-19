@@ -233,6 +233,51 @@ public:
             expect (editing::insertFile (*lanes[1], folder.getChildFile ("missing.wav"), 0.0) == nullptr, "a missing file adds nothing");
         }
 
+        beginTest ("Lanes: named Lane N; adding, renaming and deleting are undo steps (W38)");
+        {
+            lanes = editing::lanes (*edit);
+            lanes[0]->setName ("Lane 1");
+            lanes[1]->setName ("Lane 3");
+            expectEquals (editing::nextLaneName (*edit), juce::String ("Lane 2"), "the lowest free number");
+
+            auto* added = editing::addLane (*edit, lanes[0]);
+            expect (added != nullptr);
+            expectEquals (added->getName(), juce::String ("Lane 2"));
+            expectEquals (editing::lanes (*edit).indexOf (added), 1, "below the lane asked for");
+            expectEquals (editing::addLane (*edit)->getName(), juce::String ("Lane 4"), "at the end");
+            expectEquals (editing::lanes (*edit).size(), 4);
+            um.undo();
+            expectEquals (editing::lanes (*edit).size(), 3, "undo removes the added lane");
+
+            editing::renameLane (*added, "  Bass  ");
+            expectEquals (added->getName(), juce::String ("Bass"), "trimmed");
+            editing::renameLane (*added, "   ");
+            expectEquals (added->getName(), juce::String ("Bass"), "a blank name keeps the old one");
+            um.undo();
+            expectEquals (added->getName(), juce::String ("Lane 2"), "undo restores the name");
+
+            editing::setLaneMuted (*added, true);
+            editing::setLaneSoloed (*added, true);
+            expect (added->isMuted (false) && added->isSolo (false));
+            editing::setLaneMuted (*added, false);
+            editing::setLaneSoloed (*added, false);
+            expect (! added->isMuted (false) && ! added->isSolo (false));
+
+            const auto recordLane = editing::lanes (*edit)[0];
+            expect (! editing::canDeleteLane (*recordLane, *recordLane), "the recording lane stays");
+            expect (editing::canDeleteLane (*added, *recordLane));
+            auto* clip = editing::insertFile (*added, audio, 0.0);
+            expect (clip != nullptr);
+            editing::deleteLane (*added);
+            expectEquals (editing::lanes (*edit).size(), 2, "deleted with its clip");
+            um.undo();
+            const auto back = editing::lanes (*edit);
+            expectEquals (back.size(), 3, "undo brings it back");
+            expectEquals (back[1]->getName(), juce::String ("Lane 2"));
+            expectEquals (back[1]->getClips().size(), 1, "with its clip");
+            lanes = editing::lanes (*edit);
+        }
+
         expectEquals (editing::named ("Move", 1), juce::String ("Move clip"));
         expectEquals (editing::named ("Move", 3), juce::String ("Move 3 clips"));
     }

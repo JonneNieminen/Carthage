@@ -81,10 +81,19 @@ namespace carthage::ui
 
     //==============================================================================================
     /** The lane names, with each lane's colour. */
-    class Timeline::Headers final : public Component
+    class Timeline::Headers final : public Component, public TooltipClient
     {
     public:
-        explicit Headers (Timeline& t) : timeline (t) {}
+        explicit Headers (Timeline& t) : timeline (t)
+        {
+            nameEditor.setFont (theme::uiFont (theme::textMd, true));
+            nameEditor.setJustification (Justification::centredLeft);
+            nameEditor.setIndents (4, 0);
+            nameEditor.onReturnKey = [this] { finishRename (true); };
+            nameEditor.onEscapeKey = [this] { finishRename (false); };
+            nameEditor.onFocusLost = [this] { finishRename (true); };
+            addChildComponent (nameEditor);
+        }
 
         void paint (Graphics& g) override
         {
@@ -96,34 +105,204 @@ namespace carthage::ui
 
             for (int i = 0; i < tracks.size(); ++i)
             {
-                const auto y = i * laneHeight - timeline.scrollY;
+                const auto row = rowBounds (i);
 
-                if (y + laneHeight < 0 || y > getHeight())
+                if (row.getBottom() < 0 || row.getY() > getHeight())
                     continue;
 
-                auto row = Rectangle<int> (0, y, getWidth() - 1, laneHeight);
+                auto* lane = tracks[i];
                 g.setColour (theme::line);
-                g.fillRect (row.removeFromBottom (1));
+                g.fillRect (row.withTop (row.getBottom() - 1));
 
-                auto inner = row.reduced (theme::space3, theme::space2);
-                g.setColour (timeline.laneColour (i));
-                g.fillRoundedRectangle (inner.removeFromLeft (4).toFloat(), 2.0f);
-                inner.removeFromLeft (theme::space2);
+                const auto parts = partsOf (row);
+                g.setColour (timeline.laneColour (i).withMultipliedAlpha (lane->isMuted (false) ? 0.35f : 1.0f));
+                g.fillRoundedRectangle (parts.colourBar.toFloat(), 2.0f);
 
-                g.setColour (theme::text);
-                g.setFont (theme::uiFont (theme::textMd, true));
-                g.drawText (tracks[i]->getName(), inner.removeFromTop (20), Justification::centredLeft, true);
+                if (! (renaming == lane->itemID && nameEditor.isVisible()))
+                {
+                    g.setColour (lane->isMuted (false) ? theme::muted : theme::text);
+                    g.setFont (theme::uiFont (theme::textMd, true));
+                    g.drawText (lane->getName(), parts.name, Justification::centredLeft, true);
+                }
+
+                pill (g, parts.mute, "M", lane->isMuted (false), theme::warn);
+                pill (g, parts.solo, "S", lane->isSolo (false), theme::ok);
 
                 g.setColour (theme::muted);
                 g.setFont (theme::uiFont (theme::textSm));
-                const auto count = tracks[i]->getClips().size();
-                g.drawText (count == 0 ? String ("Empty") : String (count) + (count == 1 ? " clip" : " clips"),
-                            inner.removeFromTop (18), Justification::centredLeft, true);
+                const auto count = lane->getClips().size();
+                const auto recordsHere = lane == &timeline.session.getTrack();
+                auto detail = count == 0 ? String ("Empty") : String (count) + (count == 1 ? " clip" : " clips");
+                if (recordsHere) detail << ", records";
+                g.drawText (detail, parts.detail, Justification::centredLeft, true);
             }
         }
 
+        void mouseDown (const MouseEvent& e) override
+        {
+            auto* lane = laneAt (e.y);
+
+            if (lane == nullptr)
+                return;
+
+            const auto parts = partsOf (rowBounds (timeline.laneTracks().indexOf (lane)));
+
+            if (e.mods.isPopupMenu())
+                showMenu (*lane);
+            else if (parts.mute.contains (e.getPosition()))
+                editing::setLaneMuted (*lane, ! lane->isMuted (false));
+            else if (parts.solo.contains (e.getPosition()))
+                editing::setLaneSoloed (*lane, ! lane->isSolo (false));
+        }
+
+        void mouseDoubleClick (const MouseEvent& e) override
+        {
+            if (auto* lane = laneAt (e.y))
+            {
+                const auto parts = partsOf (rowBounds (timeline.laneTracks().indexOf (lane)));
+
+                if (! parts.mute.contains (e.getPosition()) && ! parts.solo.contains (e.getPosition()))
+                    startRename (*lane);
+            }
+        }
+
+        void mouseMove (const MouseEvent&) override   { repaint(); }
+        void mouseExit (const MouseEvent&) override   { repaint(); }
+
+        String getTooltip() override
+        {
+            const auto pos = getMouseXYRelative();
+            auto* lane = laneAt (pos.y);
+
+            if (lane == nullptr)
+                return {};
+
+            const auto parts = partsOf (rowBounds (timeline.laneTracks().indexOf (lane)));
+
+            if (parts.mute.contains (pos))  return lane->isMuted (false) ? "Unmute this lane" : "Mute this lane";
+            if (parts.solo.contains (pos))  return lane->isSolo (false) ? "Stop soloing this lane" : "Solo this lane: hear it alone, with any other soloed lanes";
+            return "Double-click to rename; right-click for more";
+        }
+
+        void startRename (tracktion::AudioTrack& lane)
+        {
+            renaming = lane.itemID;
+            const auto parts = partsOf (rowBounds (timeline.laneTracks().indexOf (&lane)));
+            nameEditor.setBounds (parts.name.expanded (2, 1));
+            nameEditor.setText (lane.getName(), false);
+            nameEditor.setVisible (true);
+            nameEditor.grabKeyboardFocus();
+            nameEditor.selectAll();
+            repaint();
+        }
+
+        /** Rows move when the lanes scroll; an open name editor goes with its row. */
+        void resized() override   { finishRename (true); }
+
     private:
         Timeline& timeline;
+        TextEditor nameEditor;
+        tracktion::EditItemID renaming;
+
+        struct Parts { Rectangle<int> colourBar, name, mute, solo, detail; };
+
+        Rectangle<int> rowBounds (int index) const
+        {
+            return { 0, index * laneHeight - timeline.scrollY, getWidth() - 1, laneHeight };
+        }
+
+        static Parts partsOf (Rectangle<int> row)
+        {
+            Parts p;
+            auto inner = row.reduced (theme::space3, theme::space2);
+            p.colourBar = inner.removeFromLeft (4);
+            inner.removeFromLeft (theme::space2);
+            auto top = inner.removeFromTop (20);
+            p.solo = top.removeFromRight (20).withSizeKeepingCentre (20, 18);
+            top.removeFromRight (theme::space1);
+            p.mute = top.removeFromRight (20).withSizeKeepingCentre (20, 18);
+            top.removeFromRight (theme::space1);
+            p.name = top;
+            p.detail = inner.removeFromTop (18);
+            return p;
+        }
+
+        void pill (Graphics& g, Rectangle<int> r, const String& letter, bool on, Colour onColour) const
+        {
+            const auto over = isMouseOver() && r.contains (getMouseXYRelative());
+            const auto f = r.toFloat();
+
+            if (on)
+            {
+                g.setColour (onColour);
+                g.fillRoundedRectangle (f, theme::radiusXs);
+            }
+            else
+            {
+                g.setColour (over ? theme::hover : theme::well);
+                g.fillRoundedRectangle (f, theme::radiusXs);
+                g.setColour (theme::line);
+                g.drawRoundedRectangle (f.reduced (0.5f), theme::radiusXs, theme::stroke);
+            }
+
+            g.setColour (on ? theme::onAccent : over ? theme::text : theme::muted);
+            g.setFont (theme::uiFont (theme::textSm, true));
+            g.drawText (letter, r, Justification::centred, false);
+        }
+
+        tracktion::AudioTrack* laneAt (int y) const
+        {
+            const auto tracks = timeline.laneTracks();
+            const auto index = (y + timeline.scrollY) / laneHeight;
+            return y >= 0 && index < tracks.size() ? tracks[index] : nullptr;
+        }
+
+        tracktion::AudioTrack* renamingLane() const
+        {
+            for (auto* t : timeline.laneTracks())
+                if (t->itemID == renaming)
+                    return t;
+
+            return nullptr;
+        }
+
+        void finishRename (bool keep)
+        {
+            if (! nameEditor.isVisible())
+                return;
+
+            nameEditor.setVisible (false);   // first: committing repaints, and focus moves on
+
+            if (auto* lane = renamingLane(); lane != nullptr && keep)
+                editing::renameLane (*lane, nameEditor.getText());
+
+            renaming = {};
+            repaint();
+        }
+
+        void showMenu (tracktion::AudioTrack& lane)
+        {
+            auto& recordLane = timeline.session.getTrack();
+            const auto deletable = editing::canDeleteLane (lane, recordLane);
+            const tracktion::AudioTrack::Ptr held (&lane);
+
+            PopupMenu m;
+            m.addItem ("Rename", [this, held] { startRename (*held); });
+            m.addItem (lane.isMuted (false) ? "Unmute" : "Mute", [held] { editing::setLaneMuted (*held, ! held->isMuted (false)); });
+            m.addItem (lane.isSolo (false) ? "Stop soloing" : "Solo", [held] { editing::setLaneSoloed (*held, ! held->isSolo (false)); });
+            m.addSeparator();
+            m.addItem ("Add lane below", [this, held] { timeline.addLane (held.get()); });
+            m.addItem (&lane == &recordLane ? "Delete lane (the input records here)" : "Delete lane", deletable, false, [this, held]
+            {
+                const auto name = held->getName();
+                timeline.selected.clearQuick();
+                editing::deleteLane (*held);
+
+                if (timeline.onStatus)
+                    timeline.onStatus ("Deleted " + name + ". Undo brings it back.");
+            });
+            m.showMenuAsync (PopupMenu::Options().withTargetComponent (this).withMousePosition());
+        }
     };
 
     //==============================================================================================
@@ -843,6 +1022,10 @@ namespace carthage::ui
         addChildComponent (*recording);
         addAndMakeVisible (*playhead);
 
+        addLaneButton.setTooltip ("Add a lane at the bottom. Right-click a lane's header to add one below it.");
+        addLaneButton.onClick = [this] { addLane(); };
+        addAndMakeVisible (addLaneButton);
+
         hScroll.setAutoHide (false);
         vScroll.setAutoHide (true);
         hScroll.addListener (this);
@@ -976,6 +1159,29 @@ namespace carthage::ui
         }
 
         return *slot;
+    }
+
+    void Timeline::addLane (tracktion::AudioTrack* after)
+    {
+        auto* lane = editing::addLane (session.getEdit(), after);
+
+        if (lane == nullptr)
+            return;
+
+        // Bring the new lane into view.
+        const auto index = laneTracks().indexOf (lane);
+        const auto visible = lanesArea().getHeight();
+        const auto top = index * laneHeight;
+
+        if (top < scrollY || top + laneHeight > scrollY + visible)
+        {
+            scrollY = std::max (0, top + laneHeight - visible);
+            repaintLanes();
+            resized();
+        }
+
+        if (onStatus)
+            onStatus ("Added " + lane->getName() + ". Double-click its name to rename it.");
     }
 
     void Timeline::repaintLanes()
@@ -1258,6 +1464,7 @@ namespace carthage::ui
         const auto area = lanesArea();
         ruler->setBounds (area.getX(), 0, area.getWidth(), rulerHeight);
         headers->setBounds (0, area.getY(), headerWidth, area.getHeight());
+        addLaneButton.setBounds (Rectangle<int> (0, 0, headerWidth, rulerHeight).reduced (theme::space2, 3).removeFromRight (88));   // the pop-out button sits on the left
         lanes->setBounds (area);
         hScroll.setBounds (area.getX(), area.getBottom(), area.getWidth(), getHeight() - area.getBottom());
         vScroll.setBounds (area.getRight(), area.getY(), getWidth() - area.getRight(), area.getHeight());
