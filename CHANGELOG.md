@@ -18,6 +18,8 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   everything back. Settings > Windows sets how many layouts the menu keeps.
 - Find a command (Cmd+K): type part of a command's name and press Return to run it.
 - Plugin windows stay above Carthage's own windows (Plugin > Keep plugin windows on top).
+- Settings > Projects > When it opens: the start screen, the last session (the projects and windows
+  you quit with), or an empty project.
 - Projects open as tabs across the top of the window. Click a tab, or press Ctrl+Tab and
   Ctrl+Shift+Tab, to switch; only the front project plays, the others wait with their plugins
   loaded. File > New and Open add a tab; Cmd/Ctrl+W, the tab's cross or a middle click closes one,

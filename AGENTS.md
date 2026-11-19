@@ -6,7 +6,7 @@ through amp sims, arranging on a timeline, writing in a piano roll, mixing and m
 to be faster, smoother and more reliable than FL Studio on an ARM Mac: efficiency and minimalism
 first, no gimmicks.
 
-**State of the repo:** phases 1–4 verified (2026-11-19); phase 5 (mixer) next, after the owner's go-ahead. Read `docs/JOURNAL.md` first: where work stands and what is in hand. The build system, the engine layer, the phase 1 app (audio
+**State of the repo:** phases 1–4b verified (2026-11-19); phase 4c (views in their own windows, layouts) built, its checks next. Read `docs/JOURNAL.md` first: where work stands and what is in hand. The build system, the engine layer, the phase 1 app (audio
 settings, one input monitored through one plugin, takes recorded to clips), the plugin scanner, the
 timeline with its tools, projects with autosave, the shortcut editor, tests and the measuring tool
 exist. See `docs/ROADMAP.md` for what is verified.

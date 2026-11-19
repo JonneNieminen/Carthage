@@ -989,7 +989,7 @@ namespace carthage::ui
     {
         if (show)
         {
-            startScreen.setShowAtStart (session.getEngine().getPropertyStorage().getPropertiesFile().getBoolValue ("showStartScreen", true));
+            startScreen.setShowAtStart (session.getAtLaunch() == engine::Session::AtLaunch::startScreen);
             startScreen.refresh();
             startScreen.toFront (false);
         }

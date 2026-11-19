@@ -270,13 +270,17 @@ namespace carthage::app
             connectStartScreen();
             updateTitle();
 
-            // A project named at launch opens; else a crash's copy is offered; else the start
-            // screen, unless it is switched off (F20).
+            // A project named at launch opens; else a crash's copy is offered; else what Settings
+            // says: the start screen (F20), the last session (F21), or the empty project.
+            using AtLaunch = engine::Session::AtLaunch;
+
             if (projectToOpen.existsAsFile())
                 report (session->openProject (projectToOpen));
             else if (! unclosed.empty())
                 offerRecovery (unclosed);
-            else if (session->getEngine().getPropertyStorage().getPropertiesFile().getBoolValue ("showStartScreen", true))
+            else if (session->getAtLaunch() == AtLaunch::lastSession && reopenLastSession())
+                {}
+            else if (session->getAtLaunch() != AtLaunch::emptyProject)
                 content.showStartScreen (true);
 
             // Plugins installed or updated since the last run are checked in the background;
@@ -306,6 +310,7 @@ namespace carthage::app
                     if (session->describeProject (i).unsaved)
                         return false;   // any tab: the update waits until they are saved
 
+                rememberSession();
                 session->close();
                 return true;
             };
@@ -586,7 +591,7 @@ namespace carthage::app
             start.onClose = [this] { if (auto* m = content()) m->showStartScreen (false); };
             start.onShowAtStartChanged = [this] (bool on)
             {
-                session->getEngine().getPropertyStorage().getPropertiesFile().setValue ("showStartScreen", on);
+                session->setAtLaunch (on ? engine::Session::AtLaunch::startScreen : engine::Session::AtLaunch::emptyProject);
 
                 if (auto* m = content())
                     m->getSettings().refresh();
@@ -754,7 +759,49 @@ namespace carthage::app
                 return;
             }
 
+            rememberSession();   // before the tabs close one by one
             closeEveryProjectThenQuit();
+        }
+
+        /** The saved projects open now, the front one, and the window layout (F21). */
+        void rememberSession()
+        {
+            XmlElement xml ("SESSION");
+            xml.setAttribute ("front", session->getFrontIndex());
+
+            for (int i = 0; i < session->getNumProjects(); ++i)
+                if (const auto p = session->describeProject (i); ! p.untitled)
+                    xml.createNewChildElement ("PROJECT")->setAttribute ("path", p.file.getFullPathName());
+
+            if (auto* c = content())
+                if (auto layout = c->getLayout().createXml())
+                    xml.addChildElement (layout.release());
+
+            session->getEngine().getPropertyStorage().getPropertiesFile().setValue ("lastSession", xml.toString (XmlElement::TextFormat().singleLine()));
+        }
+
+        /** At launch: the projects and layout Carthage quit with. False if there was none. */
+        bool reopenLastSession()
+        {
+            const auto xml = parseXML (session->getEngine().getPropertyStorage().getPropertiesFile().getValue ("lastSession"));
+
+            if (xml == nullptr || ! xml->hasTagName ("SESSION"))
+                return false;
+
+            int opened = 0;
+
+            for (auto* p : xml->getChildWithTagNameIterator ("PROJECT"))
+                if (const File f (p->getStringAttribute ("path")); f.existsAsFile() && session->openProject (f).wasOk())
+                    ++opened;
+
+            if (opened > 0)
+                [[maybe_unused]] auto r = session->showProject (std::clamp (xml->getIntAttribute ("front"), 0, session->getNumProjects() - 1));
+
+            if (auto* layout = xml->getChildByName ("LAYOUT"); layout != nullptr)
+                if (auto* c = content())
+                    c->applyLayout (ValueTree::fromXml (*layout));
+
+            return opened > 0;
         }
 
     private:

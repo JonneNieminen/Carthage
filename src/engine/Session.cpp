@@ -1056,6 +1056,24 @@ namespace carthage::engine
         props.setValue ("recentProjects", list.joinIntoString ("\n"));
     }
 
+    Session::AtLaunch Session::getAtLaunch() const
+    {
+        auto& props = engine->getPropertyStorage().getPropertiesFile();
+        const auto value = props.getValue ("atLaunch");
+
+        if (value == "last")  return AtLaunch::lastSession;
+        if (value == "empty") return AtLaunch::emptyProject;
+        if (value == "start") return AtLaunch::startScreen;
+
+        return props.getBoolValue ("showStartScreen", true) ? AtLaunch::startScreen : AtLaunch::emptyProject;
+    }
+
+    void Session::setAtLaunch (AtLaunch a)
+    {
+        engine->getPropertyStorage().getPropertiesFile().setValue ("atLaunch", a == AtLaunch::lastSession ? "last"
+                                                                             : a == AtLaunch::emptyProject ? "empty" : "start");
+    }
+
     bool Session::getFitLoopsToTempo() const
     {
         return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("fitLoopsToTempo", false);

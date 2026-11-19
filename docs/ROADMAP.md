@@ -407,15 +407,15 @@ Needs owner:  The go-ahead for phase 5 (mixer, insert Lines, per-channel I/O).
 ### Phase 4c — views in their own windows, window layouts
 
 Deliver (F21):
-- [ ] A view manager: each view (sample browser, plugin browser, timeline, signal path, Settings;
+- [x] A view manager: each view (sample browser, plugin browser, timeline, signal path, Settings;
       later mixer, piano roll, tuner, big clock, meters, help) docked in the main window or in a
       window of its own; detach and reattach by a button on the view and a shortcut each; "Back to
       the default layout" in the menu bar and by shortcut
-- [ ] Layout slots (how many in Settings): save and recall from a Layouts menu in the menu bar, by
+- [x] Layout slots (how many in Settings): save and recall from a Layouts menu in the menu bar, by
       shortcut too; app-wide; windows on a missing display come back to the main one
-- [ ] Plugin windows in layouts, kept above Carthage's windows, with a pin per window
-- [ ] Reopen the last session at launch (its tabs and layout), a setting beside the start screen
-- [ ] A command palette (Cmd/Ctrl+K): find and run any command, with its shortcut
+- [x] Plugin windows in layouts, kept above Carthage's windows, with a pin per window
+- [x] Reopen the last session at launch (its tabs and layout), a setting beside the start screen
+- [x] A command palette (Cmd/Ctrl+K): find and run any command, with its shortcut
 
 Exit checks:
 - [ ] Every view detached to a second display and back, by button and by shortcut; the default

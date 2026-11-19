@@ -134,13 +134,19 @@ namespace carthage::ui
         for (auto* c : std::initializer_list<Component*> { &browserHeading, &panelWidthLabel, &panelWidth, &textSizeLabel, &textSize, &playWhileHeld, &fitLoops })
             body.addAndMakeVisible (c);
 
-        showStart.setTooltip ("Recent projects and templates at launch; File > Start screen shows them any time");
-        showStart.onClick = [this]
+        styleLabel (atLaunchLabel, theme::textMd, theme::muted);
+        atLaunchLabel.setText ("When it opens", dontSendNotification);
+        atLaunch.addItem ("Show the start screen", 1);
+        atLaunch.addItem ("Reopen the last session", 2);
+        atLaunch.addItem ("Start an empty project", 3);
+        atLaunch.setTooltip ("What Carthage shows at launch. The last session is the saved projects and the window layout you quit with.");
+        atLaunch.onChange = [this]
         {
-            session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("showStartScreen", showStart.getToggleState());
+            using A = engine::Session::AtLaunch;
+            session.setAtLaunch (atLaunch.getSelectedId() == 2 ? A::lastSession : atLaunch.getSelectedId() == 3 ? A::emptyProject : A::startScreen);
         };
 
-        for (auto* c : std::initializer_list<Component*> { &projectsHeading, &showStart, &copySamples, &copySamplesHint, &versionLabel, &versionValue, &checkNow, &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
+        for (auto* c : std::initializer_list<Component*> { &projectsHeading, &atLaunchLabel, &atLaunch, &copySamples, &copySamplesHint, &versionLabel, &versionValue, &checkNow, &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
                                                            &latencyHeading, &loadHeading, &inputDeviceLabel, &outputDeviceLabel,
                                                            &rateLabel, &bufferLabel, &formatLabel, &reportedLabel, &reportedValue,
                                                            &measuredLabel, &measuredValue, &loopOutLabel, &loopInLabel, &loopHint,
@@ -231,8 +237,7 @@ namespace carthage::ui
 
     void SettingsPanel::refresh()
     {
-        showStart.setToggleState (session.getEngine().getPropertyStorage().getPropertiesFile().getBoolValue ("showStartScreen", true),
-                                  dontSendNotification);
+        atLaunch.setSelectedId (1 + static_cast<int> (session.getAtLaunch()), dontSendNotification);
 
         auto& adm = session.getDeviceManager();
         const auto setup = adm.getAudioDeviceSetup();
@@ -481,7 +486,7 @@ namespace carthage::ui
         dropoutsValue.setBounds (drops);
 
         heading (projectsHeading);
-        showStart.setBounds (r.removeFromTop (rowHeight));
+        row (atLaunchLabel, atLaunch);
         copySamples.setBounds (r.removeFromTop (rowHeight));
         copySamplesHint.setBounds (r.removeFromTop (50));
 

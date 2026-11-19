@@ -152,6 +152,12 @@ namespace carthage::engine
         bool getAlwaysCopySamples() const;
         void setAlwaysCopySamples (bool);
 
+        /** What Carthage opens with (F20, F21): the start screen, the last session, or an empty
+            project. Older settings with the start screen switched off read as an empty project. */
+        enum class AtLaunch { startScreen, lastSession, emptyProject };
+        AtLaunch getAtLaunch() const;
+        void setAtLaunch (AtLaunch);
+
         /** Settings: a dropped loop whose tempo is known follows the project's tempo (W30). */
         bool getFitLoopsToTempo() const;
         void setFitLoopsToTempo (bool);

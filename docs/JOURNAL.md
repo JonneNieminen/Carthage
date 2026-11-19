@@ -70,3 +70,9 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   Cmd+Opt+1-9 recall, Cmd+Opt+Shift+1-9 save, Cmd+K palette, keep plugin windows on top), Settings >
   Windows > Layout slots. Not yet: the command palette itself (`onCommandPalette` is unset), reopen
   last session, tests and snapshots for 4c, docs (ARCHITECTURE, CHANGELOG), the owner's checks.
+- **2026-11-19 (4c, part 2).** Command palette (Cmd+K, toggles), reopen last session (`lastSession`
+  property; Settings > Projects > When it opens), docs. All 4c items built; next: the owner's checks
+  (detach each view by button and shortcut onto a second display, save/recall two layouts, unplug a
+  display, quit and relaunch with "Reopen the last session", the palette), then the 4c report. Seen
+  working already through menus: Layouts menu, detach timeline and plugins, save layout 1, default
+  layout; recall was cut off by the screen locking.

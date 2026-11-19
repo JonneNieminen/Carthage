@@ -58,7 +58,8 @@ namespace carthage::ui
         juce::Label title, interfaceHeading, recordingHeading, latencyHeading, loadHeading, updatesHeading, updatesHint, shortcutsHeading,
                     projectsHeading, copySamplesHint;
         juce::ToggleButton copySamples { "Copy samples into the project" };
-        juce::ToggleButton showStart { "Show the start screen when Carthage opens" };
+        juce::Label atLaunchLabel;
+        juce::ComboBox atLaunch;
         juce::Label windowsHeading, slotsLabel;
         juce::ComboBox slots;
         juce::Label browserHeading, panelWidthLabel, textSizeLabel;

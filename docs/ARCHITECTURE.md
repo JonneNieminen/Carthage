@@ -184,6 +184,27 @@ packaging/           macos/ (sign.sh, make-dmg.sh, read-me), windows/ (Carthage.
 - **The timeline across tabs.** Waveform thumbnails belong to audio files, not projects, so they are
   kept when the front project changes; resolved clip paths are keyed by project file.
 
+### Phase 4c: views in their own windows, layouts
+
+- **Views** (`MainComponent::View`): samples, plugins, timeline, signal path, Settings; later the
+  mixer, piano roll, tuner, big clock, meters and help join the same list. A view is a component the
+  main window owns. Detached, it is reparented into a `ViewWindow` (a native window: a slim strip with
+  the way back, the view below; its close button also brings it back; the command manager's keys
+  work there). Docked again, it returns to the main window, which lays out only the views it holds: a
+  browser away leaves the panel to the other, the timeline away leaves a line and "Bring it back",
+  the signal path away collapses. Pop-out buttons sit on each view; one command per view toggles it.
+- **Layouts** (`getLayout` / `applyLayout`): a `LAYOUT` tree of the main window's bounds, the panel,
+  Settings, each view's place and bounds, and the plugin window's place. Slots are engine properties
+  `layout1`..`layout9`, how many offered is `layoutSlots` (Settings > Windows); the Layouts menu and
+  Cmd+Opt+1-9 recall, Cmd+Opt+Shift+1-9 save, Cmd+Opt+0 is the default. Layouts are app-wide; a window
+  whose display is gone comes to the main display (`onScreen`).
+- **Last session**: at quit (and before an update restart) the saved projects open, the front one and
+  the layout go to the `lastSession` property; at launch, with Settings > Projects > When it opens set
+  to it, they reopen.
+- **Command palette** (`ui/CommandPalette.h`, Cmd+K): every command that can run now, from the command
+  manager, fuzzy-matched, with its menu and keys; Return runs it.
+- Plugin windows are kept on top (`keepPluginOnTop`, Plugin menu) and take the last layout's place.
+
 ## Threads
 
 | Thread | Does | Must never |
