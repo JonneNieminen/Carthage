@@ -133,7 +133,11 @@ public:
             }
 
             logMessage ("worst search over 2000 plugins: " + juce::String (worst, 2) + " ms");
+            // Timing is judged in the normal builds only: the sanitizers slow everything down
+            // several times over (docs/TESTING.md, "Static checks and sanitizers").
+           #if ! (CARTHAGE_ASAN || CARTHAGE_RTSAN)
             expectLessThan (worst, 16.0);
+           #endif
         }
     }
 };

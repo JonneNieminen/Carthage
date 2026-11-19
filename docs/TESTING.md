@@ -77,7 +77,7 @@ three on macOS on every push, and fails on any finding.
   check and says why on the same line (`.mm` files are not checked: the tool misreads Objective-C).
 - **AddressSanitizer + UBSan.** `cmake --preset asan && cmake --build --preset asan && ctest --preset asan`
   runs the tests with out-of-bounds, use-after-free and undefined-behaviour checks; any report stops
-  the run.
+  the run. As in the RTSan build, timing is not judged there: the release build's tests check it.
 - **RealTimeSanitizer**: the `rtsan` preset's tests, above.
 
 ## Measuring
