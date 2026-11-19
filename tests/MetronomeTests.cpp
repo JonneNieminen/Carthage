@@ -41,7 +41,7 @@ public:
         beginTest ("The click track is pointed at the written files; a file with no sound changes nothing");
         {
             juce::TemporaryFile folderHolder;
-            const auto folder = folderHolder.getFile();
+            const auto& folder = folderHolder.getFile();
             tracktion::Engine engine ("CarthageTests", nullptr, std::make_unique<HeadlessClickBehaviour>());
             auto& storage = engine.getPropertyStorage();
 

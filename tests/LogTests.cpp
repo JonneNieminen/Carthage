@@ -10,7 +10,7 @@ public:
     void runTest() override
     {
         juce::TemporaryFile holder;
-        const auto folder = holder.getFile();
+        const auto& folder = holder.getFile();
 
         beginTest ("Lines go to the file and to memory; JUCE's own messages too");
         {
