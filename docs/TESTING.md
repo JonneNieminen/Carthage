@@ -100,6 +100,9 @@ three on macOS on every push, and fails on any finding.
   without an envelope, then with the clip moved: unity must match no envelope, silence must fall
   where the envelope drops, and the envelope must move with the clip. (Tracktion's renderer
   needs a running message loop, so render checks live in the bench, not the unit tests.)
+- **The formant shift.** `carthage-bench clip-formant` renders a tone plain and with the formant
+  shifted: it must start with the clip (latency compensated), keep its pitch, and sound different.
+  `SampleEditTests` runs the plugin's blocks inside a real-time scope, so the rtsan job checks it.
 - **The settings test.** `carthage-bench settings-test` runs the app's settings test (W41) on
   the current interface: each buffer size for 3 s, silently, then what it would recommend; the
   device must be back as it was afterwards.

@@ -1,4 +1,5 @@
 #include "SampleEdits.h"
+#include "FormantPlugin.h"
 
 #include <set>
 
@@ -14,6 +15,16 @@ namespace carthage::editing
 
         const juce::Identifier envelopeTag ("CARTHAGEENVELOPE"), pointTag ("POINT"), timeProp ("time"), gainProp ("db"), bendProp ("bend"),
                                envelopePluginProp ("carthageEnvelope"), syncedProp ("carthageEnvelopeSynced");
+
+        engine::FormantPlugin* formantPlugin (Clip& c)
+        {
+            if (auto* list = c.getPluginList())
+                for (auto* p : *list)
+                    if (auto* f = dynamic_cast<engine::FormantPlugin*> (p))
+                        return f;
+
+            return nullptr;
+        }
 
         /** The clip's envelope plugin, if it has one (marked, so a user's own plugin is never it). */
         VolumeAndPanPlugin* envelopePlugin (Clip& c)
@@ -121,6 +132,9 @@ namespace carthage::editing
             s.pitch = audio->getPitchChange();
         }
 
+        if (auto* f = formantPlugin (const_cast<Clip&> (c)))
+            s.formant = f->semitones.get();
+
         return s;
     }
 
@@ -152,6 +166,28 @@ namespace carthage::editing
             audio->setFadeOut (TimeDuration::fromSeconds (std::clamp (s.fadeOut, 0.0, length)));
             audio->setFadeInType (s.fadeInShape);
             audio->setFadeOutType (s.fadeOutShape);
+
+            // The formant plugin is there only while it shifts (it adds latency).
+            const auto formant = std::clamp (s.formant, -12.0f, 12.0f);
+            auto* f = formantPlugin (*c);
+
+            if (std::abs (formant) < 0.01f)
+            {
+                if (f != nullptr)
+                    f->deleteFromParent();
+            }
+            else
+            {
+                if (f == nullptr)
+                {
+                    auto created = c->edit.getPluginCache().createNewPlugin (engine::FormantPlugin::xmlTypeName, {});
+                    c->getPluginList()->insertPlugin (created, 0, nullptr);
+                    f = dynamic_cast<engine::FormantPlugin*> (created.get());
+                }
+
+                if (f != nullptr)
+                    f->semitones = formant;
+            }
         }
     }
 

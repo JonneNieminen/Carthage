@@ -1,4 +1,5 @@
 #include "Session.h"
+#include "FormantPlugin.h"
 #include "SampleEdits.h"
 #include "Trace.h"
 #include "Editing.h"
@@ -75,6 +76,7 @@ namespace carthage::engine
                                                       std::make_unique<Behaviour> (loadGate));
 
         auto& pm = engine->getPluginManager();
+        pm.createBuiltInType<FormantPlugin>();   // the sample editor's formant shift (4e)
         plugins = std::make_unique<PluginCatalogue> (pm.knownPluginList, pm.pluginFormatManager, folders.pluginCache);
         loadGate = plugins.get();
 

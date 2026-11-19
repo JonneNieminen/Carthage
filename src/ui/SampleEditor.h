@@ -54,8 +54,8 @@ namespace carthage::ui
         juce::AudioThumbnail thumbnail { 256, formats, thumbCache };
 
         juce::Label name, shared, facts;
-        ValueSlider gain { 0.0 }, pitch { 0.0 }, fadeIn { 0.0 }, fadeOut { 0.0 };
-        juce::Label gainLabel, pitchLabel, fadeInLabel, fadeOutLabel;
+        ValueSlider gain { 0.0 }, pitch { 0.0 }, formant { 0.0 }, fadeIn { 0.0 }, fadeOut { 0.0 };
+        juce::Label gainLabel, pitchLabel, formantLabel, fadeInLabel, fadeOutLabel;
         juce::ToggleButton reverse { "Reverse" };
         juce::ComboBox fadeInShape, fadeOutShape;   // linear, convex, concave, S-curve
         juce::TextButton fit { "Fit to tempo" }, unique { "Make unique" };

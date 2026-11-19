@@ -8,6 +8,7 @@ add_library(carthage_engine STATIC
     RealtimeCheck.h
     Editing.cpp Editing.h
     SampleEdits.cpp SampleEdits.h
+    FormantPlugin.cpp FormantPlugin.h
     Project.cpp Project.h
     Autosave.cpp Autosave.h
     SampleAnalysis.cpp SampleAnalysis.h

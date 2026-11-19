@@ -38,6 +38,7 @@ namespace carthage::editing
                                         fadeOutShape = tracktion::AudioFadeCurve::linear;
         bool reversed = false;
         float pitch = 0.0f;           ///< semitones, -24 to 24
+        float formant = 0.0f;         ///< semitones, -12 to 12: the colour, not the pitch (FormantPlugin)
         double start = 0.0;           ///< where in the file it starts playing
         double length = 0.0;          ///< how much of it plays
     };

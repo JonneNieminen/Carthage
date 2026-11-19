@@ -66,11 +66,14 @@ namespace carthage::ui
 
         setUp (gain, gainLabel, "Gain", -48.0, 12.0, 0.1, " dB", "How loud the sample plays.");
         setUp (pitch, pitchLabel, "Pitch", -24.0, 24.0, 0.01, " st", "Pitch in semitones, keeping the length.");
+        setUp (formant, formantLabel, "Formant", -12.0, 12.0, 0.01, " st",
+               "The sound's colour without its pitch: up sounds smaller and brighter, down bigger and darker.");
         setUp (fadeIn, fadeInLabel, "Fade in", 0.0, 2000.0, 1.0, " ms", "A fade at the start.");
         setUp (fadeOut, fadeOutLabel, "Fade out", 0.0, 2000.0, 1.0, " ms", "A fade at the end.");
 
         gain.onValueChange = [this] { apply ([this] (auto& s2) { s2.gainDb = static_cast<float> (gain.getValue()); }); };
         pitch.onValueChange = [this] { apply ([this] (auto& s2) { s2.pitch = static_cast<float> (pitch.getValue()); }); };
+        formant.onValueChange = [this] { apply ([this] (auto& s2) { s2.formant = static_cast<float> (formant.getValue()); }); };
         fadeIn.onValueChange = [this] { apply ([this] (auto& s2) { s2.fadeIn = fadeIn.getValue() / 1000.0; }); };
         fadeOut.onValueChange = [this] { apply ([this] (auto& s2) { s2.fadeOut = fadeOut.getValue() / 1000.0; }); };
 
@@ -247,6 +250,7 @@ namespace carthage::ui
         const auto s = sound();
         gain.setValue (s.gainDb, dontSendNotification);
         pitch.setValue (s.pitch, dontSendNotification);
+        formant.setValue (s.formant, dontSendNotification);
         fadeIn.setValue (s.fadeIn * 1000.0, dontSendNotification);
         fadeOut.setValue (s.fadeOut * 1000.0, dontSendNotification);
         reverse.setToggleState (s.reversed, dontSendNotification);
@@ -700,7 +704,7 @@ namespace carthage::ui
         r.removeFromRight (theme::space4);
         waveArea = r;
 
-        for (auto [label, slider, shape] : { std::tuple<Label*, Slider*, ComboBox*> { &gainLabel, &gain, nullptr }, { &pitchLabel, &pitch, nullptr },
+        for (auto [label, slider, shape] : { std::tuple<Label*, Slider*, ComboBox*> { &gainLabel, &gain, nullptr }, { &pitchLabel, &pitch, nullptr }, { &formantLabel, &formant, nullptr },
                                                                                         { &fadeInLabel, &fadeIn, &fadeInShape }, { &fadeOutLabel, &fadeOut, &fadeOutShape } })
         {
             auto line = controls.removeFromTop (rowHeight);

@@ -139,6 +139,7 @@ namespace
             else if (args.command == "samples")  result = samples();
             else if (args.command == "settings-test") result = settingsTest();
             else if (args.command == "clip-envelope") result = clipEnvelope();
+            else if (args.command == "clip-formant") result = clipFormant();
             else say ("unknown command: " + args.command);
 
             onMessageThreadVoid ([this] { session.reset(); });
@@ -412,6 +413,94 @@ namespace
             const auto moved = render ("moved");
             say ("Moved by 1 s: RMS at 5.25 s " + String (moved (5.25), 4) + ", at 5.75 s " + String (moved (5.75), 4));
             check (moved (5.25) > 0.05f && moved (5.75) < 0.001f, "the envelope moves with the clip");
+            say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
+            return checksFailed == 0 ? 0 : 1;
+        }
+
+        /** The sample editor's formant shift (4e), rendered: the same tone plain and shifted 6
+            semitones up. The pitch must not move, and the sound must still start with the clip
+            (the plugin's latency compensated). */
+        int clipFormant()
+        {
+            const auto tone = folder.getChildFile ("tone.wav");
+            {
+                WavAudioFormat wav;
+                std::unique_ptr<OutputStream> out = std::make_unique<FileOutputStream> (tone);
+                auto writer = wav.createWriterFor (out, AudioFormatWriterOptions{}.withSampleRate (48000.0).withNumChannels (1).withBitsPerSample (24));
+                AudioBuffer<float> b (1, 96000);
+                for (int i = 0; i < b.getNumSamples(); ++i)   // a sawtooth-ish tone at 220 Hz: harmonics to colour
+                    b.setSample (0, i, 0.2f * static_cast<float> (std::sin (i * 2.0 * MathConstants<double>::pi * 220.0 / 48000.0)
+                                                                + 0.5 * std::sin (i * 2.0 * MathConstants<double>::pi * 440.0 / 48000.0)
+                                                                + 0.33 * std::sin (i * 2.0 * MathConstants<double>::pi * 660.0 / 48000.0)));
+                writer->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
+            }
+
+            tracktion::Clip* clip = nullptr;
+            BigInteger mask;
+            onMessageThreadVoid ([&]
+            {
+                auto& edit = session->getEdit();
+                auto* lane = carthage::editing::lanes (edit)[1];
+                clip = carthage::editing::insertFile (*lane, tone, 8.0);   // 4 s
+                mask.setBit (tracktion::getAllTracks (edit).indexOf (lane));
+            });
+
+            const auto render = [&] (const String& name)
+            {
+                const auto out = folder.getChildFile (name + ".wav");
+                waitMs (300);
+                tracktion::Renderer::renderToFile (name, out, session->getEdit(), { tracktion::TimePosition(), tracktion::TimePosition::fromSeconds (7.0) },
+                                                   mask, true, true, {}, false);
+                AudioFormatManager formats;
+                carthage::audio::registerReadable (formats);
+                std::unique_ptr<AudioFormatReader> reader (formats.createReaderFor (out));
+                AudioBuffer<float> all (1, reader != nullptr ? static_cast<int> (reader->lengthInSamples) : 0);
+                if (reader != nullptr)
+                    reader->read (&all, 0, all.getNumSamples(), 0, true, false);
+                const auto sampleRate = reader != nullptr ? reader->sampleRate : 48000.0;
+                return std::make_pair (std::move (all), sampleRate);
+            };
+
+            // Where it starts (first sample above a fraction of the peak) and its pitch (zero
+            // crossings in half a second of its middle).
+            const auto measure = [] (const AudioBuffer<float>& b, double rate)
+            {
+                const auto* d = b.getReadPointer (0);
+                const auto peak = b.getMagnitude (0, 0, b.getNumSamples());
+                int onset = -1;
+                for (int i = 0; i < b.getNumSamples() && onset < 0; ++i)
+                    if (std::abs (d[i]) > peak * 0.1f) onset = i;
+
+                const auto from = static_cast<int> (4.5 * rate), to = static_cast<int> (5.0 * rate);
+                int crossings = 0;
+                for (int i = from + 1; i < to && i < b.getNumSamples(); ++i)
+                    if ((d[i - 1] < 0.0f) != (d[i] < 0.0f)) ++crossings;
+
+                return std::make_pair (onset / rate, crossings / 2.0 / 0.5);
+            };
+
+            const auto [plain, plainRate] = render ("plain");
+            onMessageThreadVoid ([&]
+            {
+                carthage::editing::begin (session->getEdit(), "Formant");
+                auto s = carthage::editing::soundOf (*clip);
+                s.formant = 6.0f;
+                carthage::editing::setSound (*clip, s);
+            });
+            const auto [shifted, shiftedRate] = render ("shifted");
+
+            const auto [plainStart, plainHz] = measure (plain, plainRate);
+            const auto [shiftedStart, shiftedHz] = measure (shifted, shiftedRate);
+            say ("Plain: starts " + String (plainStart, 4) + " s, " + String (plainHz, 1) + " Hz by crossings; shifted: starts "
+                 + String (shiftedStart, 4) + " s, " + String (shiftedHz, 1) + " Hz");
+            check (std::abs (shiftedStart - plainStart) < 0.005, "starts with the clip (latency compensated, within 5 ms)");
+            check (std::abs (shiftedHz - plainHz) / plainHz < 0.03, "the pitch does not move (within 3 %)");
+
+            // And it changed the sound: the shifted render differs from the plain one.
+            double diff = 0.0;
+            for (int i = static_cast<int> (4.4 * plainRate); i < static_cast<int> (4.6 * plainRate) && i < shifted.getNumSamples(); ++i)
+                diff += std::abs (shifted.getSample (0, i) - plain.getSample (0, i));
+            check (diff > 1.0, "and the colour changed (" + String (diff, 1) + ")");
             say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
             return checksFailed == 0 ? 0 : 1;
         }

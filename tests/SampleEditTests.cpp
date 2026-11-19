@@ -1,4 +1,6 @@
 #include <engine/SampleEdits.h>
+#include <engine/FormantPlugin.h>
+#include <engine/RealtimeCheck.h>
 
 using namespace carthage;
 
@@ -36,6 +38,7 @@ public:
         const auto snare = writeTone (folder.getChildFile ("Snare.wav"));
 
         tracktion::Engine engine ("CarthageTests", nullptr, std::make_unique<Headless>());
+        engine.getPluginManager().createBuiltInType<engine::FormantPlugin>();   // as the session does
         auto edit = tracktion::createEmptyEdit (engine, folder.getChildFile ("Test.tracktionedit"));
         edit->ensureNumberOfAudioTracks (2);
         const auto lanes = editing::lanes (*edit);
@@ -58,6 +61,7 @@ public:
             s.gainDb = -6.0f;
             s.reversed = true;
             s.pitch = 3.0f;
+            s.formant = 4.0f;
             s.fadeIn = 0.1;
             s.fadeInShape = tracktion::AudioFadeCurve::sCurve;
             s.fadeOutShape = tracktion::AudioFadeCurve::convex;
@@ -72,6 +76,7 @@ public:
                 expectWithinAbsoluteError (got.gainDb, -6.0f, 1.0e-4f);
                 expect (got.reversed);
                 expectWithinAbsoluteError (got.pitch, 3.0f, 1.0e-4f);
+                expectWithinAbsoluteError (got.formant, 4.0f, 1.0e-4f, "the formant shift too");
                 expectWithinAbsoluteError (got.fadeIn, 0.1, 1.0e-6);
                 expect (got.fadeInShape == tracktion::AudioFadeCurve::sCurve && got.fadeOutShape == tracktion::AudioFadeCurve::convex, "the shapes too");
                 expectWithinAbsoluteError (got.start, 0.25, 1.0e-6);
@@ -82,6 +87,7 @@ public:
             um.undo();
             expectWithinAbsoluteError (editing::soundOf (*b).gainDb, 0.0f, 1.0e-4f, "undone");
             expect (! editing::soundOf (*a).reversed, "undone");
+            expectWithinAbsoluteError (editing::soundOf (*a).formant, 0.0f, 1.0e-4f, "the formant plugin goes with the undo");
         }
 
         beginTest ("The envelope: on every clip of the sample, its curve where the clip is, one undo step");
@@ -129,6 +135,42 @@ public:
             expect (editing::renameSample (*a, "  ").failed(), "a blank name is refused");
             um.undo();
             expectEquals (editing::sampleName (*a), juce::String ("Kick"), "undone in one step");
+        }
+
+        beginTest ("The formant plugin processes blocks without allocating or locking (checked in the rtsan build)");
+        {
+            auto plugin = edit->getPluginCache().createNewPlugin (engine::FormantPlugin::xmlTypeName, {});
+            auto* formant = dynamic_cast<engine::FormantPlugin*> (plugin.get());
+            expect (formant != nullptr, "the type is registered");
+
+            if (formant != nullptr)
+            {
+                formant->semitones = 5.0f;
+                formant->initialise ({ tracktion::TimePosition(), 48000.0, 512 });
+                expect (formant->getLatencySeconds() > 0.0, "it reports its latency");
+
+                for (int channels : { 2, 1 })
+                {
+                    juce::AudioBuffer<float> block (std::max (1, channels), 512);
+                    tracktion::MidiMessageArray midi;
+
+                    for (int n = 0; n < 40; ++n)
+                    {
+                        for (int ch = 0; ch < channels; ++ch)
+                            for (int i = 0; i < 512; ++i)
+                                block.setSample (ch, i, 0.2f * std::sin (static_cast<float> (n * 512 + i) * 0.03f));
+
+                        const tracktion::PluginRenderContext context (&block, 0, 512, &midi, 0.0,
+                                                                     { tracktion::TimePosition(), tracktion::TimePosition::fromSeconds (512.0 / 48000.0) },
+                                                                     true, false, false, false);
+                        { const carthage::rt::ScopedRealtime realtime; formant->applyToBuffer (context); }   // checked in the rtsan build
+                    }
+
+                    expect (block.getMagnitude (0, 0, 512) > 0.01f, channels == 2 ? "stereo comes through" : "mono comes through");
+                }
+
+                formant->deinitialise();
+            }
         }
 
         beginTest ("Make unique splits a clip off as Kick (2); its copies stay with it");
