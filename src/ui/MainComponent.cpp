@@ -1031,10 +1031,12 @@ namespace carthage::ui
                 toolCommand (info); return true;
             case cmd::undo:             session.getEdit().getUndoManager().undo(); commands.commandStatusChanged(); return true;
             case cmd::redo:             session.getEdit().getUndoManager().redo(); commands.commandStatusChanged(); return true;
-            case cmd::undoHistory:      showUndoHistory(); return true;
+            // A key equivalent arrives inside the menu bar's own handling; a list opened there is
+            // closed again at once (undo history did nothing from ⌥⌘Z). Open it just after.
+            case cmd::undoHistory:      MessageManager::callAsync ([safe = SafePointer<MainComponent> (this)] { if (safe != nullptr) safe->showUndoHistory(); }); return true;
             case cmd::exportLog:        exportLog(); return true;
             case cmd::projectNotes:     toggleNotes(); return true;
-            case cmd::restoreVersion:   showVersions(); return true;
+            case cmd::restoreVersion:   MessageManager::callAsync ([safe = SafePointer<MainComponent> (this)] { if (safe != nullptr) safe->showVersions(); }); return true;
             case cmd::toggleGrid:       timeline.getGrid().enabled = ! timeline.getGrid().enabled; timeline.gridChanged(); refreshToolbar(); return true;
             case cmd::splitAtPlayhead:  timeline.splitAtPlayhead(); return true;
             case cmd::duplicateClips:   timeline.duplicateSelection(); return true;
