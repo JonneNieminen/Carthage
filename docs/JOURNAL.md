@@ -152,3 +152,10 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Rule kept: commit only when the full clang-tidy pass is clean (one push slipped through;
   fixed in the next commit).
 
+### 2026-11-19 (phase 4d report written)
+
+- Round 2: all 17 work. Fixed after: Cmd+W in notes/versions windows, Cmd+Backspace deletes.
+- 4d report in ROADMAP. Open: the wheel check (owner needs a mouse), a longer frame hitch when
+  playback starts (one run: 4 s, 46 late frames, worst 50 ms), CI run 44565369503 was queued.
+- Next after the owner's go-ahead: phase 4e, the sample editor.
+

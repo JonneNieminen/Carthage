@@ -14,7 +14,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
 | 3. Plugin manager and scanning | Verified (2026-11-18) |
-| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19); next 4d (polish, workflow, tooling), 4e (sample editor), 4f (design pass) |
+| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19); 4d built and checked by the owner except the wheel (2026-11-19); next 4e (sample editor), 4f (design pass) |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
 | 7. Help page, icon and polish | Not started |
@@ -489,11 +489,48 @@ Deliver (F22, W38, W39):
 - [x] Pictures of every window with each project version, in a Restore window (W41)
 
 Exit checks:
-- [ ] Every item exercised in the running app by the owner
-- [ ] CI runs clang-tidy, the sanitizers and RTSan on every push, and is green
-- [ ] Frame time and RTSan unchanged from 4c
+- [ ] Every item exercised in the running app by the owner (all but the wheel: no mouse at hand)
+- [ ] CI runs clang-tidy, the sanitizers and RTSan on every push, and is green (the jobs run; the
+      run covering the last commits was queued when this was written)
+- [ ] Frame time and RTSan unchanged from 4c (RTSan clean; frame time at playback start is worse,
+      see the report)
 
-Report: _not written yet_
+Report:
+
+### Report — phase 4d (2026-11-19, 4a67d88)
+Works:        Polish and workflow from the owner's two lists (F22/W38, W41): toolbar icons with keys,
+              master level, tempo with Tap and the tempo-change question, a tick-tock metronome
+              (K) with other sounds or your own; lanes named, renamed, added (1/2/4/8, Option+Cmd+N),
+              moved (drag, Cmd+Up/Down), muted and soloed (Cmd-click for the others/alone), each with
+              its own height, and a draggable name column; free slicing with a line; shading inside
+              the beat; Option-scroll lane height; a resizable browser panel; interface size
+              75-150 % with a folding toolbar; Cmd+W per window; named layouts; copyable tooltips;
+              FL-style switches; Settings search; a views palette (Cmd+J); Cmd+1-9 tabs; projects
+              renamed from tabs; notes; versions with pictures and a Restore window; undo history;
+              Export log and a crash report; a settings test at the first launch; plugins checked at
+              the first launch only. Tooling: clang-tidy with no findings, ASan/UBSan, RTSan tests and
+              fuzzing in CI, dependabot, signposts, waveform overviews on disk.
+Tested:       - Owner, two rounds in the running app (2026-11-19, checks page): round 1, 20 of 23 work,
+                Cmd++ and the undo history fixed and then working in round 2; round 2, all 17 work.
+                The wheel is not checked yet (no mouse). Owner notes acted on: Cmd+W in the notes
+                window, the tab menu's text, Option wording, shortcuts kept with the FL switches.
+              - Unit tests grew to cover lanes, tempo follow, tap tempo, metronome sounds (and their
+                spectrum), the log, overview cache, versions, the settings test's rules; the
+                bench's project run covers rename, versions with pictures; snapshots for each view.
+              - Found by the new tools: a use-after-free deleting clips (ASan), JUCE's CoreAudio
+                reader spinning on a damaged file (fuzzing, W40).
+Measured:     RTSan soak, 60 s, built-in mic at 48 kHz / 128, metronome and preview playing: 25
+              distinct reports, all on the third-party baseline, no failures. Normal build, same
+              soak: no dropouts, no late blocks, load 1.3 % average, 9.6 % worst block. Frame time,
+              300-clip demo on a 120 Hz display, 59 s with playback: 54 s with no late frame; 46 late
+              frames in a 4-second burst as playback started (worst 50 ms), against one second and
+              33 ms in 4a; steady 120 Hz otherwise. Fuzzing: 584k audio and 82k project inputs clean
+              (after W40). Settings test on this Mac: clean at 32 samples, recommended 64.
+Not done:     - The wheel check (owner, with a mouse).
+              - The longer hitch when playback starts: measured once; to look into in 4f.
+              - Tracktion's clip reader still has the CoreAudio format (W40, not patched).
+Decisions:    W38, W39, W40, W41.
+Needs owner:  The wheel check; then the go-ahead for 4e (the sample editor).
 
 ### Phase 4e — the sample editor
 

@@ -804,6 +804,11 @@ namespace
                 session->setInput (args.getInt ("input", 1) - 1, args.has ("stereo"));
                 session->setMonitoring (true);
                 session->setRecordFormat (engine::TakeRecorder::SampleFormat::int24);
+
+                // --metronome: the click track plays all the while, so the real-time check covers
+                // Tracktion's click node and Carthage's sounds (W38, W41).
+                if (args.has ("metronome"))
+                    session->setMetronomeOn (true);
             });
 
             if (insertPlugin() != 0)
