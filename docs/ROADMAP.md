@@ -14,7 +14,7 @@ the check says so. See [TESTING.md](TESTING.md) for how.
 | 1. Skeleton, audio settings, monitored guitar, record a clip | Verified (2026-11-17) |
 | 2. CI, releases and in-app updates | Verified (2026-11-18) |
 | 3. Plugin manager and scanning | Verified (2026-11-18) |
-| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19); 4d done (2026-11-19, the wheel check moved to 4f); next 4e (sample editor), 4f (design pass) |
+| 4. Timeline, grid, snapping, tools, shortcuts | Verified (4a 2026-11-18, 4b and 4c 2026-11-19); 4d done (2026-11-19, the wheel check moved to 4f); next 4e (sample editor), 4f (design pass), 4g (loop region) |
 | 5. Mixer, insert Lines, per-channel I/O | Not started |
 | 6. Piano roll | Not started |
 | 7. Help page, icon and polish | Not started |
@@ -563,6 +563,20 @@ Exit checks:
 
 Report: _not written yet_
 
+### Phase 4g — loop region
+
+Deliver (owner, 2026-11-19):
+- [ ] A loop region drawn on the main grid: drag across the ruler (or with a modifier on the lanes)
+      to set it, drag its edges to change it, and it snaps like everything else; playback loops it
+      when looping is on; a double-click on it clears it
+- [ ] The same loop region in the piano roll (built with phase 6, on the shared grid code)
+
+Exit checks:
+- [ ] Set, change, loop and clear by mouse in the running app; one undo step each
+- [ ] Owner's checks in the running app
+
+Report: _not written yet_
+
 ## Phase 5 — Mixer, insert Lines, per-channel I/O
 
 Brief features: 3, 4, 5.
@@ -580,9 +594,14 @@ Deliver:
       grouped automatically by crash history (on by default; your own grouping when off); presets
       under each plugin in the browser and from folders onto channels; the master volume becomes the
       master fader's twin
+- [ ] **Export (owner, 2026-11-19; moved here from phase 7):** Cmd+R opens Export: the loop region if
+      there is one, or the whole project from its first sound to its last; WAV 16/24/32-float and
+      FLAC, with the quality settings from feature 8; it renders the mix through the mixer and master
 - [ ] **Owner's ideas (F20):** CPU use per plugin; running chosen plugins in their own process; a tuner on the main view; recording the processed sound beside the dry one; take comping; freeze; stems export; MIDI learn
 
 Exit checks:
+- [ ] An exported file (Cmd+R) nulls against the same range played back in the app; the loop region
+      and the whole project are both exported
 - [ ] A clip, an instrument and a live input each routed to an arbitrary channel, then re-routed, while playing
 - [ ] Delay compensation verified by a null test with a plugin that reports latency
 - [ ] A feedback route is refused or handled safely
@@ -615,7 +634,7 @@ Brief feature: 9, and "Look".
 Deliver:
 - [ ] Interactive "How to use Carthage" page: tools, shortcuts (read from the command table), and every folder Carthage uses with an open-in-Finder/Explorer button
 - [ ] macOS `.icns`, Icon Composer bundle and Windows `.ico` built from `design/icon/carthage-icon.svg`
-- [ ] Export: WAV 16/24/32-float and FLAC, with the quality settings from feature 8
+- [ ] (Export moved to phase 5, with Cmd+R and the loop-region or whole-project choice)
 - [ ] README updated with real screenshots, install steps and the shortcut table; feature cards added to the README art
 - [ ] A pass over every feature in the brief, 1–12, with anything missing listed
 - [ ] **Owner's ideas (F20):** illustrated getting-started help (wiring an interface and microphone, what plugins do, starting with guitar), input level help, and troubleshooting that finds and fixes the actual problem
@@ -623,7 +642,6 @@ Deliver:
 Exit checks:
 - [ ] Every folder button opens the right folder
 - [ ] The help page's shortcut list follows a rebind
-- [ ] An exported file nulls against the same range played back in the app
 - [ ] A full song made end to end: guitar tracked through an amp sim, drums and samples on the timeline, a melody in the piano roll, mixed and exported
 
 Report: _not written yet_
