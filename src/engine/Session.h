@@ -4,6 +4,7 @@
 #include "Autosave.h"
 #include "Editing.h"
 #include "LatencyProbe.h"
+#include "Log.h"
 #include "Metronome.h"
 #include "PluginLibrary.h"
 #include "PluginScan.h"
@@ -181,6 +182,9 @@ namespace carthage::engine
             (Tracktion keeps them in the edit); the sound is app-wide, written into the settings
             folder's Metronome folder. setMetronomeSound fails, keeping the old sound, if a custom
             file can't be read. */
+        /** The audio device in a line, for the log: type, name, rate, buffer, latency. */
+        juce::String describeAudio();
+
         bool isMetronomeOn() const;
         void setMetronomeOn (bool);
         metronome::Sound getMetronomeSound() const;
@@ -300,6 +304,7 @@ namespace carthage::engine
         std::function<void()> onDeviceChanged;
 
     private:
+        bool scanLogged = false;   // one log line per plugin check
         void saveInto (const juce::File& folder, bool keepIdentity, bool binOldFolder, const std::function<void (juce::Result)>& done);
         Folders folders;
         juce::File scanner;

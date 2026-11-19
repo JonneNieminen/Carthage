@@ -13,6 +13,7 @@ add_library(carthage_engine STATIC
     SampleLibrary.cpp SampleLibrary.h
     SamplePreview.cpp SamplePreview.h
     Metronome.cpp Metronome.h
+    Log.cpp Log.h
     Session.cpp Session.h
     TakePlacement.h
     TakeRecorder.cpp TakeRecorder.h)

@@ -85,6 +85,18 @@ namespace carthage::engine
         {
             library->setPlugins (plugins->getScanned());
 
+            if (const auto p = pluginScanner->getProgress(); ! p.running && p.total > 0 && ! scanLogged)
+            {
+                scanLogged = true;
+                log::info ("Plugin check: " + juce::String (p.done) + " checked, " + juce::String (p.found) + " found, "
+                           + juce::String (p.blocked) + " blocked, " + juce::String (p.seconds, 1) + " s"
+                           + (p.newlyBlocked.isEmpty() ? juce::String() : "; newly blocked: " + p.newlyBlocked.joinIntoString (", ")));
+            }
+            else if (p.running)
+            {
+                scanLogged = false;
+            }
+
             if (onPluginsChanged)
                 onPluginsChanged();
         };
@@ -150,6 +162,7 @@ namespace carthage::engine
 
         prepareForDevice();
         applyInputRouting();
+        log::info ("Audio: " + describeAudio());
 
         if (onDeviceChanged)
             onDeviceChanged();
@@ -274,16 +287,26 @@ namespace carthage::engine
         auto plugin = front().edit->getPluginCache().createNewPlugin (tracktion::ExternalPlugin::xmlTypeName, description);
 
         if (plugin == nullptr)
+        {
+            log::error ("Plugin " + description.name + " (" + description.pluginFormatName + "): the engine could not create it");
             return juce::Result::fail ("The engine could not create " + description.name);
+        }
 
         // Index 0: before the track's own volume/pan and meter, which are channel features.
         front().track->pluginList.insertPlugin (plugin, 0, nullptr);
         library->markUsed (description.createIdentifierString());
 
         if (auto* external = dynamic_cast<tracktion::ExternalPlugin*> (plugin.get()))
+        {
             if (! external->getLoadError().isEmpty())
+            {
+                log::error ("Plugin " + description.name + " (" + description.pluginFormatName + "): " + external->getLoadError());
                 return juce::Result::fail (external->getLoadError());
+            }
+        }
 
+        log::info ("Plugin loaded: " + description.name + " " + description.version + " (" + description.pluginFormatName + ", "
+                   + description.manufacturerName + ")");
         return juce::Result::ok();
     }
 
@@ -1130,6 +1153,19 @@ namespace carthage::engine
     void Session::setFitLoopsToTempo (bool fit)
     {
         engine->getPropertyStorage().getPropertiesFile().setValue ("fitLoopsToTempo", fit);
+    }
+
+    juce::String Session::describeAudio()
+    {
+        auto& adm = getDeviceManager();
+        auto* device = adm.getCurrentAudioDevice();
+
+        if (device == nullptr)
+            return "no audio device open";
+
+        return device->getTypeName() + ", " + device->getName() + ", " + juce::String (device->getCurrentSampleRate(), 0) + " Hz, "
+               + juce::String (device->getCurrentBufferSizeSamples()) + " samples, latency in "
+               + juce::String (device->getInputLatencyInSamples()) + " / out " + juce::String (device->getOutputLatencyInSamples()) + " samples";
     }
 
     bool Session::isMetronomeOn() const     { return front().edit->clickTrackEnabled.get(); }

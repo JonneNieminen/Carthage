@@ -731,6 +731,7 @@ namespace carthage::ui
             case cmd::undo:              info.setActive (session.getEdit().getUndoManager().canUndo());
                                          info.shortName = "Undo " + session.getEdit().getUndoManager().getUndoDescription(); break;
             case cmd::redo:              info.setActive (session.getEdit().getUndoManager().canRedo()); break;
+            case cmd::undoHistory:       info.setActive (session.getEdit().getUndoManager().canUndo()); break;
             case cmd::pasteClips:        info.setActive (timeline.canPaste() && ! session.isRecording()); break;
             case cmd::windowSamples:     info.setTicked (isDetached (View::samples)); break;
             case cmd::windowPlugins:     info.setTicked (isDetached (View::plugins)); break;
@@ -764,6 +765,84 @@ namespace carthage::ui
                 }
                 break;
         }
+    }
+
+    void MainComponent::exportLog()
+    {
+        const auto text = "Carthage log, exported " + Time::getCurrentTime().formatted ("%Y-%m-%d %H:%M:%S") + "\n"
+                          + log::systemSummary() + "\nAudio: " + session.describeAudio() + "\n\n" + log::text();
+        saveOrCopy ("Export log", text, "Carthage log.txt");
+    }
+
+    void MainComponent::offerCrashReport (const String& note)
+    {
+        log::warning ("The last run stopped unexpectedly; a report was offered");
+        const auto text = note + "\n\nThe log of that run:\n" + log::previousRun();
+        saveOrCopy ("Carthage stopped unexpectedly last time",
+                    log::withoutHome (text), "Carthage crash report.txt");
+    }
+
+    void MainComponent::saveOrCopy (const String& title, const String& rawText, const String& fileName)
+    {
+        // Nothing is sent anywhere: the person saves it or copies it, and the home folder is ~.
+        const auto text = log::withoutHome (rawText);
+        auto* w = new AlertWindow (title, "Save it as a file, or copy it to paste into a message. Your home folder shows as ~.",
+                                   MessageBoxIconType::NoIcon, this);
+        w->addButton (String::fromUTF8 ("Save\xe2\x80\xa6"), 1, KeyPress (KeyPress::returnKey));
+        w->addButton ("Copy", 2);
+        w->addButton ("Not now", 0, KeyPress (KeyPress::escapeKey));
+
+        w->enterModalState (true, ModalCallbackFunction::create ([this, text, fileName] (int choice)
+        {
+            if (choice == 2)
+            {
+                copyToClipboard (text);
+                setStatus ("Copied to the clipboard");
+            }
+            else if (choice == 1)
+            {
+                logChooser = std::make_unique<FileChooser> ("Save as", File::getSpecialLocation (File::userDesktopDirectory).getChildFile (fileName), "*.txt");
+                logChooser->launchAsync (FileBrowserComponent::saveMode | FileBrowserComponent::warnAboutOverwriting,
+                                         [safe = SafePointer<MainComponent> (this), text] (const FileChooser& fc)
+                {
+                    if (safe == nullptr || fc.getResult() == File())
+                        return;
+
+                    if (fc.getResult().replaceWithText (text))
+                        safe->setStatus ("Saved " + fc.getResult().getFileName());
+                    else
+                        safe->setStatus ("Could not save " + fc.getResult().getFileName(), theme::warn);
+                });
+            }
+        }), true);
+    }
+
+    void MainComponent::showUndoHistory()
+    {
+        // Newest first; choosing a step undoes it and everything after it, in one go (W38).
+        auto& um = session.getEdit().getUndoManager();
+        const auto steps = um.getUndoDescriptions();
+
+        PopupMenu m;
+        m.addSectionHeader ("Undo back to before");
+
+        for (int i = 0; i < steps.size(); ++i)   // JUCE lists them newest first
+        {
+            const auto count = i + 1;
+            m.addItem (steps[i].isNotEmpty() ? steps[i] : String ("Change"), [this, count, edit = &session.getEdit()]
+            {
+                if (edit != &session.getEdit())
+                    return;   // another project came forward meanwhile
+
+                for (int n = 0; n < count; ++n)
+                    edit->getUndoManager().undo();
+
+                commands.commandStatusChanged();
+                setStatus (count == 1 ? String ("Undid 1 step") : "Undid " + String (count) + " steps");
+            });
+        }
+
+        m.showMenuAsync (PopupMenu::Options().withTargetComponent (&timeline).withMinimumWidth (260));
     }
 
     String MainComponent::layoutName (int n)
@@ -828,6 +907,8 @@ namespace carthage::ui
                 toolCommand (info); return true;
             case cmd::undo:             session.getEdit().getUndoManager().undo(); commands.commandStatusChanged(); return true;
             case cmd::redo:             session.getEdit().getUndoManager().redo(); commands.commandStatusChanged(); return true;
+            case cmd::undoHistory:      showUndoHistory(); return true;
+            case cmd::exportLog:        exportLog(); return true;
             case cmd::toggleGrid:       timeline.getGrid().enabled = ! timeline.getGrid().enabled; timeline.gridChanged(); refreshToolbar(); return true;
             case cmd::splitAtPlayhead:  timeline.splitAtPlayhead(); return true;
             case cmd::duplicateClips:   timeline.duplicateSelection(); return true;
@@ -1378,6 +1459,9 @@ namespace carthage::ui
     {
         statusLabel.setText (text, dontSendNotification);
         statusLabel.setColour (Label::textColourId, colour);
+
+        if (colour == theme::warn || colour == theme::clip)
+            log::warning (text);   // what the person was warned about is in the log (W38)
     }
 
     //==============================================================================================

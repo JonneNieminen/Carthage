@@ -96,12 +96,21 @@ namespace carthage::ui
 
         /** Layout slot `n` (1..9) by its name: "Layout n" until the person names it (W38). */
         juce::String layoutName (int n);
+        void showUndoHistory();
+
+        /** Export log (W38): this run's log with the computer and audio device on top, home as ~. */
+        void exportLog();
+        void saveOrCopy (const juce::String& title, const juce::String& text, const juce::String& fileName);
+
+        /** After a crash: the note it left and the log of that run, offered to save or copy. */
+        void offerCrashReport (const juce::String& note);
         void askToRenameLayout (int n);
 
         /** Settings: the left panel's width and the sample browser's text size (F19). */
         void setPanelWidth (int);
 
     private:
+        std::unique_ptr<juce::FileChooser> logChooser;   // Export log's Save
         class SignalRow;
 
         engine::Session& session;

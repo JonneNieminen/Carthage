@@ -71,7 +71,7 @@ namespace carthage::app
                     m.addCommandItem (&commands, commands::keepPluginOnTop);
                     break;
                 case 4:
-                    for (auto id : { commands::undo, commands::redo })
+                    for (auto id : { commands::undo, commands::redo, commands::undoHistory })
                         m.addCommandItem (&commands, id);
                     m.addSeparator();
                     for (auto id : { commands::cutClips, commands::copyClips, commands::pasteClips })
@@ -136,6 +136,7 @@ namespace carthage::app
                     break;
                 case 8:
                     m.addCommandItem (&commands, commands::checkForUpdates);
+                    m.addCommandItem (&commands, commands::exportLog);
                     break;
                 default:
                     break;
@@ -228,6 +229,12 @@ namespace carthage::app
                 if (const File f (arg.unquoted()); File::isAbsolutePath (arg.unquoted()) && f.hasFileExtension (carthage::project::extension))
                     projectToOpen = f;
 
+            // The log first, so everything after it is in it (W38); a crash leaves a note for the
+            // next launch to offer as a report.
+            carthage::log::start (FileLogger::getSystemLogFileFolder().getChildFile ("Carthage"),
+                                  "Carthage " + getApplicationVersion());
+            carthage::log::installCrashHandler();
+
             LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
             tooltips = std::make_unique<TooltipWindow> (nullptr, 600);
             Desktop::getInstance().addGlobalMouseListener (&tooltipMenu);
@@ -281,6 +288,9 @@ namespace carthage::app
             startUpdater (content);
             connectStartScreen();
             updateTitle();
+
+            if (const auto note = carthage::log::takeCrashNote(); note.isNotEmpty())
+                content.offerCrashReport (note);
 
             // A project named at launch opens; else a crash's copy is offered; else what Settings
             // says: the start screen (F20), the last session (F21), or the empty project.
@@ -767,6 +777,7 @@ namespace carthage::app
             menuBar.reset();
             session.reset();
             LookAndFeel::setDefaultLookAndFeel (nullptr);
+            carthage::log::stop();
         }
 
         void systemRequestedQuit() override
