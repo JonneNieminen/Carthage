@@ -1257,6 +1257,9 @@ namespace carthage::engine
         return r;
     }
 
+    int Session::getBeatShading() const      { return juce::jlimit (0, 4, engine->getPropertyStorage().getPropertiesFile().getIntValue ("beatShading", 0)); }
+    void Session::setBeatShading (int steps) { engine->getPropertyStorage().getPropertiesFile().setValue ("beatShading", juce::jlimit (0, 4, steps)); }
+
     bool Session::getCheckPluginsAtLaunch() const    { return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("checkPluginsAtLaunch", false); }
     void Session::setCheckPluginsAtLaunch (bool on)  { engine->getPropertyStorage().getPropertiesFile().setValue ("checkPluginsAtLaunch", on); }
 

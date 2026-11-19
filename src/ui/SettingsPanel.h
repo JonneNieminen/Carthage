@@ -42,6 +42,7 @@ namespace carthage::ui
 
         /** "Show the load in the toolbar" (off by default, owner's list F22). */
         std::function<void (bool)> onShowLoadChanged;
+        std::function<void()> onBeatShadingChanged;
 
         /** "Check now", beside the version: the same as "Check for updates…" in the menu. */
         std::function<void()> onCheckForUpdates;
@@ -73,6 +74,8 @@ namespace carthage::ui
         juce::ToggleButton clickWhileRecording { "Only while recording" };
         std::unique_ptr<juce::FileChooser> clickChooser;
         void chooseOwnClick();
+        juce::Label beatShadingLabel;
+        juce::ComboBox beatShading;
         juce::ToggleButton clickPlaces { "Click an empty spot to place the last clip" };
         juce::ToggleButton rightClickDeletes { "Right-click deletes a clip" };
         juce::ComboBox atLaunch, tempoFollow;

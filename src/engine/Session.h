@@ -196,6 +196,11 @@ namespace carthage::engine
         juce::File getMetronomeCustomFile() const;
         juce::Result setMetronomeSound (metronome::Sound, const juce::File& customFile = {});
 
+        /** Settings (W41): shade steps inside the beat on the lanes, for programming drums.
+            0 off; 1 every beat; 2, 3 or 4: halves, thirds or quarters of a beat. */
+        int getBeatShading() const;
+        void setBeatShading (int);
+
         bool getCheckPluginsAtLaunch() const;
         void setCheckPluginsAtLaunch (bool);
 

@@ -450,6 +450,39 @@ namespace carthage::ui
             const auto bar = timeline.beatsPerBar();
             const auto ppb = timeline.pixelsPerBeat;
 
+            // Shading inside the beat (W41): every other step tinted, so a half beat or a 16th
+            // is easy to find when programming drums. Only when the steps are wide enough to see.
+            if (const auto shading = timeline.session.getBeatShading(); shading > 0)
+            {
+                const auto step = 1.0 / static_cast<double> (shading);   // 1: whole beats; 2: halves…
+
+                if (step * ppb >= 6.0)
+                {
+                    g.setColour (theme::text.withAlpha (0.035f));
+                    const auto firstStep = static_cast<long> (std::floor (first / step));
+                    const auto lastStep = static_cast<long> (std::ceil (last / step));
+
+                    for (auto k = firstStep; k <= lastStep; ++k)
+                    {
+                        if ((k & 1) == 0)
+                            continue;
+
+                        const auto x0 = timeline.xAtBeat (static_cast<double> (k) * step) - static_cast<float> (getX());
+                        const auto x1 = timeline.xAtBeat (static_cast<double> (k + 1) * step) - static_cast<float> (getX());
+                        g.fillRect (x0, static_cast<float> (clip.getY()), x1 - x0, static_cast<float> (clip.getHeight()));
+                    }
+
+                    // The half beat gets a line of its own.
+                    if (shading == 2 || shading == 4)
+                    {
+                        g.setColour (theme::line);
+                        for (auto b = std::floor (first); b <= last; b += 1.0)
+                            g.fillRect (timeline.xAtBeat (b + 0.5) - static_cast<float> (getX()), static_cast<float> (clip.getY()), 1.0f,
+                                        static_cast<float> (clip.getHeight()));
+                    }
+                }
+            }
+
             // Grid lines: bars stronger than the grid's own steps. Drawn at least 10 px apart (the
             // grid still snaps at its own step); closer lines read as texture, not as a grid.
             auto shown = timeline.grid;
@@ -573,6 +606,8 @@ namespace carthage::ui
 
         struct Original { tracktion::EditItemID id; double start = 0.0, end = 0.0; };
 
+        Rectangle<int> sliceLine;   // where the slice tool will cut, while it is over a clip
+
         enum class Drag { none, move, trimStart, trimEnd, stretch, slip, marquee, paint, erase, mute, zoomRange };
 
         Drag drag = Drag::none;
@@ -644,6 +679,30 @@ namespace carthage::ui
                 case Tool::zoom:    setMouseCursor (MouseCursor::CrosshairCursor); break;
                 default:            setMouseCursor (MouseCursor::PointingHandCursor); break;
             }
+
+            // The slice tool shows where it will cut: a line through the clip under the pointer,
+            // exactly there, free of the grid (W41).
+            auto line = Rectangle<int>();
+
+            if (timeline.tool == Tool::slice && hit.clip != nullptr)
+            {
+                const auto lane = editing::laneOf (*hit.clip);
+                const auto top = timeline.laneTop (lane) - timeline.scrollY + 3;
+                line = { e.x - 1, top - 3, 3, timeline.heightOfLane (lane) - 1 };
+            }
+
+            if (line != sliceLine)
+            {
+                repaint (sliceLine.expanded (4, 0));
+                sliceLine = line;
+                repaint (sliceLine.expanded (4, 0));
+            }
+        }
+
+        void mouseExit (const MouseEvent&) override
+        {
+            repaint (sliceLine.expanded (4, 0));
+            sliceLine = {};
         }
 
         void mouseDown (const MouseEvent& e) override
@@ -769,8 +828,9 @@ namespace carthage::ui
                 case Tool::slice:
                     if (hit.clip != nullptr)
                     {
+                        // Where you click, never on the grid: drag the new edges to the grid after (W41).
                         begin ("Slice clip");
-                        editing::split (edit, { hit.clip }, snapped (anchorBeat, bypass, { hit.clip }));
+                        editing::split (edit, { hit.clip }, anchorBeat);
                         used();
                     }
                     return;
@@ -1088,6 +1148,16 @@ namespace carthage::ui
 
         void paintOverChildren (Graphics& g) override
         {
+            if (! sliceLine.isEmpty())
+            {
+                const auto x = static_cast<float> (sliceLine.getCentreX());
+                g.setColour (theme::accent);
+                g.fillRect (Rectangle<float> (x - 0.75f, static_cast<float> (sliceLine.getY()), 1.5f, static_cast<float> (sliceLine.getHeight())));
+                Path notch;   // a small mark at the top, so the line reads as "cut here"
+                notch.addTriangle (x - 4.0f, static_cast<float> (sliceLine.getY()), x + 4.0f, static_cast<float> (sliceLine.getY()), x, static_cast<float> (sliceLine.getY()) + 5.0f);
+                g.fillPath (notch);
+            }
+
             if (! marquee.isEmpty())
             {
                 g.setColour (theme::accent.withAlpha (0.12f));

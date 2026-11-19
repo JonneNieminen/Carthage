@@ -547,6 +547,7 @@ namespace carthage::ui
         settings.onBrowserTextSizeChanged = [this] (float px) { samples.setTextSize (px); };
         settings.onPlayWhileHeldChanged = [this] (bool held) { samples.setPlayWhileHeld (held); };
         settings.onShowLoadChanged = [this] (bool) { resized(); };
+        settings.onBeatShadingChanged = [this] { timeline.gridChanged(); };
         showPanel (panelShowsSamples, false);
 
         // Views in their own windows (F21): a pop-out button on each, the way back on its window.

@@ -293,6 +293,11 @@ namespace
                 onMessageThreadVoid ([this] { commands.invokeDirectly (app::commands::record, false); });
                 Thread::sleep (1500);   // the waveform thumbnail builds on its own thread
                 capture (outDir.getChildFile ("take.png"));
+
+                // Shading inside the beat (W41), on halves.
+                onMessageThreadVoid ([this] { session->setBeatShading (2); content->getTimeline().gridChanged(); });
+                capture (outDir.getChildFile ("take-shading.png"));
+                onMessageThreadVoid ([this] { session->setBeatShading (0); content->getTimeline().gridChanged(); });
             }
 
             onMessageThreadVoid ([this] { content.reset(); session.reset(); });

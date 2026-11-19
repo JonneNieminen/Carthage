@@ -58,6 +58,7 @@ namespace carthage::ui
         UpdateBanner& getUpdateBanner() noexcept    { return updateBanner; }
         SettingsPanel& getSettings() noexcept       { return settings; }
         PluginBrowser& getPluginBrowser() noexcept  { return browser; }
+        Timeline& getTimeline() noexcept           { return timeline; }
         SampleBrowser& getSampleBrowser() noexcept  { return samples; }
         StartScreen& getStartScreen() noexcept      { return startScreen; }
 

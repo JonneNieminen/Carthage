@@ -204,6 +204,23 @@ namespace carthage::ui
         checkPlugins.onClick = [this] { session.setCheckPluginsAtLaunch (checkPlugins.getToggleState()); };
         body.addAndMakeVisible (checkPlugins);
 
+        styleLabel (beatShadingLabel, theme::textMd, theme::muted);
+        beatShadingLabel.setText ("Shade inside the beat", dontSendNotification);
+        beatShading.addItem ("Off", 1);
+        beatShading.addItem ("Every other beat", 2);
+        beatShading.addItem ("Every other 1/2 beat", 3);
+        beatShading.addItem ("Every other 1/3 beat", 4);
+        beatShading.addItem ("Every other 1/4 beat", 5);
+        beatShading.setTooltip ("Tints every other step on the lanes, so the steps inside a beat are easy to find when programming drums. Halves and quarters also get a line at the half beat.");
+        beatShading.setSelectedId (1 + session.getBeatShading(), dontSendNotification);
+        beatShading.onChange = [this]
+        {
+            session.setBeatShading (beatShading.getSelectedId() - 1);
+            if (onBeatShadingChanged) onBeatShadingChanged();
+        };
+        body.addAndMakeVisible (beatShadingLabel);
+        body.addAndMakeVisible (beatShading);
+
         clickPlaces.setToggleState (session.getClickPlacesClip(), dontSendNotification);
         clickPlaces.setTooltip ("As in FL Studio: with the select tool, a click on an empty spot places a copy of the last clip you used. Shift-drag still selects.");
         clickPlaces.onClick = [this] { session.setClickPlacesClip (clickPlaces.getToggleState()); };
@@ -618,6 +635,7 @@ namespace carthage::ui
         clickWhileRecording.setBounds (r.removeFromTop (rowHeight));
 
         heading (timelineHeading);
+        row (beatShadingLabel, beatShading);
         clickPlaces.setBounds (r.removeFromTop (rowHeight));
         rightClickDeletes.setBounds (r.removeFromTop (rowHeight));
 
