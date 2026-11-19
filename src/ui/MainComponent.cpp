@@ -525,6 +525,20 @@ namespace carthage::ui
                 commands.invokeDirectly (cmd::closeProject, false);
         };
         tabs.onNew = [this] { commands.invokeDirectly (cmd::newProject, false); };
+        tabs.onRename = [this] (int index)
+        {
+            if (session.showProject (index).failed())
+                return;
+
+            // Never saved: it has no folder to rename yet, so naming it is saving it.
+            if (session.isUntitled())
+            {
+                commands.invokeDirectly (cmd::saveProjectAs, false);
+                return;
+            }
+
+            askToRenameProject();
+        };
         browser.onInsert = [this] (const PluginDescription& d) { insertPlugin (d); };
         signalRow->onPluginDropped = [this] (const String& key)
         {
@@ -921,6 +935,36 @@ namespace carthage::ui
         }
 
         refreshToolbar();
+    }
+
+    void MainComponent::askToRenameProject()
+    {
+        // Asks first (F22): renaming moves the project's folder, which undo cannot reverse.
+        const auto oldName = session.getProjectName();
+        auto* w = new AlertWindow ("Rename " + oldName,
+                                   "The project's folder and file take the new name. The old folder goes to the bin.",
+                                   MessageBoxIconType::NoIcon, this);
+        w->addTextEditor ("name", oldName, "New name");
+        w->addButton ("Rename", 1, KeyPress (KeyPress::returnKey));
+        w->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
+
+        w->enterModalState (true, ModalCallbackFunction::create ([this, w] (int choice)
+        {
+            const auto name = w->getTextEditorContents ("name");
+
+            if (choice != 1)
+                return;
+
+            session.renameProject (name, [this] (const Result& r)
+            {
+                if (r.failed())
+                    setStatus ("Not renamed: " + r.getErrorMessage(), theme::warn);
+                else
+                    setStatus ("Renamed to " + session.getProjectName());
+
+                tabs.refresh();
+            });
+        }), true);   // deletes the window when it closes
     }
 
     void MainComponent::refreshMasterVolume()

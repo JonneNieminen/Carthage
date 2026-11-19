@@ -843,6 +843,34 @@ namespace carthage::engine
 
     void Session::saveAs (const juce::File& folder, const std::function<void (juce::Result)>& done)
     {
+        saveInto (folder, false, false, done);
+    }
+
+    juce::File Session::renamedFolder (const juce::String& newName) const
+    {
+        const auto name = juce::File::createLegalFileName (newName.trim()).trim();
+
+        if (name.isEmpty() || name.startsWithChar ('.'))
+            return {};
+
+        return front().file.getParentDirectory().getSiblingFile (name);
+    }
+
+    void Session::renameProject (const juce::String& newName, const std::function<void (juce::Result)>& done)
+    {
+        const auto fail = [&done] (const juce::String& why) { if (done) done (juce::Result::fail (why)); };
+        const auto folder = renamedFolder (newName);
+
+        if (front().untitled)                          return fail ("Save the project first");
+        if (folder == juce::File())                    return fail ("That name cannot be a folder name");
+        if (folder == front().file.getParentDirectory()) return fail ("That is its name already");
+        if (folder.exists())                           return fail ("A project named " + folder.getFileName() + " is there already");
+
+        saveInto (folder, true, true, done);
+    }
+
+    void Session::saveInto (const juce::File& folder, bool keepIdentity, bool binOldFolder, const std::function<void (juce::Result)>& done)
+    {
         if (isRecording())
         {
             if (done) done (juce::Result::fail ("Stop recording first"));
@@ -859,21 +887,33 @@ namespace carthage::engine
         auto newInfo = p.info;
         newInfo.view = currentView();
 
-        if (! wasUntitled)
+        if (! wasUntitled && ! keepIdentity)
             newInfo.id = project::Info::createNew().id;
 
         auto snapshot = project::snapshot (*p.edit, file, newInfo, oldFolder);
         const auto taken = p.changeCount;
         auto* target = &p;
 
-        writer.post ([snapshot, file, oldFolder, folder]
+        const auto oldFile = p.file;
+
+        writer.post ([snapshot, file, oldFile, oldFolder, folder, binOldFolder]
                      {
-                         if (auto r = project::copyMedia (oldFolder, folder); r.failed())
+                         // A rename carries everything in the folder; Save as, only the media.
+                         if (binOldFolder)
+                         {
+                             if (! oldFolder.copyDirectoryTo (folder))
+                                 return juce::Result::fail ("Could not copy the project to " + folder.getFullPathName());
+
+                             folder.getChildFile (oldFile.getFileName()).deleteFile();   // written anew below, under the new name
+                         }
+                         else if (auto r = project::copyMedia (oldFolder, folder); r.failed())
+                         {
                              return r;
+                         }
 
                          return project::write (snapshot, file);
                      },
-                     [this, target, file, oldFolder, wasUntitled, newInfo, taken, done] (const juce::Result& r)
+                     [this, target, file, oldFolder, wasUntitled, binOldFolder, newInfo, taken, done] (const juce::Result& r)
                      {
                          if (r.wasOk() && isOpen (target))
                          {
@@ -893,9 +933,10 @@ namespace carthage::engine
                              if (autosaves)
                                  autosaves->markOpen (q.info.id, q.file);
 
-                             // An untitled project's folder held only its recordings, now copied:
-                             // it goes to the bin, where it can still be found.
-                             if (wasUntitled && oldFolder.isDirectory() && oldFolder != file.getParentDirectory())
+                             // An untitled project's folder held only its recordings, now copied;
+                             // a renamed one was copied whole. Either goes to the bin, where it
+                             // can still be found.
+                             if ((wasUntitled || binOldFolder) && oldFolder.isDirectory() && oldFolder != file.getParentDirectory())
                                  oldFolder.moveToTrash();
 
                              savedAt (q, taken);

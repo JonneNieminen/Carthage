@@ -129,6 +129,7 @@ namespace carthage::ui
         ValueSlider masterVolume { newProjectMasterDb };
         juce::Label masterLabel;
         void refreshMasterVolume();
+        void askToRenameProject();
 
         // Toolbar: the tools (icons with their keys), the grid menu and the snap toggle.
         juce::OwnedArray<ToolButton> toolButtons;

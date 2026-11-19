@@ -10,7 +10,8 @@ namespace carthage::ui
         takes the toolbar's surface, so it reads as joined to the controls below it; the others sit
         back on the well. An unsaved project shows a dot, which turns into the close cross under the
         pointer. A click brings a tab forward, a middle click or the cross closes it, a drag moves
-        it, and + starts a new project.
+        it, and + starts a new project. A double-click, or Rename in the right-click menu, renames
+        the project (owner's list F22).
 
         It only draws what the session reports (describeProject); the window decides what a click
         does, so closing goes through the same ask-to-save path as Cmd/Ctrl+W. */
@@ -21,7 +22,7 @@ namespace carthage::ui
 
         static constexpr int height = 32;
 
-        std::function<void (int)> onSelect, onClose;
+        std::function<void (int)> onSelect, onClose, onRename;
         std::function<void()> onNew;
 
         /** The session's projects changed (added, closed, saved, edited, moved). */
@@ -34,6 +35,7 @@ namespace carthage::ui
         void mouseDown (const juce::MouseEvent&) override;
         void mouseDrag (const juce::MouseEvent&) override;
         void mouseUp (const juce::MouseEvent&) override;
+        void mouseDoubleClick (const juce::MouseEvent&) override;
 
     private:
         engine::Session& session;

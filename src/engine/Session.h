@@ -142,6 +142,14 @@ namespace carthage::engine
             copying its recordings along, and carries on there. */
         void saveAs (const juce::File& folder, const std::function<void (juce::Result)>& done);
 
+        /** Renames the front project, saved before: writes it into a sibling folder named
+            `newName`, as `<newName>.carthage`, keeping its identity, and moves the old folder to the
+            bin (owner's list F22). Fails, changing nothing, when the name is empty or taken. */
+        void renameProject (const juce::String& newName, const std::function<void (juce::Result)>& done);
+
+        /** The folder renameProject would use, or none when `newName` gives no usable name. */
+        juce::File renamedFolder (const juce::String& newName) const;
+
         /** Copies every audio file the front project uses from outside its folder into its
             Samples folder, then points the clips at the copies, as one undo step ("Collect
             samples", W30). The copying runs on the writer; `done` gets how many files were copied.
@@ -260,6 +268,7 @@ namespace carthage::engine
         std::function<void()> onDeviceChanged;
 
     private:
+        void saveInto (const juce::File& folder, bool keepIdentity, bool binOldFolder, const std::function<void (juce::Result)>& done);
         Folders folders;
         juce::File scanner;
         PluginCatalogue* loadGate = nullptr;   // read by the engine's plugin load gate

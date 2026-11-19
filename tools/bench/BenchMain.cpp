@@ -450,6 +450,24 @@ namespace
             check (! onMessageThread ([this] { return session->hasUnsavedChanges() || session->getEdit().getUndoManager().canUndo(); }),
                    "opening is not an edit: nothing unsaved, nothing to undo");
 
+            say ("Rename from the tab: the folder and file take the name, everything in it comes along");
+            song.getChildFile ("Notes.txt").replaceWithText ("kept");
+            const auto renamed = song.getSiblingFile ("Song renamed");
+            auto rr = await ([&] (auto done) { session->renameProject ("Song renamed", done); });
+            check (rr.wasOk(), "rename: " + (rr.wasOk() ? String ("done") : rr.getErrorMessage()));
+            check (renamed.getChildFile ("Song renamed.carthage").existsAsFile() && ! renamed.getChildFile ("Song.carthage").exists(),
+                   "Song renamed/Song renamed.carthage, and no old file beside it");
+            check (renamed.getChildFile ("Notes.txt").loadFileAsString() == "kept", "other files come along");
+            check (! song.exists(), "the old folder is gone (to the bin)");
+            check (onMessageThread ([this] { return session->getProjectName() == "Song renamed" && ! session->hasUnsavedChanges(); }),
+                   "the tab shows the new name, nothing unsaved");
+            check (clipCount() == 1, "the clip is still there");
+            renamed.getSiblingFile ("Taken").createDirectory();
+            auto taken = await ([&] (auto done) { session->renameProject ("Taken", done); });
+            check (taken.failed() && renamed.isDirectory(), "a name in use is refused, nothing moves");
+            auto back = await ([&] (auto done) { session->renameProject ("Song", done); });
+            check (back.wasOk() && song.getChildFile ("Song.carthage").existsAsFile(), "renamed back to Song");
+
             say ("Autosave: after a pause, written to the project's autosave folder");
             onMessageThreadVoid ([this] { session->setAutosavePolicy ({ 0.3, 0.0, 10 }); });
             onMessageThreadVoid ([this]

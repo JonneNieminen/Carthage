@@ -205,6 +205,12 @@ namespace carthage::ui
         }
     }
 
+    void ProjectTabs::mouseDoubleClick (const MouseEvent& e)
+    {
+        if (const auto tab = tabAt (e.getPosition()); tab >= 0 && ! closeArea (tab).contains (e.getPosition()) && onRename)
+            onRename (tab);
+    }
+
     void ProjectTabs::mouseUp (const MouseEvent& e)
     {
         const auto from = pressed, to = dragTo;
@@ -227,6 +233,15 @@ namespace carthage::ui
         }
 
         const auto tab = tabAt (e.getPosition());
+
+        if (tab >= 0 && e.mods.isPopupMenu())
+        {
+            PopupMenu menu;
+            menu.addItem ("Rename…", [this, tab] { if (onRename) onRename (tab); });
+            menu.addItem ("Close", [this, tab] { if (onClose) onClose (tab); });
+            menu.showMenuAsync (PopupMenu::Options().withTargetComponent (this).withMousePosition());
+            return;
+        }
 
         if (tab >= 0 && tab == from && onClose
              && (e.mods.isMiddleButtonDown() || closeArea (tab).contains (e.getPosition())))
