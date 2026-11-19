@@ -44,6 +44,29 @@ namespace carthage::editing
         so a whole drag of a control undoes at once. */
     void setSound (const tracktion::Clip&, const SampleSound&);
 
+    /** The sample's volume envelope (owner, 4e): points drawn on its waveform, FL-style. Times are
+        seconds into the file; the gain is in dB (-60 is silence); `bend` (-1 to 1) curves the
+        line to the next point. Kept in each clip's own state, so it saves and undoes with the
+        project. It plays through a volume plugin on the clip whose curve, in timeline time
+        (checked by render), is worked out from these points: syncEnvelope. */
+    struct EnvelopePoint
+    {
+        double time = 0.0;
+        float gainDb = 0.0f;
+        float bend = 0.0f;
+    };
+
+    std::vector<EnvelopePoint> envelopeOf (const tracktion::Clip&);
+
+    /** Gives every clip of the sample this envelope (empty: none). The caller opens the undo step. */
+    void setEnvelope (const tracktion::Clip&, std::vector<EnvelopePoint>);
+
+    /** Makes the clip's playing curve match its envelope where the clip is now (moved, trimmed,
+        stretched, reversed, undone). Cheap when nothing changed. Not an undo step: the curve is
+        worked out from the envelope, which is. */
+    void syncEnvelope (tracktion::Clip&);
+    void syncEnvelopes (tracktion::Edit&);
+
     /** Fits every clip of the sample to the project tempo (W36, fitToTempo), from `bpm`. */
     void fitSampleToTempo (const tracktion::Clip&, double bpm);
 }

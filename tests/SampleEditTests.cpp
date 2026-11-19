@@ -84,6 +84,42 @@ public:
             expect (! editing::soundOf (*a).reversed, "undone");
         }
 
+        beginTest ("The envelope: on every clip of the sample, its curve where the clip is, one undo step");
+        {
+            const auto curveTimes = [] (tracktion::Clip& c)
+            {
+                std::vector<double> times;
+
+                for (auto* plugin : *c.getPluginList())
+                    if (auto* vp = dynamic_cast<tracktion::VolumeAndPanPlugin*> (plugin))
+                        for (int i = 0; i < vp->volParam->getCurve().getNumPoints(); ++i)
+                            times.push_back (vp->volParam->getCurve().getPointTime (i).inSeconds());
+
+                return times;
+            };
+
+            // a: beat 0 (0 s); b: beat 8 (4 s), both Kick, the first second of the file playing.
+            editing::begin (*edit, "Envelope");
+            editing::setEnvelope (*a, { { 0.0, 0.0f, 0.0f }, { 0.5, -60.0f, 0.3f } });
+            expectEquals (static_cast<int> (editing::envelopeOf (*b).size()), 2, "every clip of the sample");
+            expectEquals (static_cast<int> (editing::envelopeOf (*other).size()), 0, "another file is not touched");
+
+            const auto onB = curveTimes (*b);
+            expect (onB.size() == 2 && std::abs (onB[0] - 4.0) < 1.0e-6 && std::abs (onB[1] - 4.5) < 1.0e-6, "in timeline time, from the clip's start");
+
+            editing::begin (*edit, "Move clip");
+            editing::move ({ b }, 2.0, 0);   // one second later
+            editing::syncEnvelope (*b);
+            const auto moved = curveTimes (*b);
+            expect (moved.size() == 2 && std::abs (moved[0] - 5.0) < 1.0e-6, "follows the clip");
+
+            um.undo();
+            um.undo();
+            editing::syncEnvelopes (*edit);
+            expectEquals (static_cast<int> (editing::envelopeOf (*a).size()), 0, "undone");
+            expect (curveTimes (*a).empty(), "and its plugin gone");
+        }
+
         beginTest ("Make unique splits a clip off as Kick (2); its copies stay with it");
         {
             expectEquals (editing::makeUnique (*b), juce::String ("Kick (2)"));

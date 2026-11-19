@@ -42,6 +42,7 @@
 #include <engine/Editing.h>
 #include <engine/Session.h>
 #include <engine/SettingsTest.h>
+#include <engine/SampleEdits.h>
 
 #include <iostream>
 #include <map>
@@ -137,6 +138,7 @@ namespace
             else if (args.command == "demo")     result = demo();
             else if (args.command == "samples")  result = samples();
             else if (args.command == "settings-test") result = settingsTest();
+            else if (args.command == "clip-envelope") result = clipEnvelope();
             else say ("unknown command: " + args.command);
 
             onMessageThreadVoid ([this] { session.reset(); });
@@ -341,6 +343,75 @@ namespace
             check (onMessageThread ([this] { return session->describeAudio(); }).isNotEmpty(), "the device is back as it was: "
                    + onMessageThread ([this] { return session->describeAudio(); }));
             onMessageThreadVoid ([&] { test.reset(); });
+            say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
+            return checksFailed == 0 ? 0 : 1;
+        }
+
+        /** The sample editor's envelope (4e), rendered: a 1 s tone at 4 s with an envelope at unity
+            for its first half and silent after; then the same clip moved by a second. The render
+            runs on this thread while the message loop runs (Tracktion's renderer needs it). */
+        int clipEnvelope()
+        {
+            const auto tone = folder.getChildFile ("tone.wav");
+            {
+                WavAudioFormat wav;
+                std::unique_ptr<OutputStream> out = std::make_unique<FileOutputStream> (tone);
+                auto writer = wav.createWriterFor (out, AudioFormatWriterOptions{}.withSampleRate (48000.0).withNumChannels (1).withBitsPerSample (24));
+                AudioBuffer<float> b (1, 48000);
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                    b.setSample (0, i, 0.25f * std::sin (static_cast<float> (i) * 0.05f));
+                writer->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
+            }
+
+            tracktion::Clip* clip = nullptr;
+            BigInteger mask;
+            onMessageThreadVoid ([&]
+            {
+                auto& edit = session->getEdit();
+                auto* lane = carthage::editing::lanes (edit)[1];
+                clip = carthage::editing::insertFile (*lane, tone, 8.0);   // beat 8 at 120 bpm: 4 s
+                mask.setBit (tracktion::getAllTracks (edit).indexOf (lane));
+            });
+
+            const auto render = [&] (const String& name)
+            {
+                const auto out = folder.getChildFile (name + ".wav");
+                waitMs (300);
+                tracktion::Renderer::renderToFile (name, out, session->getEdit(), { tracktion::TimePosition(), tracktion::TimePosition::fromSeconds (7.0) },
+                                                   mask, true, true, {}, false);
+                AudioFormatManager formats;
+                carthage::audio::registerReadable (formats);
+                std::unique_ptr<AudioFormatReader> reader (formats.createReaderFor (out));
+                return [r = std::shared_ptr<AudioFormatReader> (std::move (reader))] (double at)
+                {
+                    if (r == nullptr) return -1.0f;
+                    AudioBuffer<float> b (1, 4800);
+                    r->read (&b, 0, 4800, static_cast<int64> (at * r->sampleRate), true, false);
+                    return b.getRMSLevel (0, 0, 4800);
+                };
+            };
+
+            const auto plain = render ("plain");
+            onMessageThreadVoid ([&]
+            {
+                carthage::editing::begin (session->getEdit(), "Envelope");
+                carthage::editing::setEnvelope (*clip, { { 0.0, 0.0f, 0.0f }, { 0.5, 0.0f, 0.0f }, { 0.51, -60.0f, 0.0f } });
+            });
+            const auto shaped = render ("shaped");
+            say ("RMS without envelope at 4.25 s " + String (plain (4.25), 4) + "; with it at 4.25 s " + String (shaped (4.25), 4)
+                 + " and 4.75 s " + String (shaped (4.75), 4));
+            check (std::abs (shaped (4.25) - plain (4.25)) < 0.01f, "at unity it is as loud as without an envelope");
+            check (shaped (4.75) < 0.001f, "silent after the envelope drops");
+
+            onMessageThreadVoid ([&]
+            {
+                carthage::editing::begin (session->getEdit(), "Move clip");
+                carthage::editing::move ({ clip }, 2.0, 0);   // one second later; the session re-syncs it
+                session->getEdit().getUndoManager().dispatchPendingMessages();
+            });
+            const auto moved = render ("moved");
+            say ("Moved by 1 s: RMS at 5.25 s " + String (moved (5.25), 4) + ", at 5.75 s " + String (moved (5.75), 4));
+            check (moved (5.25) > 0.05f && moved (5.75) < 0.001f, "the envelope moves with the clip");
             say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
             return checksFailed == 0 ? 0 : 1;
         }

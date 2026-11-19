@@ -96,6 +96,10 @@ three on macOS on every push, and fails on any finding.
   analysis as intervals (subsystem `fi.carthage`, category `Work`). Record Carthage in Instruments
   with the os_signpost or Points of Interest instrument to see where a slow moment went. They
   cost nothing when nothing records, and never run on the audio thread.
+- **The sample editor's envelope.** `carthage-bench clip-envelope` renders a tone with and
+  without an envelope, then with the clip moved: unity must match no envelope, silence must fall
+  where the envelope drops, and the envelope must move with the clip. (Tracktion's renderer
+  needs a running message loop, so render checks live in the bench, not the unit tests.)
 - **The settings test.** `carthage-bench settings-test` runs the app's settings test (W41) on
   the current interface: each buffer size for 3 s, silently, then what it would recommend; the
   device must be back as it was afterwards.

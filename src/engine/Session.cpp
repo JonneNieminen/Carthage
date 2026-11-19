@@ -1,4 +1,5 @@
 #include "Session.h"
+#include "SampleEdits.h"
 #include "Trace.h"
 #include "Editing.h"
 
@@ -570,6 +571,9 @@ namespace carthage::engine
 
     void Session::Project::changeListenerCallback (juce::ChangeBroadcaster*)
     {
+        // Clips moved, trimmed or undone take their envelopes with them (4e).
+        editing::syncEnvelopes (*edit);
+
         // An edit: autosave after the next pause (W30).
         ++changeCount;
         changedSinceAutosave = true;
