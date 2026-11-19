@@ -460,7 +460,6 @@ namespace carthage::ui
                                                               signalRow.get(), &timeline, &statusLabel })
             addAndMakeVisible (comp);
 
-        loadMeter.setVisible (props().getBoolValue ("showLoad", false));
         addChildComponent (settings);
         addAndMakeVisible (browser);
         addChildComponent (samples);
@@ -491,9 +490,12 @@ namespace carthage::ui
         pluginsTab.setTooltip ("Your plugins");
         session.getSampleLibrary().onChange = [this] { samples.refresh(); };
         settings.onPanelWidthChanged = [this] (int w) { setPanelWidth (w); };
+        settings.onUiScaleChanged = [this] (double s) { setUiScale (s); };
+        Desktop::getInstance().setGlobalScaleFactor (static_cast<float> (uiScale()));
+        settings.showUiScale (uiScale());
         settings.onBrowserTextSizeChanged = [this] (float px) { samples.setTextSize (px); };
         settings.onPlayWhileHeldChanged = [this] (bool held) { samples.setPlayWhileHeld (held); };
-        settings.onShowLoadChanged = [this] (bool show) { loadMeter.setVisible (show); resized(); };
+        settings.onShowLoadChanged = [this] (bool) { resized(); };
         showPanel (panelShowsSamples, false);
 
         // Views in their own windows (F21): a pop-out button on each, the way back on its window.
@@ -804,6 +806,9 @@ namespace carthage::ui
             case cmd::windowSettings:   toggleDetached (View::settings); return true;
             case cmd::defaultLayout:    defaultLayout(); setStatus ("Back to the default layout"); return true;
             case cmd::commandPalette:   if (palette.isVisible()) palette.close(); else palette.open(); return true;
+            case cmd::uiLarger:         setUiScale (uiScale() + 0.125); return true;
+            case cmd::uiSmaller:        setUiScale (uiScale() - 0.125); return true;
+            case cmd::uiActualSize:     setUiScale (1.0); return true;
             case cmd::lanesTaller:      timeline.setLaneHeight (timeline.getLaneHeight() + Timeline::laneHeightStep); return true;
             case cmd::lanesShorter:     timeline.setLaneHeight (timeline.getLaneHeight() - Timeline::laneHeightStep); return true;
             case cmd::keepPluginOnTop:
@@ -970,6 +975,25 @@ namespace carthage::ui
         }
 
         refreshToolbar();
+    }
+
+    bool MainComponent::showsLoad()
+    {
+        return props().getBoolValue ("showLoad", false);
+    }
+
+    double MainComponent::uiScale()
+    {
+        return jlimit (0.75, 1.5, props().getDoubleValue ("uiScale", 1.0));
+    }
+
+    void MainComponent::setUiScale (double scale)
+    {
+        scale = jlimit (0.75, 1.5, std::round (scale * 40.0) / 40.0);   // in steps of 2.5 %
+        props().setValue ("uiScale", scale);
+        Desktop::getInstance().setGlobalScaleFactor (static_cast<float> (scale));
+        settings.showUiScale (scale);
+        setStatus ("Interface at " + String (roundToInt (scale * 100.0)) + " %");
     }
 
     void MainComponent::askToRenameProject()
@@ -1410,41 +1434,80 @@ namespace carthage::ui
         tabs.setBounds (r.removeFromTop (ProjectTabs::height));
 
         auto top = r.removeFromTop (56).reduced (theme::space4, theme::space2 + 2);
+
+        // The toolbar folds when the window is narrow (or the interface large, W38): the least
+        // needed parts go first, each still a tooltip or a menu item away.
+        struct Fold { bool words, masterLabel, load, master, tap; int time, grid, tool; };
+        constexpr auto wide = ToolButton::width, narrow = ToolButton::narrowWidth;
+        const Fold folds[] = { { true,  true,  true,  true,  true,  104, 116, wide },
+                               { false, false, true,  true,  true,  104, 116, wide },
+                               { false, false, false, true,  true,  100, 92,  wide },
+                               { false, false, false, false, false, 100, 92,  wide },
+                               { false, false, false, false, false, 100, 92,  narrow } };
+        const auto widthOf = [this] (const Fold& f)
+        {
+            return 3 * 36 + 2 * theme::space1 + theme::space4 + f.time + theme::space2 + 80
+                   + (f.tap ? theme::space1 + 40 : 0) + theme::space4
+                   + (f.master ? (f.masterLabel ? 46 : 0) + 100 + theme::space4 : 0)
+                   + toolButtons.size() * (f.tool + 2) + theme::space3 + f.grid + theme::space1 + 56
+                   + 36 + theme::space4 + (f.words ? 64 + theme::space1 : 0) + 64 + theme::space2
+                   + (f.load && showsLoad() ? 140 : 0);
+        };
+        auto fold = folds[std::size (folds) - 1];
+        for (const auto& f : folds)
+            if (widthOf (f) <= top.getWidth()) { fold = f; break; }
+
         recordButton.setBounds (top.removeFromLeft (36));
         top.removeFromLeft (theme::space1);
         playButton.setBounds (top.removeFromLeft (36));
         top.removeFromLeft (theme::space1);
         toStartButton.setBounds (top.removeFromLeft (36));
         top.removeFromLeft (theme::space4);
-        timeLabel.setBounds (top.removeFromLeft (112));
+        timeLabel.setBounds (top.removeFromLeft (fold.time));
         top.removeFromLeft (theme::space2);
-        tempo.setBounds (top.removeFromLeft (84).withSizeKeepingCentre (84, 26));
-        top.removeFromLeft (theme::space1);
-        tapButton.setBounds (top.removeFromLeft (40).withSizeKeepingCentre (40, 26));
+        tempo.setBounds (top.removeFromLeft (80).withSizeKeepingCentre (80, 26));
+        tapButton.setVisible (fold.tap);
+        if (fold.tap)
+        {
+            top.removeFromLeft (theme::space1);
+            tapButton.setBounds (top.removeFromLeft (40).withSizeKeepingCentre (40, 26));
+        }
         top.removeFromLeft (theme::space4);
 
-        masterLabel.setBounds (top.removeFromLeft (46));
-        masterVolume.setBounds (top.removeFromLeft (100).withSizeKeepingCentre (100, 24));
-        top.removeFromLeft (theme::space4);
+        masterLabel.setVisible (fold.master && fold.masterLabel);
+        masterVolume.setVisible (fold.master);
+        if (fold.master)
+        {
+            if (fold.masterLabel)
+                masterLabel.setBounds (top.removeFromLeft (46));
+            masterVolume.setBounds (top.removeFromLeft (100).withSizeKeepingCentre (100, 24));
+            top.removeFromLeft (theme::space4);
+        }
 
         for (auto* b : toolButtons)
         {
-            b->setBounds (top.removeFromLeft (ToolButton::width).withSizeKeepingCentre (ToolButton::width, ToolButton::height));
+            b->setShowsKey (fold.tool == ToolButton::width);
+            b->setBounds (top.removeFromLeft (fold.tool).withSizeKeepingCentre (fold.tool, ToolButton::height));
             top.removeFromLeft (2);
         }
 
         top.removeFromLeft (theme::space3);
-        gridMenu.setBounds (top.removeFromLeft (120).withSizeKeepingCentre (120, 28));
+        gridMenu.setBounds (top.removeFromLeft (fold.grid).withSizeKeepingCentre (fold.grid, 28));
         top.removeFromLeft (theme::space1);
         snapButton.setBounds (top.removeFromLeft (56).withSizeKeepingCentre (56, 28));
 
         settingsButton.setBounds (top.removeFromRight (36));
         top.removeFromRight (theme::space4);
-        latencyWords.setBounds (top.removeFromRight (64));
-        top.removeFromRight (theme::space1);   // the figure and its words read as "6.3 ms round trip"
-        latencyLabel.setBounds (top.removeFromRight (72));
-        top.removeFromRight (theme::space6);
-        if (loadMeter.isVisible())   // hidden unless Settings shows it (owner's list F22)
+        latencyWords.setVisible (fold.words);
+        if (fold.words)
+        {
+            latencyWords.setBounds (top.removeFromRight (64));
+            top.removeFromRight (theme::space1);   // the figure and its words read as "6.3 ms round trip"
+        }
+        latencyLabel.setBounds (top.removeFromRight (64));
+        top.removeFromRight (theme::space2);
+        loadMeter.setVisible (fold.load && showsLoad());   // hidden unless Settings shows it (owner's list F22)
+        if (loadMeter.isVisible())
             loadMeter.setBounds (top.removeFromRight (140).withSizeKeepingCentre (140, 20));
 
         // The panel docks on the left, under the transport; the rest of the window shifts over.

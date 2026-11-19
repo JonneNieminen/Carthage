@@ -150,6 +150,11 @@ namespace carthage::ui
         void askHowClipsFollow (std::vector<editing::BeatPlace> before);
         void askToRenameProject();
 
+        /** App-wide interface size (W38): 75 to 150 %, kept in the settings. */
+        void setUiScale (double);
+        double uiScale();
+        bool showsLoad();
+
         // Toolbar: the tools (icons with their keys), the grid menu and the snap toggle.
         juce::OwnedArray<ToolButton> toolButtons;
         juce::ComboBox gridMenu;

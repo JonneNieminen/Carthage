@@ -54,6 +54,7 @@ namespace carthage::app
 
             // Added after the layouts, so the ids above stay as saved.
             lanesTaller = afterLayouts, lanesShorter,
+            uiLarger, uiSmaller, uiActualSize,
         };
 
         /** Layout slots there can be; Settings chooses how many are offered (F21). */
@@ -74,7 +75,8 @@ namespace carthage::app
                      nudgeLeft, nudgeRight, addMarker, loopSelection, keyboardShortcuts,
                      copyClips, cutClips, pasteClips, sampleBrowser,
                      windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings,
-                     defaultLayout, commandPalette, keepPluginOnTop, lanesTaller, lanesShorter };
+                     defaultLayout, commandPalette, keepPluginOnTop, lanesTaller, lanesShorter,
+                     uiLarger, uiSmaller, uiActualSize };
         }
 
         /** The layout commands, recall then save, slot 1 first. */
@@ -202,6 +204,9 @@ namespace carthage::app
                 case commandPalette:  info.setInfo (juce::String::fromUTF8 ("Find a command\xe2\x80\xa6"), "Type to find any command and run it", "Window", 0); info.addDefaultKeypress ('k', primary); break;
                 case lanesTaller:     info.setInfo ("Taller lanes", "Make every lane taller (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('=', primary | juce::ModifierKeys::altModifier); break;
                 case lanesShorter:    info.setInfo ("Shorter lanes", "Make every lane shorter (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('-', primary | juce::ModifierKeys::altModifier); break;
+                case uiLarger:        info.setInfo ("Larger interface", "Make everything in Carthage larger, up to 150 %", "View", 0); info.addDefaultKeypress ('=', primary); break;
+                case uiSmaller:       info.setInfo ("Smaller interface", "Make everything in Carthage smaller, down to 75 %", "View", 0); info.addDefaultKeypress ('-', primary); break;
+                case uiActualSize:    info.setInfo ("Actual size", "Interface at 100 %", "View", 0); info.addDefaultKeypress ('0', primary); break;
                 case keepPluginOnTop: info.setInfo ("Keep plugin windows on top", "Plugin windows stay above Carthage's own windows", "Plugin", 0); break;
                 case startScreen:
                     info.setInfo ("Start screen", "Recent projects and templates", "File", 0);

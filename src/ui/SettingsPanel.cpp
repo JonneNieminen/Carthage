@@ -136,7 +136,18 @@ namespace carthage::ui
         slots.setTooltip ("How many window layouts the Layouts menu keeps; Cmd+Option+1 to 9 recall them, with Shift to save");
         slots.onChange = [this] { session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("layoutSlots", slots.getSelectedId()); };
 
-        for (auto* c : std::initializer_list<Component*> { &windowsHeading, &slotsLabel, &slots })
+        styleLabel (uiScaleLabel, theme::textMd, theme::muted);
+        uiScaleLabel.setText ("Interface size", dontSendNotification);
+        uiScale.setSliderStyle (Slider::LinearHorizontal);
+        uiScale.setTextBoxStyle (Slider::TextBoxRight, false, 52, 22);
+        uiScale.setRange (75.0, 150.0, 2.5);
+        uiScale.setTextValueSuffix (" %");
+        uiScale.setNumDecimalPlacesToDisplay (0);
+        uiScale.setChangeNotificationOnlyOnRelease (true);   // the whole window rescales: once, on release
+        uiScale.setTooltip ("Everything in Carthage larger or smaller. Cmd+= and Cmd+- step it, Cmd+0 is 100 %.");
+        uiScale.onValueChange = [this] { if (onUiScaleChanged) onUiScaleChanged (uiScale.getValue() / 100.0); };
+
+        for (auto* c : std::initializer_list<Component*> { &windowsHeading, &slotsLabel, &slots, &uiScaleLabel, &uiScale })
             body.addAndMakeVisible (c);
 
         for (auto* c : std::initializer_list<Component*> { &browserHeading, &panelWidthLabel, &panelWidth, &textSizeLabel, &textSize, &playWhileHeld, &fitLoops })
@@ -517,6 +528,7 @@ namespace carthage::ui
 
         heading (windowsHeading);
         row (slotsLabel, slots);
+        row (uiScaleLabel, uiScale);
 
         heading (browserHeading);
         row (panelWidthLabel, panelWidth);

@@ -191,10 +191,13 @@ namespace carthage::ui
 
         // The icon on the left, the key on the right: the key is how the tool is picked.
         auto icon = toolGlyph (glyph);
-        const auto box = area.removeFromLeft (16).withSizeKeepingCentre (16, 16).toFloat();
+        const auto box = (showsKey ? area.removeFromLeft (16) : area).withSizeKeepingCentre (16, 16).toFloat();
         icon.applyTransform (AffineTransform::translation (box.getX(), box.getY()));
         g.setColour (ink);
         g.strokePath (icon, PathStrokeType (1.4f, PathStrokeType::curved, PathStrokeType::rounded));
+
+        if (! showsKey)
+            return;
 
         g.setColour (chosen ? theme::onAccent : theme::muted);
         g.setFont (theme::timeFont (theme::textXs));

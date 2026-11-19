@@ -146,6 +146,11 @@ namespace
             Thread::sleep (1500);
             capture (outDir.getChildFile ("main.png"));
 
+            // The narrowest window Carthage allows: the toolbar folds (W38).
+            onMessageThreadVoid ([this] { content->setSize (960, 780); });
+            capture (outDir.getChildFile ("main-narrow.png"));
+            onMessageThreadVoid ([this] { content->setSize (1280, 780); });
+
             onMessageThreadVoid ([this] { content->getPluginBrowser().setSearch ("amp"); });
             capture (outDir.getChildFile ("browser-search.png"));
             onMessageThreadVoid ([this] { content->getPluginBrowser().setSearch ({});

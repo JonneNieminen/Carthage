@@ -34,6 +34,8 @@ namespace carthage::ui
 
         /** The browser's settings (F19); the window applies them. */
         std::function<void (int)> onPanelWidthChanged;
+        std::function<void (double)> onUiScaleChanged;
+        void showUiScale (double s)   { uiScale.setValue (s * 100.0, juce::dontSendNotification); }
         void showPanelWidth (int w)   { panelWidth.setValue (w, juce::dontSendNotification); }
         std::function<void (float)> onBrowserTextSizeChanged;
         std::function<void (bool)> onPlayWhileHeldChanged;
@@ -64,7 +66,8 @@ namespace carthage::ui
         juce::ToggleButton copySamples { "Copy samples into the project" };
         juce::Label atLaunchLabel, tempoFollowLabel;
         juce::ComboBox atLaunch, tempoFollow;
-        juce::Label windowsHeading, slotsLabel;
+        juce::Label windowsHeading, slotsLabel, uiScaleLabel;
+        ValueSlider uiScale { 100.0 };   // %; double-click returns here
         juce::ComboBox slots;
         juce::Label browserHeading, panelWidthLabel, textSizeLabel;
         ValueSlider panelWidth { 300.0 };   // px; double-click returns here

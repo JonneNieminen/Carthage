@@ -460,8 +460,8 @@ Needs owner:  The owner's next list of features (to be placed on the roadmap), t
 ### Phase 4d — polish, workflow and tooling
 
 Deliver (F22, W38, W39):
-- [ ] App-wide UI size (Settings 75-150 %, Cmd+= / Cmd+- / Cmd+0); rename layouts; Cmd+W on a view's
-      window sends it back
+- [x] App-wide UI size (Settings 75-150 %, Cmd+= / Cmd+- / Cmd+0); the toolbar folds when narrow
+- [ ] Rename layouts; Cmd+W on a view's window sends it back
 - [ ] Tooltips on every tool; Cmd+C copies a showing tooltip, Copy tooltip on right-click
 - [x] Toolbar: icons with their letters, space used well; the CPU bar hidden by default (Settings);
       a master volume slider beside the transport that also takes a typed value

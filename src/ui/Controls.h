@@ -39,14 +39,17 @@ namespace carthage::ui
         void setKeyText (const juce::String& k)  { keyText = k; repaint(); }
         void setChosen (bool on)                 { chosen = on; repaint(); }
 
-        static constexpr int width = 38, height = 28;
+        /** In a narrow toolbar the key is left to the tooltip. */
+        void setShowsKey (bool on)               { showsKey = on; repaint(); }
+
+        static constexpr int width = 38, narrowWidth = 28, height = 28;
 
         void paintButton (juce::Graphics&, bool highlighted, bool down) override;
 
     private:
         Glyph glyph;
         juce::String keyText;
-        bool chosen = false;
+        bool chosen = false, showsKey = true;
     };
 
     /** The border of a panel, to drag (owner's list F22): resize it by dragging, double-click to

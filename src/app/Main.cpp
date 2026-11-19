@@ -84,7 +84,7 @@ namespace carthage::app
                     for (auto id : { commands::addMarker, commands::loopSelection, commands::toggleGrid })
                         m.addCommandItem (&commands, id);
                     m.addSeparator();
-                    for (auto id : { commands::lanesTaller, commands::lanesShorter })
+                    for (auto id : { commands::lanesTaller, commands::lanesShorter, commands::uiLarger, commands::uiSmaller, commands::uiActualSize })
                         m.addCommandItem (&commands, id);
                     break;
                 case 5:
