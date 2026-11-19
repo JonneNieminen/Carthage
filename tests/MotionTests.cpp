@@ -22,10 +22,14 @@ public:
 
     void runTest() override
     {
-        const auto wheel = [] (ui::ValueSlider& slider, juce::ModifierKeys mods, float dx, float dy)
+        // Each event at its own time: JUCE's slider drops a wheel event with the same time as the
+        // one before (it takes it for a duplicate), and two calls can fall in one clock tick.
+        auto when = juce::Time::getCurrentTime();
+        const auto wheel = [&when] (ui::ValueSlider& slider, juce::ModifierKeys mods, float dx, float dy)
         {
+            when += juce::RelativeTime::milliseconds (100);
             const juce::MouseEvent e (juce::Desktop::getInstance().getMainMouseSource(), {}, mods, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                                      &slider, &slider, juce::Time::getCurrentTime(), {}, juce::Time::getCurrentTime(), 0, false);
+                                      &slider, &slider, when, {}, when, 0, false);
             juce::MouseWheelDetails details {};
             details.deltaX = dx;
             details.deltaY = dy;

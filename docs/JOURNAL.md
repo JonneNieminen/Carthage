@@ -227,3 +227,8 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - The background drag tool delivers its press late (partway along the path), so ruler drags looked
   wrong with it; a real press (full-screen control, owner present) placed the region exactly.
 - Open for the owner: a modifier for drawing the region on the lanes (all are taken there).
+- CI caught a flaky wheel test (two events in one clock tick; JUCE's slider drops the second as a
+  duplicate). With its own time per event the test showed a real bug: JUCE reads a sideways wheel
+  as -deltaX, so Shift + wheel on a Mac moved sliders backwards. ValueSlider takes it as the wheel
+  turn it was; the test fails without that.
+- Owner: all 4g checks pass.

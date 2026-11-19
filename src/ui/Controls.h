@@ -149,6 +149,11 @@ namespace carthage::ui
 
             if (e.mods.isShiftDown())
             {
+                // macOS sends a mouse wheel's turn with Shift as a sideways scroll, which JUCE's
+                // slider reads reversed (-deltaX): take it as the wheel turn it was (4f wheel check).
+                if (w.deltaY == 0.0f)
+                    std::swap (w.deltaX, w.deltaY);
+
                 w.deltaX *= 0.1f;
                 w.deltaY *= 0.1f;
             }
