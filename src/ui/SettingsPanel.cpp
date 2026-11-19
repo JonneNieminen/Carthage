@@ -314,6 +314,13 @@ namespace carthage::ui
         loopIn.onChange = rememberLoopback;
 
         measureButton.onClick = [this] { startMeasurement(); };
+
+        testButton.setTooltip ("Tries each buffer size for a few seconds, silently, and recommends settings for this computer. You choose whether to use them.");
+        testButton.onClick = [this] { if (onRunSettingsTest) onRunSettingsTest(); };
+        styleLabel (testHint, theme::textSm, theme::muted);
+        testHint.setText ("About 30 seconds. Your input is not heard while it runs.", dontSendNotification);
+        body.addAndMakeVisible (testButton);
+        body.addAndMakeVisible (testHint);
         useMeasured.onClick = [this]
         {
             session.setMeasuredRoundTrip (useMeasured.getToggleState() && lastMeasurement
@@ -639,7 +646,12 @@ namespace carthage::ui
 
         std::vector<Section> sections;
         sections.push_back ({ &interfaceHeading, { row (inputDeviceLabel, inputDevice), row (outputDeviceLabel, outputDevice),
-                                                   row (rateLabel, rate), row (bufferLabel, buffer) } });
+                                                   row (rateLabel, rate), row (bufferLabel, buffer),
+                                                   Line { { &testButton, &testHint }, rowHeight + 20 + theme::space1, [this] (Rectangle<int> b)
+                                                          {
+                                                              testButton.setBounds (b.removeFromTop (rowHeight).removeFromLeft (150));
+                                                              testHint.setBounds (b.removeFromTop (20));
+                                                          } } } });
         sections.push_back ({ &recordingHeading, { row (formatLabel, format) } });
         sections.push_back ({ &latencyHeading, { row (reportedLabel, reportedValue), row (measuredLabel, measuredValue),
                                                  Line { { &loopHint, &loopOutLabel, &loopOut, &loopInLabel, &loopIn, &measureButton },

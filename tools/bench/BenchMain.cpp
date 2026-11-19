@@ -41,6 +41,7 @@
 
 #include <engine/Editing.h>
 #include <engine/Session.h>
+#include <engine/SettingsTest.h>
 
 #include <iostream>
 #include <map>
@@ -135,6 +136,7 @@ namespace
             else if (args.command == "projects") result = projects();
             else if (args.command == "demo")     result = demo();
             else if (args.command == "samples")  result = samples();
+            else if (args.command == "settings-test") result = settingsTest();
             else say ("unknown command: " + args.command);
 
             onMessageThreadVoid ([this] { session.reset(); });
@@ -311,6 +313,36 @@ namespace
             say (r.wasOk() ? "wrote " + carthage::project::fileIn (out).getFullPathName() + " with " + String (count) + " clips"
                            : r.getErrorMessage());
             return r.wasOk() ? 0 : 1;
+        }
+
+        /** The settings test (W41) on this computer's interface, as the app runs it: silent. */
+        int settingsTest()
+        {
+            say ("Settings test on " + onMessageThread ([this] { return session->describeAudio(); }));
+            WaitableEvent finished;
+            engine::SettingsTest::Recommendation result;
+            std::unique_ptr<engine::SettingsTest> test;
+
+            onMessageThreadVoid ([&]
+            {
+                test = std::make_unique<engine::SettingsTest> (*session);
+                test->start ([] (const String& line) { say ("  " + line); },
+                             [&] (const engine::SettingsTest::Recommendation& r) { result = r; finished.signal(); });
+            });
+
+            finished.wait (120000);
+
+            for (const auto& s : result.steps)
+                say ("  " + String (s.bufferSize).paddedLeft (' ', 5) + " samples: " + String (s.dropouts) + " dropouts, worst block "
+                     + String (roundToInt (s.worstLoad * 100.0f)) + " %" + (s.clean ? " clean" : ""));
+
+            check (result.valid, "a recommendation: " + (result.valid ? String (result.bufferSize) + " samples, " + String (result.sampleRate, 0) + " Hz, "
+                                                                          + String (result.parallelChecks) + " checks at once" : result.reason));
+            check (onMessageThread ([this] { return session->describeAudio(); }).isNotEmpty(), "the device is back as it was: "
+                   + onMessageThread ([this] { return session->describeAudio(); }));
+            onMessageThreadVoid ([&] { test.reset(); });
+            say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
+            return checksFailed == 0 ? 0 : 1;
         }
 
         int projects()

@@ -201,6 +201,13 @@ namespace carthage::engine
         int getBeatShading() const;
         void setBeatShading (int);
 
+        /** How many plugins the scanner checks at the same time (the settings test suggests it). */
+        int getParallelChecks() const;
+        void setParallelChecks (int);
+
+        /** True once, at the first launch: the settings test has not been offered yet (W41). */
+        bool takeFirstSettingsTest();
+
         bool getCheckPluginsAtLaunch() const;
         void setCheckPluginsAtLaunch (bool);
 

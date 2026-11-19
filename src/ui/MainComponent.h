@@ -13,6 +13,7 @@
 
 #include <app/Commands.h>
 #include <engine/Session.h>
+#include <engine/SettingsTest.h>
 
 #include <array>
 #include <map>
@@ -103,6 +104,10 @@ namespace carthage::ui
         void exportLog();
         void saveOrCopy (const juce::String& title, const juce::String& text, const juce::String& fileName);
 
+        /** The settings test (W41): runs silently, then asks Yes/No to use what it recommends.
+            `atFirstLaunch` words the question for a first run. */
+        void runSettingsTest (bool atFirstLaunch);
+
         /** After a crash: the note it left and the log of that run, offered to save or copy. */
         void offerCrashReport (const juce::String& note);
         void askToRenameLayout (int n);
@@ -112,6 +117,8 @@ namespace carthage::ui
 
     private:
         std::unique_ptr<juce::FileChooser> logChooser;   // Export log's Save
+        std::unique_ptr<engine::SettingsTest> settingsTest;
+        void offerRecommendation (const engine::SettingsTest::Recommendation&, bool atFirstLaunch);
 
         // Project notes (W38): a window of their own that follows the project in front.
         class NotesWindow;

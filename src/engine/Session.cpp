@@ -82,6 +82,7 @@ namespace carthage::engine
         library = std::make_unique<PluginLibrary> (folders.pluginCache);
         library->setPlugins (plugins->getScanned());
         pluginScanner = std::make_unique<PluginScanner> (*plugins, scanner);
+        pluginScanner->maxParallel = getParallelChecks();
         pluginScanner->onChange = [this]
         {
             library->setPlugins (plugins->getScanned());
@@ -1263,6 +1264,28 @@ namespace carthage::engine
 
     int Session::getBeatShading() const      { return juce::jlimit (0, 4, engine->getPropertyStorage().getPropertiesFile().getIntValue ("beatShading", 0)); }
     void Session::setBeatShading (int steps) { engine->getPropertyStorage().getPropertiesFile().setValue ("beatShading", juce::jlimit (0, 4, steps)); }
+
+    int Session::getParallelChecks() const
+    {
+        return juce::jlimit (1, 16, engine->getPropertyStorage().getPropertiesFile().getIntValue ("parallelChecks", 4));
+    }
+
+    void Session::setParallelChecks (int n)
+    {
+        engine->getPropertyStorage().getPropertiesFile().setValue ("parallelChecks", juce::jlimit (1, 16, n));
+        pluginScanner->maxParallel = getParallelChecks();
+    }
+
+    bool Session::takeFirstSettingsTest()
+    {
+        auto& props = engine->getPropertyStorage().getPropertiesFile();
+
+        if (props.getBoolValue ("settingsTestOffered", false))
+            return false;
+
+        props.setValue ("settingsTestOffered", true);
+        return true;
+    }
 
     bool Session::getCheckPluginsAtLaunch() const    { return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("checkPluginsAtLaunch", false); }
     void Session::setCheckPluginsAtLaunch (bool on)  { engine->getPropertyStorage().getPropertiesFile().setValue ("checkPluginsAtLaunch", on); }

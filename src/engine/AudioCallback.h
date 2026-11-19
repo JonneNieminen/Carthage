@@ -52,6 +52,10 @@ namespace carthage::engine
         /** Message thread, from the UI's frame timer. Reads and resets the window. */
         Load takeLoad() noexcept;
 
+        /** Message thread. The worst block's load since the last call, for the settings test
+            alone: the toolbar's meter reads its own window (takeLoad). */
+        float takeTestPeak() noexcept   { return testPeak.exchange (0.0f, std::memory_order_relaxed); }
+
         /** Message thread. Peak level of each recorded input since the last read, linear. */
         std::array<float, 2> takeInputPeaks() noexcept;
 
@@ -94,7 +98,7 @@ namespace carthage::engine
         std::atomic<int> lateCallbacks { 0 };
         std::uint64_t lastHostTimeNs = 0;   // audio thread only
         int lastBlockSize = 0;              // audio thread only
-        std::atomic<float> loadSum { 0.0f }, loadPeak { 0.0f };
+        std::atomic<float> loadSum { 0.0f }, loadPeak { 0.0f }, testPeak { 0.0f };
         std::atomic<int> loadCount { 0 };
         std::array<std::atomic<float>, 2> inputPeak {};
 

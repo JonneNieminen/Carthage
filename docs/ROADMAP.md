@@ -485,7 +485,7 @@ Deliver (F22, W38, W39):
 - [x] Timeline (W41): free slice cut with a line, shading steps inside the beat
 - [x] Tick-tock metronome (W41)
 - [x] Settings search, views palette (Cmd+J), Cmd+1 to Cmd+9 for tabs (W41)
-- [ ] Settings test at the first launch and from Settings, with Yes/No (W41)
+- [x] Settings test at the first launch and from Settings, with Yes/No (W41)
 - [ ] Pictures of every window with each project version, in a Restore window (W41)
 
 Exit checks:

@@ -200,6 +200,7 @@ namespace carthage::engine
             loadSum.store (loadSum.load (std::memory_order_relaxed) + load, std::memory_order_relaxed);
             loadCount.fetch_add (1, std::memory_order_relaxed);
             storeMax (loadPeak, load);
+            storeMax (testPeak, load);
         }
 
         // A missed deadline shows up as a gap between blocks longer than the previous block lasted.

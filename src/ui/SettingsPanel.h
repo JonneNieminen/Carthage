@@ -34,6 +34,10 @@ namespace carthage::ui
 
         /** The browser's settings (F19); the window applies them. */
         std::function<void (int)> onPanelWidthChanged;
+
+        /** "Test this computer" (W41); the window runs the test and says when it ends. */
+        std::function<void()> onRunSettingsTest;
+        void setTestRunning (bool running)   { testButton.setEnabled (! running); testButton.setButtonText (running ? juce::String::fromUTF8 ("Testing\xe2\x80\xa6") : juce::String ("Test this computer")); }
         std::function<void (double)> onUiScaleChanged;
         void showUiScale (double s)   { uiScale.setValue (s * 100.0, juce::dontSendNotification); }
         void showPanelWidth (int w)   { panelWidth.setValue (w, juce::dontSendNotification); }
@@ -104,7 +108,8 @@ namespace carthage::ui
         IconButton closeButton { IconButton::Glyph::close };
         IconButton popButton { IconButton::Glyph::popOut };
 
-        juce::Label inputDeviceLabel, outputDeviceLabel, rateLabel, bufferLabel, formatLabel;
+        juce::Label inputDeviceLabel, outputDeviceLabel, rateLabel, bufferLabel, formatLabel, testHint;
+        juce::TextButton testButton { "Test this computer" };
         juce::ComboBox inputDevice, outputDevice, rate, buffer, format;
 
         juce::Label reportedLabel, reportedValue, measuredLabel, measuredValue, loopOutLabel, loopInLabel, loopHint;

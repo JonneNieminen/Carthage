@@ -548,6 +548,7 @@ namespace carthage::ui
         settings.onPlayWhileHeldChanged = [this] (bool held) { samples.setPlayWhileHeld (held); };
         settings.onShowLoadChanged = [this] (bool) { resized(); };
         settings.onBeatShadingChanged = [this] { timeline.gridChanged(); };
+        settings.onRunSettingsTest = [this] { runSettingsTest (false); };
         showPanel (panelShowsSamples, false);
 
         // Views in their own windows (F21): a pop-out button on each, the way back on its window.
@@ -893,6 +894,80 @@ namespace carthage::ui
     {
         if (notesWindow != nullptr)
             notesWindow->refresh();
+    }
+
+    void MainComponent::runSettingsTest (bool atFirstLaunch)
+    {
+        if (settingsTest != nullptr && settingsTest->isRunning())
+            return;
+
+        settingsTest = std::make_unique<engine::SettingsTest> (session);
+        setStatus ("Testing this computer's audio settings, silently");
+        settings.setTestRunning (true);
+
+        settingsTest->start ([this] (const String& line) { setStatus ("Settings test: " + line); },
+                             [safe = SafePointer<MainComponent> (this), atFirstLaunch] (const engine::SettingsTest::Recommendation& r)
+        {
+            if (safe == nullptr)
+                return;
+
+            safe->settings.setTestRunning (false);
+            safe->settings.refresh();
+
+            if (! r.valid)
+            {
+                safe->setStatus ("Settings test: " + r.reason, theme::warn);
+                return;
+            }
+
+            safe->setStatus ("Settings test done");
+            safe->offerRecommendation (r, atFirstLaunch);
+        });
+    }
+
+    void MainComponent::offerRecommendation (const engine::SettingsTest::Recommendation& r, bool atFirstLaunch)
+    {
+        auto& adm = session.getDeviceManager();
+        const auto current = adm.getAudioDeviceSetup();
+        const auto ms = [] (int samples, double rate) { return String (samples * 1000.0 / rate, 1) + " ms"; };
+
+        StringArray lines;
+        lines.add ("Buffer size: " + String (r.bufferSize) + " samples, " + ms (r.bufferSize, r.sampleRate)
+                   + (r.bufferSize == current.bufferSize ? String (" (as now)") : " (now " + String (current.bufferSize) + ")"));
+        lines.add ("Sample rate: " + String (r.sampleRate / 1000.0, 1) + " kHz" + (std::abs (r.sampleRate - current.sampleRate) < 1.0 ? String (" (as now)") : String()));
+        lines.add ("Plugins checked at the same time: " + String (r.parallelChecks) + (r.parallelChecks == session.getParallelChecks() ? String (" (as now)") : String()));
+
+        auto* w = new AlertWindow (atFirstLaunch ? "Carthage tested this computer" : "Recommended settings",
+                                   String (atFirstLaunch ? "To start with settings that suit this computer, Carthage tried your interface silently. " : String())
+                                       + "It recommends:\n\n" + lines.joinIntoString ("\n") + "\n\n" + r.reason
+                                       + "\n\nYou can run the test again from Settings > Interface.",
+                                   MessageBoxIconType::NoIcon, this);
+        w->addButton ("Use these", 1, KeyPress (KeyPress::returnKey));
+        w->addButton ("Keep mine", 0, KeyPress (KeyPress::escapeKey));
+
+        w->enterModalState (true, ModalCallbackFunction::create ([this, r] (int choice)
+        {
+            if (choice != 1)
+            {
+                log::info ("Settings test: recommendation declined");
+                return;
+            }
+
+            auto& devices = session.getDeviceManager();
+            auto setup = devices.getAudioDeviceSetup();
+            setup.bufferSize = r.bufferSize;
+            setup.sampleRate = r.sampleRate;
+
+            if (auto err = devices.setAudioDeviceSetup (setup, true); err.isNotEmpty())
+                setStatus ("The interface did not accept that: " + err, theme::warn);
+            else
+                setStatus ("Using the recommended settings");
+
+            session.setParallelChecks (r.parallelChecks);
+            log::info ("Settings test: recommendation used (" + String (r.bufferSize) + " samples, " + String (r.sampleRate, 0) + " Hz, "
+                       + String (r.parallelChecks) + " checks at once)");
+            settings.refresh();
+        }), true);
     }
 
     void MainComponent::exportLog()

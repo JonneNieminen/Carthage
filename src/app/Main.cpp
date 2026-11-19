@@ -297,6 +297,10 @@ namespace carthage::app
             if (const auto note = carthage::log::takeCrashNote(); note.isNotEmpty())
                 content.offerCrashReport (note);
 
+            // The settings test runs once, at the first launch, after the interface has settled.
+            else if (session->takeFirstSettingsTest())
+                Timer::callAfterDelay (3000, [this] { if (auto* c = this->content()) c->runSettingsTest (true); });
+
             // A project named at launch opens; else a crash's copy is offered; else what Settings
             // says: the start screen (F20), the last session (F21), or the empty project.
             using AtLaunch = engine::Session::AtLaunch;
