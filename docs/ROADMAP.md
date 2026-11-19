@@ -583,11 +583,12 @@ Needs owner:  Confirm the rising-line bend; then the go-ahead for 4f (the design
 ### Phase 4f — the design pass
 
 Deliver (F22, W38):
-- [ ] A refinement of the whole UI: type (a bundled open-licence typeface, once the owner approves the
-      choice), icons, spacing, motion that answers actions; same theme and density
-- [ ] The sample editor's layout: its buttons and sliders placed with care (owner, 4e)
-- [ ] Carried from 4d: the owner's wheel check (scroll, Shift, Cmd and Option with a mouse), and the
-      longer frame hitch when playback starts (measure again; fix if it holds)
+- [x] A refinement of the whole UI: type (Barlow, Barlow Semi Condensed, IBM Plex Mono, embedded;
+      W45), spacing, motion that answers actions (Reduce motion respected); same theme and density
+- [x] The sample editor's layout: its buttons and sliders placed with care (owner, 4e)
+- [ ] Carried from 4d: the owner's wheel check (scroll, Shift, Cmd and Option with a mouse)
+- [x] Carried from 4d: the frame hitch when playback starts, measured again (2026-11-19, the
+      300-clip demo at 120 Hz, three starts): no late frame, worst 8.34 ms. It does not hold.
 
 Exit checks:
 - [ ] Before and after snapshots of every screen; owner's approval

@@ -14,8 +14,9 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - **4f so far:** fonts embedded with their licences; dense face on lane rows, Plex Mono figures in
   value boxes; sample editor in the agreed layout; motion (switches slide, tools cross-fade, the
   sample editor rises in and fades out, Settings slides) with Reduce motion and playback
-  respected. **Next:** measure the playback-start hitch, the owner's 4f checks (with the deferred
-  mouse-wheel check), the 4f report.
+  respected. Playback-start hitch measured again: none (worst 8.34 ms, 120 Hz, three starts).
+  **Next:** the owner's 4f checks (f-* on the checks page, with the deferred mouse-wheel check),
+  then the 4f report.
 - **Rule learnt:** run the full clang-tidy pass (AGENTS.md "Commands") before every push; CI's
   tidy job failed twice on new test files that were not re-checked.
 - **In hand, not finished:**
@@ -212,5 +213,6 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Motion: `ui/Motion.h` (Host, allowedFor, Tween on JUCE's juce_animation, display-synced),
   `ui/platform/Motion_mac.mm` / `Motion_win.cpp` read the system's reduce-motion setting.
   `ui::Switch` replaces every `juce::ToggleButton`. MotionTests cover the rules.
-- An older Carthage was running when I wanted to try the motion live; I left it alone.
+- The owner let me quit the older Carthage; in the new build the editor opens in place and the
+  Reverse switch lands right both ways. 4f checks (f-*) are on the checks page.
 
