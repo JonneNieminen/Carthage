@@ -1127,6 +1127,21 @@ namespace carthage::engine
         engine->getPropertyStorage().getPropertiesFile().setValue ("fitLoopsToTempo", fit);
     }
 
+    std::optional<editing::TempoFollow> Session::getTempoFollow() const
+    {
+        const auto v = engine->getPropertyStorage().getPropertiesFile().getIntValue ("tempoFollow", 0);
+
+        if (v < 1 || v > 3)
+            return std::nullopt;
+
+        return static_cast<editing::TempoFollow> (v - 1);
+    }
+
+    void Session::setTempoFollow (std::optional<editing::TempoFollow> how)
+    {
+        engine->getPropertyStorage().getPropertiesFile().setValue ("tempoFollow", how ? 1 + static_cast<int> (*how) : 0);
+    }
+
     bool Session::isOpen (const Project* p) const
     {
         return std::any_of (projects.begin(), projects.end(), [p] (const auto& q) { return q.get() == p; });

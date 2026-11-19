@@ -138,6 +138,15 @@ namespace carthage::ui
         time::TapTempo tapTempo;
         void refreshTempo();
         void setTempo (double bpm);
+
+        // A tempo change is one gesture (a drag, a typed figure, taps, wheel steps): the clips'
+        // beats are taken at its start, and when it settles the clips follow as Settings says or
+        // as the person answers (W38).
+        std::optional<std::vector<editing::BeatPlace>> tempoBefore;
+        int tempoChanges = 0;
+        juce::ToggleButton rememberTempoFollow { "Remember this choice (Settings can change it)" };   // outlives the question's window
+        void tempoSettled();
+        void askHowClipsFollow (std::vector<editing::BeatPlace> before);
         void askToRenameProject();
 
         // Toolbar: the tools (icons with their keys), the grid menu and the snap toggle.

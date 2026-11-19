@@ -352,6 +352,69 @@ namespace carthage::editing
         crossfade (c);
     }
 
+    std::vector<BeatPlace> placesInBeats (Edit& edit)
+    {
+        std::vector<BeatPlace> places;
+
+        for (auto* lane : lanes (edit))
+            for (auto* c : lane->getClips())
+            {
+                const auto* audio = dynamic_cast<AudioClipBase*> (c);
+                places.push_back ({ c->itemID, startBeat (*c), endBeat (*c), audio != nullptr && audio->getAutoTempo() });
+            }
+
+        return places;
+    }
+
+    void setTempo (Edit& edit, double bpm)
+    {
+        auto& first = *edit.tempoSequence.getTempo (0);
+        first.set (first.getStartBeat(), bpm, first.getCurve(), false);
+    }
+
+    int followTempo (Edit& edit, const std::vector<BeatPlace>& before, TempoFollow how)
+    {
+        auto& t = edit.tempoSequence;
+        int changed = 0;
+
+        for (const auto& place : before)
+        {
+            auto* c = findClipForID (edit, place.clip);
+
+            if (c == nullptr || (how == TempoFollow::leaveInTime && ! place.fitted))
+                continue;
+
+            const auto start = t.toTime (BeatPosition::fromBeats (place.start));
+            const auto end = t.toTime (BeatPosition::fromBeats (place.end));
+            const auto oldLength = c->getPosition().getLength().inSeconds();
+            const auto newLength = (end - start).inSeconds();
+
+            if (std::abs ((c->getPosition().getStart() - start).inSeconds()) < 1.0e-9
+                 && (how == TempoFollow::moveWithBeat || std::abs (oldLength - newLength) < 1.0e-9))
+                continue;   // already there
+
+            c->setStart (start, false, true);   // moves it, keeping its length
+
+            if (place.fitted)
+            {
+                c->setEnd (end, true);   // a fitted loop stretches itself to its beats
+            }
+            else if (how == TempoFollow::stretch && oldLength > 0.0 && newLength > 0.0)
+            {
+                if (auto* audio = dynamic_cast<AudioClipBase*> (c); audio != nullptr && audio->getTimeStretchMode() == TimeStretcher::disabled)
+                    audio->setTimeStretchMode (TimeStretcher::defaultMode);
+
+                c->setSpeedRatio (c->getSpeedRatio() * oldLength / newLength);
+                c->setEnd (end, true);
+            }
+
+            crossfade (*c);
+            ++changed;
+        }
+
+        return changed;
+    }
+
     void slip (Clip& c, double deltaBeats)
     {
         const auto seconds = (timeAt (c, startBeat (c) + std::abs (deltaBeats)) - c.getPosition().getStart()).inSeconds();

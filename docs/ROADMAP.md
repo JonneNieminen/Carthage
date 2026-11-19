@@ -466,7 +466,7 @@ Deliver (F22, W38, W39):
 - [x] Toolbar: icons with their letters, space used well; the CPU bar hidden by default (Settings);
       a master volume slider beside the transport that also takes a typed value
 - [x] Lanes: Lane 1, 2… renamable; add, delete, mute and solo from the lane header
-- [ ] Projects renamed from their tabs (asks first); tap tempo; a question when the tempo changes
+- [x] Projects renamed from their tabs (asks first); tap tempo; a question when the tempo changes
       (stretch, move with the beat, leave in time; remember the choice)
 - [ ] Panels resizable by their border, double-click fits the longest text
 - [ ] Wheel: scroll on both axes and zoom time and lane height in every grid; lane-height shortcut

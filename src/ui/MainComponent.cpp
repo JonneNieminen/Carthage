@@ -563,13 +563,12 @@ namespace carthage::ui
         tempo.setSkewFactorFromMidPoint (120.0);
         tempo.setTooltip ("The project's tempo. Drag, scroll (Shift for fine steps), or click and type; double-click returns to 120.");
         tempo.onValueChange = [this] { setTempo (tempo.getValue()); };
-        tempo.onDragStart = [this] { session.getEdit().getUndoManager().beginNewTransaction ("Change tempo"); };
+        tempo.onDragEnd = [this] { tempoSettled(); };
         tapButton.setTooltip ("Tap in time, at least twice, to set the tempo");
         tapButton.onClick = [this]
         {
             if (const auto bpm = tapTempo.tap (Time::getMillisecondCounterHiRes() / 1000.0))
             {
-                session.getEdit().getUndoManager().beginNewTransaction ("Tap tempo");
                 tempo.setValue (std::round (*bpm * 10.0) / 10.0);   // to a tenth: taps are not finer
             }
         };
@@ -627,6 +626,8 @@ namespace carthage::ui
             timeline.projectChanged();
             refreshToolbar();
             refreshMasterVolume();
+            tempoBefore.reset();   // a change in progress belonged to the other project
+            ++tempoChanges;
             refreshTempo();
             signalRow->refreshPlugin();
             signalRow->setMessage ({}, false);
@@ -997,13 +998,79 @@ namespace carthage::ui
 
     void MainComponent::setTempo (double bpm)
     {
-        auto* first = session.getEdit().tempoSequence.getTempo (0);
+        auto& edit = session.getEdit();
 
-        if (std::abs (first->getBpm() - bpm) > 1.0e-6)
+        if (std::abs (edit.tempoSequence.getTempo (0)->getBpm() - bpm) < 1.0e-6)
+            return;
+
+        if (! tempoBefore)
         {
-            first->setBpm (bpm);
-            timeline.gridChanged();
+            edit.getUndoManager().beginNewTransaction ("Change tempo");
+            tempoBefore = editing::placesInBeats (edit);
         }
+
+        editing::setTempo (edit, bpm);
+        editing::followTempo (edit, *tempoBefore, editing::TempoFollow::leaveInTime);   // fitted loops keep their beats
+        timeline.gridChanged();
+
+        // Settles after a short pause (wheel steps, taps); a drag settles when it ends.
+        const auto change = ++tempoChanges;
+        Timer::callAfterDelay (800, [safe = SafePointer<MainComponent> (this), change]
+        {
+            if (safe != nullptr && change == safe->tempoChanges && ! safe->tempo.isMouseButtonDown())
+                safe->tempoSettled();
+        });
+    }
+
+    void MainComponent::tempoSettled()
+    {
+        if (! tempoBefore)
+            return;
+
+        auto before = std::move (*tempoBefore);
+        tempoBefore.reset();
+
+        if (std::none_of (before.begin(), before.end(), [] (const auto& p) { return ! p.fitted; }))
+            return;   // no clips, or only fitted loops, which have followed already
+
+        if (const auto how = session.getTempoFollow())
+        {
+            editing::followTempo (session.getEdit(), before, *how);
+            timeline.gridChanged();
+            return;
+        }
+
+        askHowClipsFollow (std::move (before));
+    }
+
+    void MainComponent::askHowClipsFollow (std::vector<editing::BeatPlace> before)
+    {
+        auto* w = new AlertWindow ("The tempo is now " + String (tempo.getValue(), 2) + " bpm",
+                                   "What should the clips already on the lanes do?",
+                                   MessageBoxIconType::NoIcon, this);
+        rememberTempoFollow.setToggleState (false, dontSendNotification);
+        rememberTempoFollow.setSize (320, 24);
+        w->addCustomComponent (&rememberTempoFollow);
+        w->addButton ("Stretch with the beat", 3);
+        w->addButton ("Move with the beat", 2);
+        w->addButton ("Stay in time", 1, KeyPress (KeyPress::escapeKey));
+
+        auto* edit = &session.getEdit();
+        w->enterModalState (true, ModalCallbackFunction::create ([this, edit, before = std::move (before)] (int choice)
+        {
+            const auto how = static_cast<editing::TempoFollow> (std::max (1, choice) - 1);
+
+            if (rememberTempoFollow.getToggleState())
+                session.setTempoFollow (how);
+
+            // The project may have changed behind the question; then its clips are not these.
+            if (edit == &session.getEdit())
+            {
+                editing::followTempo (*edit, before, how);
+                timeline.gridChanged();
+                settings.refresh();
+            }
+        }), true);
     }
 
     void MainComponent::refreshMasterVolume()
@@ -1224,6 +1291,10 @@ namespace carthage::ui
 
         const auto position = session.getPositionSeconds();
         timeline.setPlayhead (position, recordingFrom);
+
+        // Undo and redo can change the tempo; follow them unless the figure is being changed.
+        if (! tempoBefore && ! tempo.isMouseButtonDown() && ! tempo.hasKeyboardFocus (true))
+            refreshTempo();
 
         const auto whole = static_cast<int> (position);
         const auto ms = static_cast<int> ((position - whole) * 1000.0);

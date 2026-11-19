@@ -2,6 +2,8 @@
 
 #include <tracktion_engine/tracktion_engine.h>
 
+#include <vector>
+
 namespace carthage::editing
 {
     /** Every timeline edit, as plain functions on the edit model (AGENTS.md, "Model and editing").
@@ -35,6 +37,23 @@ namespace carthage::editing
     /** Makes an audio clip of a loop at `bpm` follow the project's tempo (W30's option): its
         content is time-stretched, keeping its pitch, and it keeps its length in beats. */
     void fitToTempo (tracktion::Clip&, double bpm);
+
+    /** What happens to clips when the tempo changes (W38, asked each time unless remembered):
+        they keep their place in seconds, move with the beat at their own speed, or stretch with
+        the beat, keeping their pitch. Fitted loops (auto-tempo) always follow the beat. */
+    enum class TempoFollow { leaveInTime, moveWithBeat, stretch };
+
+    /** Sets the project's tempo with every clip left where it is in seconds (Tracktion's own
+        setBpm moves them); followTempo then does what the person chose. */
+    void setTempo (tracktion::Edit&, double bpm);
+
+    /** Where every lane clip sits in beats, taken before the tempo changes. */
+    struct BeatPlace { tracktion::EditItemID clip; double start = 0.0, end = 0.0; bool fitted = false; };
+    std::vector<BeatPlace> placesInBeats (tracktion::Edit&);
+
+    /** After a tempo change: puts the clips taken in `before` back on their beats, as `how`
+        says. Returns how many clips changed. */
+    int followTempo (tracktion::Edit&, const std::vector<BeatPlace>& before, TempoFollow how);
 
     /** Slides the content inside the clip; the clip stays put (Cmd/Ctrl drag). */
     void slip (tracktion::Clip&, double deltaBeats);

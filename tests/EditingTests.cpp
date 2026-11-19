@@ -233,6 +233,49 @@ public:
             expect (editing::insertFile (*lanes[1], folder.getChildFile ("missing.wav"), 0.0) == nullptr, "a missing file adds nothing");
         }
 
+        beginTest ("A tempo change: clips stay in time, move with the beat, or stretch with it (W38)");
+        {
+            const auto run = [&] (editing::TempoFollow how, auto check)
+            {
+                editing::setTempo (*edit, 120.0);
+                auto* c = editing::insertFile (*lanes[1], audio, 4.0);   // 4 s at beat 4 (2 s): beats 4 to 12
+                const auto before = editing::placesInBeats (*edit);
+                editing::setTempo (*edit, 60.0);
+                editing::followTempo (*edit, before, how);
+                check (*c);
+                editing::remove ({ c });
+            };
+
+            run (editing::TempoFollow::leaveInTime, [&] (tracktion::Clip& c)
+            {
+                near (c.getPosition().getStart().inSeconds(), 2.0, "leave: same second");
+                near (c.getPosition().getLength().inSeconds(), 4.0, "leave: same length");
+            });
+            run (editing::TempoFollow::moveWithBeat, [&] (tracktion::Clip& c)
+            {
+                near (editing::startBeat (c), 4.0, "move: same beat");
+                near (c.getPosition().getLength().inSeconds(), 4.0, "move: same length in seconds");
+            });
+            run (editing::TempoFollow::stretch, [&] (tracktion::Clip& c)
+            {
+                near (editing::startBeat (c), 4.0, "stretch: same beat");
+                near (editing::endBeat (c), 12.0, "stretch: same length in beats");
+                near (c.getSpeedRatio(), 0.5, "plays at half speed, time-stretched");
+            });
+            editing::setTempo (*edit, 120.0);
+
+            // A fitted loop follows the beat whatever was chosen.
+            auto* loop = editing::insertFile (*lanes[1], audio, 4.0);
+            editing::fitToTempo (*loop, 120.0);   // 4 s at 120 bpm: 8 beats
+            const auto before = editing::placesInBeats (*edit);
+            editing::setTempo (*edit, 60.0);
+            editing::followTempo (*edit, before, editing::TempoFollow::leaveInTime);
+            near (editing::startBeat (*loop), 4.0, "the loop stays on its beat");
+            near (editing::endBeat (*loop), 12.0, "and keeps its 8 beats");
+            editing::remove ({ loop });
+            editing::setTempo (*edit, 120.0);
+        }
+
         beginTest ("Lanes: named Lane N; adding, renaming and deleting are undo steps (W38)");
         {
             lanes = editing::lanes (*edit);

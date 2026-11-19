@@ -154,7 +154,20 @@ namespace carthage::ui
             session.setAtLaunch (atLaunch.getSelectedId() == 2 ? A::lastSession : atLaunch.getSelectedId() == 3 ? A::emptyProject : A::startScreen);
         };
 
-        for (auto* c : std::initializer_list<Component*> { &projectsHeading, &atLaunchLabel, &atLaunch, &copySamples, &copySamplesHint, &versionLabel, &versionValue, &checkNow, &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
+        styleLabel (tempoFollowLabel, theme::textMd, theme::muted);
+        tempoFollowLabel.setText ("Tempo changes", dontSendNotification);
+        tempoFollow.addItem ("Ask each time", 1);
+        tempoFollow.addItem ("Clips stay in time", 2);
+        tempoFollow.addItem ("Clips move with the beat", 3);
+        tempoFollow.addItem ("Clips stretch with the beat", 4);
+        tempoFollow.setTooltip ("What clips do when you change the tempo. Fitted loops always follow the beat.");
+        tempoFollow.onChange = [this]
+        {
+            const auto id = tempoFollow.getSelectedId();
+            session.setTempoFollow (id <= 1 ? std::nullopt : std::optional (static_cast<editing::TempoFollow> (id - 2)));
+        };
+
+        for (auto* c : std::initializer_list<Component*> { &projectsHeading, &atLaunchLabel, &atLaunch, &tempoFollowLabel, &tempoFollow, &copySamples, &copySamplesHint, &versionLabel, &versionValue, &checkNow, &updatesHeading, &updatesHint, &betaUpdates, &interfaceHeading, &recordingHeading,
                                                            &latencyHeading, &loadHeading, &inputDeviceLabel, &outputDeviceLabel,
                                                            &rateLabel, &bufferLabel, &formatLabel, &reportedLabel, &reportedValue,
                                                            &measuredLabel, &measuredValue, &loopOutLabel, &loopInLabel, &loopHint,
@@ -246,6 +259,8 @@ namespace carthage::ui
     void SettingsPanel::refresh()
     {
         atLaunch.setSelectedId (1 + static_cast<int> (session.getAtLaunch()), dontSendNotification);
+        const auto follow = session.getTempoFollow();
+        tempoFollow.setSelectedId (follow ? 2 + static_cast<int> (*follow) : 1, dontSendNotification);
 
         auto& adm = session.getDeviceManager();
         const auto setup = adm.getAudioDeviceSetup();
@@ -496,6 +511,7 @@ namespace carthage::ui
 
         heading (projectsHeading);
         row (atLaunchLabel, atLaunch);
+        row (tempoFollowLabel, tempoFollow);
         copySamples.setBounds (r.removeFromTop (rowHeight));
         copySamplesHint.setBounds (r.removeFromTop (50));
 

@@ -2,6 +2,7 @@
 
 #include "AudioCallback.h"
 #include "Autosave.h"
+#include "Editing.h"
 #include "LatencyProbe.h"
 #include "PluginLibrary.h"
 #include "PluginScan.h"
@@ -169,6 +170,10 @@ namespace carthage::engine
         /** Settings: a dropped loop whose tempo is known follows the project's tempo (W30). */
         bool getFitLoopsToTempo() const;
         void setFitLoopsToTempo (bool);
+
+        /** Settings: what clips do when the tempo changes (W38); nothing means ask each time. */
+        std::optional<editing::TempoFollow> getTempoFollow() const;
+        void setTempoFollow (std::optional<editing::TempoFollow>);
 
         /** Writes a copy of the front project into `folder` (with its recordings and samples) and
             carries on in the original: Save as template. */
