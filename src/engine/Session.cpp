@@ -103,9 +103,9 @@ namespace carthage::engine
         };
 
         // The metronome's sound, written afresh each launch (a few kB), so a new build's sounds
-        // replace the old files. A custom file that has gone falls back to the wooden click.
+        // replace the old files. A custom file that has gone falls back to the tick-tock.
         if (setMetronomeSound (getMetronomeSound(), getMetronomeCustomFile()).failed())
-            setMetronomeSound (metronome::Sound::wood);
+            setMetronomeSound (metronome::Sound::tickTock);
 
         sampleLibrary = std::make_unique<SampleLibrary> (folders.settings);
         sampleAnalyser = std::make_unique<SampleAnalyser> (*sampleLibrary);

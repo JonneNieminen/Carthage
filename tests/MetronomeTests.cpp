@@ -1,5 +1,7 @@
 #include <engine/Metronome.h>
 
+#include <juce_dsp/juce_dsp.h>
+
 using namespace carthage;
 
 namespace
@@ -19,7 +21,7 @@ public:
     {
         using metronome::Sound;
 
-        for (auto sound : { Sound::wood, Sound::hiHat, Sound::cowbell })
+        for (auto sound : { Sound::tickTock, Sound::hiHat, Sound::cowbell })
         {
             beginTest ("Sound " + juce::String (static_cast<int> (sound)) + ": short, the accent louder, the same each time");
 
@@ -36,6 +38,28 @@ public:
             for (int i = 0; i < again.getNumSamples(); ++i)
                 same = same && again.getSample (0, i) == accent.getSample (0, i);
             expect (same, "deterministic");
+        }
+
+        beginTest ("The tick-tock does not sting: almost all its energy is below 2.5 kHz (W41)");
+        {
+            for (bool accent : { true, false })
+            {
+                const auto b = metronome::synthesize (Sound::tickTock, accent, 48000.0);
+                constexpr int order = 13, size = 1 << order;   // 8192 points: 5.9 Hz per bin
+                juce::dsp::FFT fft (order);
+                std::vector<float> data (2 * size, 0.0f);
+                std::copy_n (b.getReadPointer (0), std::min (size, b.getNumSamples()), data.begin());
+                fft.performFrequencyOnlyForwardTransform (data.data());
+
+                double low = 0.0, high = 0.0;
+                for (int k = 1; k < size / 2; ++k)
+                {
+                    const auto energy = static_cast<double> (data[static_cast<size_t> (k)]) * data[static_cast<size_t> (k)];
+                    (k * 48000.0 / size < 2500.0 ? low : high) += energy;
+                }
+
+                expectLessThan (high / (low + high), 0.05, accent ? "the tock" : "the tick");
+            }
         }
 
         beginTest ("The click track is pointed at the written files; a file with no sound changes nothing");

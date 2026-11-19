@@ -8,10 +8,10 @@ namespace carthage::metronome
         Tracktion's click track plays them: it reads two WAV files, one for the first beat of a
         bar (the accent) and one for the other beats, so Carthage writes its sounds as WAV files
         into its own folder and points the click track at them. */
-    enum class Sound { wood, hiHat, cowbell, custom };
+    enum class Sound { tickTock, hiHat, cowbell, custom };   // saved by number: keep the order
 
     /** A click made from nothing but maths, so it needs no bundled files: short (under 0.3 s),
-        mono, the accent louder and a little brighter. The same every time (fixed noise seed). */
+        mono, the accent louder (the tick-tock's also deeper). The same every time (fixed noise seed). */
     juce::AudioBuffer<float> synthesize (Sound, bool accent, double sampleRate);
 
     /** Writes the two click files for `sound` into `folder` and points the engine's click track

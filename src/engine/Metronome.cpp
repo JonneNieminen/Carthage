@@ -10,14 +10,50 @@ namespace carthage::metronome
     {
         constexpr double twoPi = 2.0 * std::numbers::pi;
 
-        /** A wooden block: two damped partials that a wood block rings at, and a short knock. */
-        float wood (double t, bool accent, juce::Random& noise)
+        /** A band-pass filter (RBJ), for noise with a pitch to it: a knock rather than a hiss. */
+        struct BandPass
         {
-            const auto f = accent ? 2100.0 : 1650.0;
-            const auto ring = std::exp (-t / 0.018) * (0.7 * std::sin (twoPi * f * t) + 0.3 * std::sin (twoPi * f * 2.76 * t));
-            const auto knock = std::exp (-t / 0.0015) * (noise.nextDouble() * 2.0 - 1.0);
-            return static_cast<float> (ring + 0.35 * knock);
-        }
+            BandPass (double f, double q, double rate)
+            {
+                const auto w = twoPi * f / rate, alpha = std::sin (w) / (2.0 * q), a0 = 1.0 + alpha;
+                b0 = alpha / a0;
+                b2 = -alpha / a0;
+                a1 = -2.0 * std::cos (w) / a0;
+                a2 = (1.0 - alpha) / a0;
+            }
+
+            double next (double x)
+            {
+                const auto y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
+                x2 = x1; x1 = x; y2 = y1; y1 = y;
+                return y;
+            }
+
+            double b0 = 0, b2 = 0, a1 = 0, a2 = 0, x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+        };
+
+        /** Tick-tock (W41): like a car's indicator relay. The first beat is a deeper wooden tock,
+            the others a dry tick. Everything sits below about 2 kHz, where a click does not sting:
+            decaying sines, and a short knock of band-passed noise. */
+        struct TickTock
+        {
+            TickTock (bool isAccent, double rate) : accent (isAccent), knock (isAccent ? 900.0 : 1600.0, isAccent ? 3.0 : 4.0, rate) {}
+
+            float next (double t, juce::Random& noise)
+            {
+                const auto attack = std::min (1.0, t / 0.002);
+                const auto partial = [t, attack] (double f, double decay, double gain) { return gain * attack * std::exp (-t / decay) * std::sin (twoPi * f * t); };
+                const auto n = knock.next (noise.nextDouble() * 2.0 - 1.0);
+
+                if (accent)
+                    return static_cast<float> (partial (620.0, 0.022, 0.42) + partial (1240.0, 0.010, 0.10) + 0.20 * 4.0 * n * std::exp (-t / 0.004));
+
+                return static_cast<float> (partial (1150.0, 0.012, 0.26) + 0.14 * 4.0 * n * std::exp (-t / 0.003));
+            }
+
+            bool accent;
+            BandPass knock;
+        };
 
         /** A closed hi-hat: bright noise (differenced twice, which tilts it high), decaying fast. */
         struct HiHat
@@ -76,10 +112,11 @@ namespace carthage::metronome
 
     juce::AudioBuffer<float> synthesize (Sound sound, bool accent, double sampleRate)
     {
-        const auto seconds = sound == Sound::cowbell ? 0.28 : sound == Sound::hiHat ? 0.2 : 0.12;
+        const auto seconds = sound == Sound::cowbell ? 0.28 : sound == Sound::hiHat ? 0.2 : 0.15;
         juce::AudioBuffer<float> b (1, static_cast<int> (seconds * sampleRate));
         juce::Random noise (accent ? 7 : 3);
         HiHat hat;
+        TickTock tickTock (accent, sampleRate);
 
         for (int i = 0; i < b.getNumSamples(); ++i)
         {
@@ -88,7 +125,7 @@ namespace carthage::metronome
 
             switch (sound)
             {
-                case Sound::wood:     v = wood (t, accent, noise); break;
+                case Sound::tickTock: v = tickTock.next (t, noise); break;
                 case Sound::hiHat:    v = hat.next (t, accent, noise); break;
                 case Sound::cowbell:  v = cowbell (t, accent); break;
                 case Sound::custom:   break;
@@ -139,7 +176,7 @@ namespace carthage::metronome
             return juce::Result::ok();
         }
 
-        const auto name = sound == Sound::wood ? juce::String ("Wood") : sound == Sound::hiHat ? juce::String ("Hi-hat") : juce::String ("Cowbell");
+        const auto name = sound == Sound::tickTock ? juce::String ("Tick-tock") : sound == Sound::hiHat ? juce::String ("Hi-hat") : juce::String ("Cowbell");
         const auto accentFile = folder.getChildFile (name + " accent.wav"), beatFile = folder.getChildFile (name + " beat.wav");
 
         if (auto r = writeWav (synthesize (sound, true, rate), rate, accentFile); r.failed()) return r;

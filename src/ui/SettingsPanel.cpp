@@ -167,7 +167,7 @@ namespace carthage::ui
 
         styleLabel (clickSoundLabel, theme::textMd, theme::muted);
         clickSoundLabel.setText ("Sound", dontSendNotification);
-        clickSound.addItem ("Wooden click", 1);
+        clickSound.addItem ("Tick-tock", 1);
         clickSound.addItem ("Hi-hat", 2);
         clickSound.addItem ("Cowbell", 3);
         clickSound.addItem (String::fromUTF8 ("Your own sound\xe2\x80\xa6"), 4);
