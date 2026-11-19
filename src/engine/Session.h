@@ -138,6 +138,9 @@ namespace carthage::engine
             project counts as unsaved until it is saved. */
         juce::Result recover (const autosave::Store::Recovery&);
 
+        /** The UI's picture of every window, as JPEG bytes, asked for at each save (W41). */
+        std::function<juce::MemoryBlock()> takePicture;
+
         /** Writes the project to its file in the background; `done` runs on the message thread. */
         void save (const std::function<void (juce::Result)>& done);
 

@@ -149,6 +149,16 @@ public:
 
             const auto versions = project::versionsOf (file);
             expectEquals (versions.size(), project::versionsKept);
+            expect (! project::pictureOfVersion (versions.getFirst()).exists(), "no preview yet, so no picture");
+
+            // With a preview beside the project, each kept version takes the picture with it.
+            project::previewOf (file).replaceWithText ("picture of save 23");
+            file.replaceWithText ("save 23");
+            project::keepVersion (file);
+            const auto newest = project::versionsOf (file).getFirst();
+            expectEquals (project::pictureOfVersion (newest).loadFileAsString(), juce::String ("picture of save 23"));
+            expectEquals (project::versionsOf (file).size(), project::versionsKept, "the oldest goes, with its picture");
+            expectEquals (project::versionsIn (folder).findChildFiles (juce::File::findFiles, false, "*.jpg").size(), 1);
             expectEquals (versions.getFirst().loadFileAsString(), juce::String ("save ") + juce::String (project::versionsKept + 2), "newest first");
             expect (versions.getFirst().getParentDirectory() == project::versionsIn (folder));
             project::keepVersion (folder.getChildFile ("nothing.carthage"));   // no file, no version

@@ -482,6 +482,101 @@ namespace carthage::ui
     };
 
     //==============================================================================================
+    /** File > Restore a version (W41): each version with its picture, newest first. */
+    class MainComponent::VersionsWindow final : public DocumentWindow
+    {
+    public:
+        VersionsWindow (MainComponent& m, const Array<File>& versions)
+            : DocumentWindow ("Restore a version: " + m.session.getProjectName(), theme::bg2, DocumentWindow::closeButton), owner (m)
+        {
+            setUsingNativeTitleBar (true);
+            list.setSize (rowWidth, versions.size() * rowHeight);
+
+            for (const auto& v : versions)
+                list.addAndMakeVisible (rows.add (new Row (*this, v)));
+
+            for (int i = 0; i < rows.size(); ++i)
+                rows[i]->setBounds (0, i * rowHeight, rowWidth, rowHeight);
+
+            viewport.setViewedComponent (&list, false);
+            viewport.setScrollBarsShown (true, false);
+            viewport.setSize (rowWidth + viewport.getScrollBarThickness(), std::min (3, versions.size()) * rowHeight);
+            setContentNonOwned (&viewport, true);
+            setResizable (true, false);
+            addKeyListener (owner.commands.getKeyMappings());
+        }
+
+        ~VersionsWindow() override
+        {
+            removeKeyListener (owner.commands.getKeyMappings());
+            clearContentComponent();
+        }
+
+        void closeButtonPressed() override   { setVisible (false); }
+
+    private:
+        static constexpr int rowHeight = 196, rowWidth = 640, pictureWidth = 300;
+
+        struct Row final : Component
+        {
+            Row (VersionsWindow& w, File f) : window (w), file (std::move (f))
+            {
+                picture = ImageFileFormat::loadFrom (project::pictureOfVersion (file));
+                const auto when = file.getLastModificationTime();
+                styleLabel (date, theme::textMd, theme::text, true);
+                date.setText (when.formatted ("%A %e %B, %H:%M"), dontSendNotification);
+                styleLabel (note, theme::textSm, theme::muted);
+                note.setText (file.getFileNameWithoutExtension().endsWith ("before restoring") ? "Kept just before a restore"
+                                                                                               : "Kept when the next save replaced it",
+                              dontSendNotification);
+                restore.onClick = [this] { window.owner.askToRestore (file); };
+                for (auto* c : std::initializer_list<Component*> { &date, &note, &restore })
+                    addAndMakeVisible (c);
+            }
+
+            void paint (Graphics& g) override
+            {
+                const auto box = getLocalBounds().reduced (theme::space3).removeFromLeft (pictureWidth).toFloat();
+                g.setColour (theme::well);
+                g.fillRoundedRectangle (box, theme::radiusSm);
+
+                if (picture.isValid())
+                    g.drawImage (picture, box.reduced (2.0f), RectanglePlacement::centred);
+                else
+                {
+                    g.setColour (theme::faint);
+                    g.setFont (theme::uiFont (theme::textSm));
+                    g.drawText ("No picture: saved before pictures were kept", box.reduced (theme::space2), Justification::centred, true);
+                }
+
+                g.setColour (theme::line);
+                g.fillRect (0, getHeight() - 1, getWidth(), 1);
+            }
+
+            void resized() override
+            {
+                auto r = getLocalBounds().reduced (theme::space3);
+                r.removeFromLeft (pictureWidth + theme::space4);
+                date.setBounds (r.removeFromTop (24));
+                note.setBounds (r.removeFromTop (20));
+                r.removeFromTop (theme::space3);
+                restore.setBounds (r.removeFromTop (30).removeFromLeft (120));
+            }
+
+            VersionsWindow& window;
+            File file;
+            Image picture;
+            Label date, note;
+            TextButton restore { String::fromUTF8 ("Restore\xe2\x80\xa6") };
+        };
+
+        MainComponent& owner;
+        Viewport viewport;
+        Component list;
+        OwnedArray<Row> rows;
+    };
+
+    //==============================================================================================
     MainComponent::MainComponent (engine::Session& s, ApplicationCommandManager& c)
         : session (s), commands (c), timeline (s), settings (s, c, cmd::inMenuOrder()), browser (s), samples (s)
     {
@@ -695,6 +790,7 @@ namespace carthage::ui
 
         // Projects: the view is saved with the project; a new project replaces the edit.
         session.getViewState = [this] { return timeline.getViewState(); };
+        session.takePicture = [this] { return pictureOfWindows(); };
         session.onProjectClosing = [this] { closePluginWindow(); };
         session.onProjectChanged = [this]
         {
@@ -742,6 +838,7 @@ namespace carthage::ui
         session.onTakeEnded = nullptr;
         session.onPluginsChanged = nullptr;
         session.getViewState = nullptr;
+        session.takePicture = nullptr;
         session.onProjectClosing = nullptr;
         session.onProjectChanged = nullptr;
         closePluginWindow();
@@ -848,46 +945,79 @@ namespace carthage::ui
             notesWindow->show();
     }
 
+    MemoryBlock MainComponent::pictureOfWindows()
+    {
+        // Side by side, each at the same height: the main window first, then each view's window.
+        constexpr float height = 420.0f;
+        constexpr int maxWidth = 2400;
+        Array<Image> shots;
+        shots.add (createComponentSnapshot (getLocalBounds(), true, 1.0f));
+
+        for (auto& [view, window] : viewWindows)
+            if (window != nullptr && window->isVisible())
+                shots.add (window->getHolder().createComponentSnapshot (window->getHolder().getLocalBounds(), true, 1.0f));
+
+        int width = 0;
+        for (const auto& shot : shots)
+            width += roundToInt (static_cast<float> (shot.getWidth()) * height / static_cast<float> (std::max (1, shot.getHeight()))) + 8;
+
+        const auto scale = std::min (1.0f, static_cast<float> (maxWidth) / static_cast<float> (std::max (1, width)));
+        Image picture (Image::RGB, std::max (1, roundToInt (static_cast<float> (width) * scale)), roundToInt (height * scale), true);
+        Graphics g (picture);
+        g.fillAll (theme::bg);
+        float x = 0.0f;
+
+        for (const auto& shot : shots)
+        {
+            const auto w = static_cast<float> (shot.getWidth()) * height / static_cast<float> (std::max (1, shot.getHeight())) * scale;
+            g.drawImage (shot, Rectangle<float> (x, 0.0f, w, height * scale), RectanglePlacement::stretchToFit);
+            x += w + 8.0f * scale;
+        }
+
+        JPEGImageFormat jpeg;
+        jpeg.setQuality (0.7f);
+        MemoryOutputStream out;
+        jpeg.writeImageToStream (picture, out);
+        return out.getMemoryBlock();
+    }
+
     void MainComponent::showVersions()
     {
         const auto versions = project::versionsOf (session.getProjectFile());
 
-        PopupMenu m;
-
         if (versions.isEmpty())
         {
-            m.addItem ("No versions yet: each save keeps the one before it", false, false, [] {});
+            setStatus ("No versions yet: each save keeps the one before it");
+            return;
         }
-        else
+
+        versionsWindow = std::make_unique<VersionsWindow> (*this, versions);
+        versionsWindow->centreAroundComponent (this, versionsWindow->getWidth(), versionsWindow->getHeight());
+        versionsWindow->setVisible (true);
+        versionsWindow->toFront (true);
+    }
+
+    void MainComponent::askToRestore (const File& version)
+    {
+        const auto when = version.getLastModificationTime();
+        auto* w = new AlertWindow ("Restore the version from " + when.formatted ("%e %b %H:%M") + "?",
+                                   "The project as it is now is kept as a version too, so you can come back to it.",
+                                   MessageBoxIconType::NoIcon, this);
+        w->addButton ("Restore", 1, KeyPress (KeyPress::returnKey));
+        w->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
+        w->enterModalState (true, ModalCallbackFunction::create ([this, version] (int choice)
         {
-            m.addSectionHeader ("Saved before");
+            if (choice != 1)
+                return;
 
-            for (const auto& v : versions)
-            {
-                const auto when = v.getLastModificationTime();
-                const auto before = v.getFileNameWithoutExtension().endsWith ("before restoring") ? String (", before a restore") : String();
-                m.addItem (when.formatted ("%a %e %b, %H:%M") + before, [this, v, when]
-                {
-                    auto* w = new AlertWindow ("Restore the version from " + when.formatted ("%e %b %H:%M") + "?",
-                                               "The project as it is now is kept as a version too, so you can come back to it.",
-                                               MessageBoxIconType::NoIcon, this);
-                    w->addButton ("Restore", 1, KeyPress (KeyPress::returnKey));
-                    w->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
-                    w->enterModalState (true, ModalCallbackFunction::create ([this, v] (int choice)
-                    {
-                        if (choice != 1)
-                            return;
+            if (versionsWindow != nullptr)
+                versionsWindow->setVisible (false);
 
-                        if (auto r = session.restoreVersion (v); r.failed())
-                            setStatus ("Not restored: " + r.getErrorMessage(), theme::warn);
-                        else
-                            setStatus ("Restored. Save to keep it as the project.");
-                    }), true);
-                });
-            }
-        }
-
-        m.showMenuAsync (PopupMenu::Options().withTargetComponent (&timeline).withMinimumWidth (260));
+            if (auto r = session.restoreVersion (version); r.failed())
+                setStatus ("Not restored: " + r.getErrorMessage(), theme::warn);
+            else
+                setStatus ("Restored. Save to keep it as the project.");
+        }), true);
     }
 
     void MainComponent::refreshNotes()

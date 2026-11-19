@@ -204,6 +204,9 @@ namespace carthage::project
         return files;
     }
 
+    juce::File previewOf (const juce::File& projectFile)      { return projectFile.getSiblingFile (".preview.jpg"); }
+    juce::File pictureOfVersion (const juce::File& versionFile) { return versionFile.withFileExtension ("jpg"); }
+
     void keepVersion (const juce::File& projectFile, const juce::String& note)
     {
         if (! projectFile.existsAsFile())
@@ -217,12 +220,21 @@ namespace carthage::project
         const auto target = folder.getChildFile (name + extension).getNonexistentSibling();
 
         if (projectFile.copyFileTo (target))
+        {
             target.setLastModificationTime (juce::Time::getCurrentTime());   // when it was replaced, for the order
+
+            // Its picture goes with it: how it looked when that version was saved.
+            if (const auto preview = previewOf (projectFile); preview.existsAsFile())
+                preview.copyFileTo (pictureOfVersion (target));
+        }
 
         const auto all = versionsOf (projectFile);
 
         for (int i = versionsKept; i < all.size(); ++i)
+        {
+            pictureOfVersion (all[i]).deleteFile();
             all[i].deleteFile();
+        }
     }
 
     std::optional<Miniature> miniatureOf (const juce::File& projectFile)

@@ -864,10 +864,17 @@ namespace carthage::engine
         const auto taken = p.changeCount;
         auto* target = &p;
 
-        writer.post ([snapshot, file]
+        const auto picture = takePicture ? takePicture() : juce::MemoryBlock();
+
+        writer.post ([snapshot, file, picture]
                      {
-                         project::keepVersion (file);   // the file this save replaces (W38)
-                         return project::write (snapshot, file);
+                         project::keepVersion (file);   // the file this save replaces (W38), with its picture (W41)
+                         auto r = project::write (snapshot, file);
+
+                         if (r.wasOk() && picture.getSize() > 0)
+                             project::previewOf (file).replaceWithData (picture.getData(), picture.getSize());
+
+                         return r;
                      },
                      [this, target, file, taken, done] (const juce::Result& r)
                      {
@@ -907,6 +914,10 @@ namespace carthage::engine
 
         if (auto r = project::write (project::snapshot (*p.edit, p.file, p.info), now); r.failed())
             return r;
+
+        if (takePicture)
+            if (const auto picture = takePicture(); picture.getSize() > 0)
+                project::pictureOfVersion (now).replaceWithData (picture.getData(), picture.getSize());
 
         auto info = opened.info;
         info.id = p.info.id;   // the same project
@@ -979,8 +990,9 @@ namespace carthage::engine
         auto* target = &p;
 
         const auto oldFile = p.file;
+        const auto picture = takePicture ? takePicture() : juce::MemoryBlock();
 
-        writer.post ([snapshot, file, oldFile, oldFolder, folder, binOldFolder]
+        writer.post ([snapshot, file, oldFile, oldFolder, folder, binOldFolder, picture]
                      {
                          // A rename carries everything in the folder; Save as, only the media.
                          if (binOldFolder)
@@ -995,7 +1007,12 @@ namespace carthage::engine
                              return r;
                          }
 
-                         return project::write (snapshot, file);
+                         auto r = project::write (snapshot, file);
+
+                         if (r.wasOk() && picture.getSize() > 0)
+                             project::previewOf (file).replaceWithData (picture.getData(), picture.getSize());
+
+                         return r;
                      },
                      [this, target, file, oldFolder, wasUntitled, binOldFolder, newInfo, taken, done] (const juce::Result& r)
                      {

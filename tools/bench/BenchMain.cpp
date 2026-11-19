@@ -517,8 +517,11 @@ namespace
                 carthage::editing::begin (edit, "Move clip");
                 carthage::editing::move ({ tracktion::getAudioTracks (edit)[2]->getClips().getFirst() }, 4.0, 0);
             });
+            onMessageThreadVoid ([this] { session->takePicture = [] { return MemoryBlock ("picture", 7); }; });   // the app's is the windows
             auto saved = await ([&] (auto done) { session->save (done); });
             check (saved.wasOk() && std::abs (startOf() - before - 4.0) < 1.0e-6, "moved by 4 beats and saved");
+            check (onMessageThread ([this] { return carthage::project::previewOf (session->getProjectFile()).loadFileAsString(); }) == "picture",
+                   "the save wrote its picture beside the project");
             const auto versions = onMessageThread ([this] { return carthage::project::versionsOf (session->getProjectFile()); });
             check (! versions.isEmpty(), "a version was kept: " + String (versions.size()));
             const auto tabsBefore = onMessageThread ([this] { return session->getNumProjects(); });
@@ -532,6 +535,7 @@ namespace
             const auto kept = onMessageThread ([this] { return carthage::project::versionsOf (session->getProjectFile()); });
             check (kept.size() == versions.size() + 1 && kept.getFirst().getFileName().contains ("before restoring"),
                    "the moved state was kept as a version first");
+            check (carthage::project::pictureOfVersion (kept.getFirst()).existsAsFile(), "with a picture");
             auto resaved = await ([&] (auto done) { session->save (done); });
             check (resaved.wasOk() && ! onMessageThread ([this] { return session->hasUnsavedChanges(); }), "saved again");
 

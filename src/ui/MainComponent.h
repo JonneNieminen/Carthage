@@ -125,6 +125,13 @@ namespace carthage::ui
         std::unique_ptr<NotesWindow> notesWindow;
         void toggleNotes();
         void showVersions();
+        void askToRestore (const juce::File& version);
+
+        /** Every window of the session in one picture (the main window, then each view in its own
+            window), as JPEG bytes: kept with each save to tell versions apart (W41). */
+        juce::MemoryBlock pictureOfWindows();
+        class VersionsWindow;
+        std::unique_ptr<VersionsWindow> versionsWindow;
         void refreshNotes();
         class SignalRow;
 

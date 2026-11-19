@@ -486,7 +486,7 @@ Deliver (F22, W38, W39):
 - [x] Tick-tock metronome (W41)
 - [x] Settings search, views palette (Cmd+J), Cmd+1 to Cmd+9 for tabs (W41)
 - [x] Settings test at the first launch and from Settings, with Yes/No (W41)
-- [ ] Pictures of every window with each project version, in a Restore window (W41)
+- [x] Pictures of every window with each project version, in a Restore window (W41)
 
 Exit checks:
 - [ ] Every item exercised in the running app by the owner

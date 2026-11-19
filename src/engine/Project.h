@@ -40,6 +40,11 @@ namespace carthage::project
     void keepVersion (const juce::File& projectFile, const juce::String& note = {});
     juce::Array<juce::File> versionsOf (const juce::File& projectFile);   // newest first
 
+    /** A picture of every window, taken at each save (W41): beside the project file as a hidden
+        ".preview.jpg", and beside each version as "<version>.jpg" (keepVersion carries it). */
+    juce::File previewOf (const juce::File& projectFile);
+    juce::File pictureOfVersion (const juce::File& versionFile);
+
     /** The folder samples are collected into (W30, "Collect samples into project"). */
     juce::File samplesIn (const juce::File& folder);
 

@@ -146,6 +146,13 @@ namespace
             Thread::sleep (1500);
             capture (outDir.getChildFile ("main.png"));
 
+            // The picture each save keeps with its version (W41).
+            onMessageThreadVoid ([this, &outDir]
+            {
+                const auto jpeg = session->takePicture ? session->takePicture() : MemoryBlock();
+                outDir.getChildFile ("version-picture.jpg").replaceWithData (jpeg.getData(), jpeg.getSize());
+            });
+
             // The narrowest window Carthage allows: the toolbar folds (W38).
             onMessageThreadVoid ([this] { content->setSize (960, 780); });
             capture (outDir.getChildFile ("main-narrow.png"));
