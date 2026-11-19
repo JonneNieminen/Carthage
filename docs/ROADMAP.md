@@ -471,9 +471,9 @@ Deliver (F22, W38, W39):
 - [x] Panels resizable by their border, double-click fits the longest text (the browser panel; the
       mixer's panels follow in phase 5)
 - [x] Wheel: scroll on both axes and zoom time and lane height in every grid; lane-height shortcut
-- [ ] FL-style paste-by-click and right-click delete as Settings switches (off)
+- [x] FL-style paste-by-click and right-click delete as Settings switches (off)
 - [ ] Metronome: built-in wooden click, hi-hat and cowbell, or your own sound
-- [ ] Plugin check at the first launch only, then a Settings switch (off)
+- [x] Plugin check at the first launch only, then a Settings switch (off)
 - [ ] Export logs (file or clipboard, macOS and Windows), a local crash report offered after a crash,
       project versions, an undo history list, project notes
 - [ ] Tooling: `.clang-tidy` with no findings in Carthage's code, RTSan, AddressSanitizer and UBSan in

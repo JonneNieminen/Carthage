@@ -295,9 +295,13 @@ namespace carthage::app
             else if (session->getAtLaunch() != AtLaunch::emptyProject)
                 content.showStartScreen (true);
 
-            // Plugins installed or updated since the last run are checked in the background;
-            // --rescan-plugins checks them all (for measuring the UI during a full scan).
-            session->getPluginScanner().start (getCommandLineParameterArray().contains ("--rescan-plugins"));
+            // The plugins are checked in the background at the first launch, then only when asked
+            // (Rescan) unless Settings says every launch (W38); --rescan-plugins checks them all
+            // (for measuring the UI during a full scan).
+            const auto everything = getCommandLineParameterArray().contains ("--rescan-plugins");
+
+            if (session->takeFirstPluginCheck() || everything || session->getCheckPluginsAtLaunch())
+                session->getPluginScanner().start (everything);
         }
 
         /** Updates (docs/RELEASING.md): the banner, the beta toggle, a quiet check on launch. */

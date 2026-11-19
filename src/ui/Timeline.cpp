@@ -543,11 +543,36 @@ namespace carthage::ui
             auto& edit = timeline.session.getEdit();
             const auto lanesList = timeline.laneTracks();
 
+            // FL-style right-click delete (a Settings switch, W38): any tool, and a right-drag
+            // deletes every clip it crosses, as the erase tool does.
+            if (e.mods.isPopupMenu() && timeline.session.getRightClickDeletes())
+            {
+                begin ("Delete clips");
+                drag = Drag::erase;
+                eraseOrMute (hit);
+                return;
+            }
+
             switch (timeline.tool)
             {
                 case Tool::select:
                 case Tool::stretch:
                 {
+                    // FL-style paste by click (a Settings switch, W38): an empty spot gets a copy
+                    // of the last clip used; Shift still draws a selection box.
+                    if (hit.clip == nullptr && timeline.tool == Tool::select && ! e.mods.isShiftDown()
+                         && timeline.session.getClickPlacesClip() && anchorLane >= 0 && anchorLane < lanesList.size())
+                    {
+                        if (auto* source = clipFor (timeline.brush))
+                        {
+                            begin ("Place clip");
+                            if (auto* placed = editing::placeCopy (*source, *lanesList[anchorLane], std::max (0.0, snapped (anchorBeat, bypass, {}))))
+                                timeline.selectOnly ({ placed });
+                            used();
+                            return;
+                        }
+                    }
+
                     if (hit.clip == nullptr)
                     {
                         if (! e.mods.isShiftDown())

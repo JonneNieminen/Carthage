@@ -171,6 +171,22 @@ namespace carthage::engine
         bool getFitLoopsToTempo() const;
         void setFitLoopsToTempo (bool);
 
+        /** Settings, both off by default (W38): a click on an empty spot with the select tool
+            places the last clip used, as FL Studio does; a right-click deletes a clip (and a
+            right-drag deletes every clip it crosses). */
+        /** Settings (W38): plugins are checked at the first launch; after that only when asked
+            (Rescan), unless this is on. */
+        bool getCheckPluginsAtLaunch() const;
+        void setCheckPluginsAtLaunch (bool);
+
+        /** True once, at the first launch: the plugins have never been checked. Marks them checked. */
+        bool takeFirstPluginCheck();
+
+        bool getClickPlacesClip() const;
+        void setClickPlacesClip (bool);
+        bool getRightClickDeletes() const;
+        void setRightClickDeletes (bool);
+
         /** Settings: what clips do when the tempo changes (W38); nothing means ask each time. */
         std::optional<editing::TempoFollow> getTempoFollow() const;
         void setTempoFollow (std::optional<editing::TempoFollow>);

@@ -24,7 +24,7 @@ namespace carthage::ui
         title.setText ("Settings", dontSendNotification);
 
         for (auto [label, text] : { std::pair { &interfaceHeading, "Interface" }, { &recordingHeading, "Recording" },
-                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" }, { &windowsHeading, "Windows" },
+                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" }, { &timelineHeading, "Timeline" }, { &windowsHeading, "Windows" },
                                     { &updatesHeading, "Updates" },
                                     { &shortcutsHeading, "Keyboard shortcuts" } })
         {
@@ -164,6 +164,21 @@ namespace carthage::ui
             using A = engine::Session::AtLaunch;
             session.setAtLaunch (atLaunch.getSelectedId() == 2 ? A::lastSession : atLaunch.getSelectedId() == 3 ? A::emptyProject : A::startScreen);
         };
+
+        checkPlugins.setToggleState (session.getCheckPluginsAtLaunch(), dontSendNotification);
+        checkPlugins.setTooltip ("Off: plugins are checked at the first launch, then when you press Rescan in the plugin browser. "
+                                 "On: new or updated plugins are checked each time Carthage opens.");
+        checkPlugins.onClick = [this] { session.setCheckPluginsAtLaunch (checkPlugins.getToggleState()); };
+        body.addAndMakeVisible (checkPlugins);
+
+        clickPlaces.setToggleState (session.getClickPlacesClip(), dontSendNotification);
+        clickPlaces.setTooltip ("As in FL Studio: with the select tool, a click on an empty spot places a copy of the last clip you used. Shift-drag still selects.");
+        clickPlaces.onClick = [this] { session.setClickPlacesClip (clickPlaces.getToggleState()); };
+        rightClickDeletes.setToggleState (session.getRightClickDeletes(), dontSendNotification);
+        rightClickDeletes.setTooltip ("As in FL Studio: a right-click deletes the clip under the pointer; a right-drag deletes every clip it crosses.");
+        rightClickDeletes.onClick = [this] { session.setRightClickDeletes (rightClickDeletes.getToggleState()); };
+        for (auto* c : std::initializer_list<Component*> { &clickPlaces, &rightClickDeletes })
+            body.addAndMakeVisible (c);
 
         styleLabel (tempoFollowLabel, theme::textMd, theme::muted);
         tempoFollowLabel.setText ("Tempo changes", dontSendNotification);
@@ -535,6 +550,11 @@ namespace carthage::ui
         row (textSizeLabel, textSize);
         playWhileHeld.setBounds (r.removeFromTop (rowHeight));
         fitLoops.setBounds (r.removeFromTop (rowHeight));
+        checkPlugins.setBounds (r.removeFromTop (rowHeight));
+
+        heading (timelineHeading);
+        clickPlaces.setBounds (r.removeFromTop (rowHeight));
+        rightClickDeletes.setBounds (r.removeFromTop (rowHeight));
 
         heading (updatesHeading);
         {

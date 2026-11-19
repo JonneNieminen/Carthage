@@ -64,7 +64,9 @@ namespace carthage::ui
         juce::Label title, interfaceHeading, recordingHeading, latencyHeading, loadHeading, updatesHeading, updatesHint, shortcutsHeading,
                     projectsHeading, copySamplesHint;
         juce::ToggleButton copySamples { "Copy samples into the project" };
-        juce::Label atLaunchLabel, tempoFollowLabel;
+        juce::Label atLaunchLabel, tempoFollowLabel, timelineHeading;
+        juce::ToggleButton clickPlaces { "Click an empty spot to place the last clip" };
+        juce::ToggleButton rightClickDeletes { "Right-click deletes a clip" };
         juce::ComboBox atLaunch, tempoFollow;
         juce::Label windowsHeading, slotsLabel, uiScaleLabel;
         ValueSlider uiScale { 100.0 };   // %; double-click returns here
@@ -74,6 +76,7 @@ namespace carthage::ui
         juce::ComboBox textSize;
         juce::ToggleButton playWhileHeld { "Play sounds only while held" };
         juce::ToggleButton fitLoops { "Fit loops to the project tempo" };
+        juce::ToggleButton checkPlugins { "Check for new plugins at every launch" };
         ShortcutEditor shortcuts;
         juce::Viewport viewport;
         juce::Component body;

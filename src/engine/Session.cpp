@@ -1127,6 +1127,25 @@ namespace carthage::engine
         engine->getPropertyStorage().getPropertiesFile().setValue ("fitLoopsToTempo", fit);
     }
 
+    bool Session::getCheckPluginsAtLaunch() const    { return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("checkPluginsAtLaunch", false); }
+    void Session::setCheckPluginsAtLaunch (bool on)  { engine->getPropertyStorage().getPropertiesFile().setValue ("checkPluginsAtLaunch", on); }
+
+    bool Session::takeFirstPluginCheck()
+    {
+        auto& props = engine->getPropertyStorage().getPropertiesFile();
+
+        if (props.getBoolValue ("pluginsCheckedOnce", false))
+            return false;
+
+        props.setValue ("pluginsCheckedOnce", true);
+        return true;
+    }
+
+    bool Session::getClickPlacesClip() const     { return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("clickPlacesClip", false); }
+    void Session::setClickPlacesClip (bool on)   { engine->getPropertyStorage().getPropertiesFile().setValue ("clickPlacesClip", on); }
+    bool Session::getRightClickDeletes() const   { return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("rightClickDeletes", false); }
+    void Session::setRightClickDeletes (bool on) { engine->getPropertyStorage().getPropertiesFile().setValue ("rightClickDeletes", on); }
+
     std::optional<editing::TempoFollow> Session::getTempoFollow() const
     {
         const auto v = engine->getPropertyStorage().getPropertiesFile().getIntValue ("tempoFollow", 0);
