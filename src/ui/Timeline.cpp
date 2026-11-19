@@ -1,4 +1,5 @@
 #include "Timeline.h"
+#include <app/Commands.h>
 #include <engine/AudioFormats.h>
 #include "SampleBrowser.h"
 
@@ -112,8 +113,15 @@ namespace carthage::ui
                     continue;
 
                 auto* lane = tracks[i];
-                g.setColour (theme::line);
-                g.fillRect (row.withTop (row.getBottom() - 1));
+
+                if (lane->itemID == timeline.currentLane)
+                {
+                    g.setColour (theme::hover);   // the current lane: ⌥⌘N adds below it, ⌘↑/↓ move it
+                    g.fillRect (row);
+                }
+
+                g.setColour (borderUnderPointer == i ? theme::lineStrong : theme::line);
+                g.fillRect (row.withTop (row.getBottom() - (borderUnderPointer == i ? 2 : 1)));
 
                 const auto parts = partsOf (row);
                 g.setColour (timeline.laneColour (i).withMultipliedAlpha (lane->isMuted (false) ? 0.35f : 1.0f));
@@ -144,23 +152,92 @@ namespace carthage::ui
 
         void mouseDown (const MouseEvent& e) override
         {
+            resizing = -1;
+            moving = {};
+            dropIndex = -1;
+
+            if (const auto border = borderAt (e.y); border >= 0 && ! e.mods.isPopupMenu())
+            {
+                resizing = border;
+                heightAtStart = timeline.heightOfLane (border);
+                return;
+            }
+
             auto* lane = laneAt (e.y);
 
             if (lane == nullptr)
                 return;
 
+            timeline.currentLane = lane->itemID;
+            repaint();
             const auto parts = partsOf (rowBounds (timeline.laneTracks().indexOf (lane)));
 
             if (e.mods.isPopupMenu())
                 showMenu (*lane);
             else if (parts.mute.contains (e.getPosition()))
-                editing::setLaneMuted (*lane, ! lane->isMuted (false));
+                e.mods.isCommandDown() ? editing::muteOthers (*lane) : editing::setLaneMuted (*lane, ! lane->isMuted (false));
             else if (parts.solo.contains (e.getPosition()))
-                editing::setLaneSoloed (*lane, ! lane->isSolo (false));
+                e.mods.isCommandDown() ? editing::soloAlone (*lane) : editing::setLaneSoloed (*lane, ! lane->isSolo (false));
+            else
+                moving = lane->itemID;   // a drag moves the lane
+        }
+
+        void mouseDrag (const MouseEvent& e) override
+        {
+            if (resizing >= 0)
+            {
+                if (auto* lane = timeline.laneTracks()[resizing])
+                    timeline.setLaneOwnHeight (*lane, heightAtStart + e.getDistanceFromDragStartY());
+                return;
+            }
+
+            if (moving == tracktion::EditItemID() || std::abs (e.getDistanceFromDragStartY()) < 4)
+                return;
+
+            // The gap the lane would go into: before the lane under the pointer's upper half,
+            // after it for the lower half.
+            const auto tracks = timeline.laneTracks();
+            const auto contentY = e.y + timeline.scrollY;
+            const auto under = std::clamp (timeline.laneIndexAt (contentY), 0, std::max (0, tracks.size() - 1));
+            const auto mid = timeline.laneTop (under) + timeline.heightOfLane (under) / 2;
+            dropIndex = std::clamp (contentY < mid ? under : under + 1, 0, tracks.size());
+            setMouseCursor (MouseCursor::DraggingHandCursor);
+            repaint();
+        }
+
+        void mouseUp (const MouseEvent&) override
+        {
+            if (dropIndex >= 0)
+            {
+                const auto tracks = timeline.laneTracks();
+
+                for (auto* t : tracks)
+                {
+                    if (t->itemID == moving)
+                    {
+                        const auto from = tracks.indexOf (t);
+                        editing::moveLane (*t, dropIndex > from ? dropIndex - 1 : dropIndex);   // the gap counts the lane itself
+                        break;
+                    }
+                }
+            }
+
+            resizing = -1;
+            moving = {};
+            dropIndex = -1;
+            setMouseCursor (MouseCursor::NormalCursor);
+            repaint();
         }
 
         void mouseDoubleClick (const MouseEvent& e) override
         {
+            if (const auto border = borderAt (e.y); border >= 0)
+            {
+                if (auto* lane = timeline.laneTracks()[border])
+                    timeline.setLaneOwnHeight (*lane, std::nullopt);   // back to the default
+                return;
+            }
+
             if (auto* lane = laneAt (e.y))
             {
                 const auto parts = partsOf (rowBounds (timeline.laneTracks().indexOf (lane)));
@@ -170,8 +247,26 @@ namespace carthage::ui
             }
         }
 
-        void mouseMove (const MouseEvent&) override   { repaint(); }
-        void mouseExit (const MouseEvent&) override   { repaint(); }
+        void mouseMove (const MouseEvent& e) override
+        {
+            const auto border = borderAt (e.y);
+            setMouseCursor (border >= 0 ? MouseCursor::UpDownResizeCursor : MouseCursor::NormalCursor);
+            borderUnderPointer = border;
+            repaint();
+        }
+
+        void mouseExit (const MouseEvent&) override   { borderUnderPointer = -1; repaint(); }
+
+        void paintOverChildren (Graphics& g) override
+        {
+            if (dropIndex < 0)
+                return;
+
+            // Where the dragged lane goes.
+            const auto y = timeline.laneTop (dropIndex) - timeline.scrollY;
+            g.setColour (theme::accent);
+            g.fillRect (0, std::max (0, y - 1), getWidth() - 1, 2);
+        }
 
         String getTooltip() override
         {
@@ -183,9 +278,12 @@ namespace carthage::ui
 
             const auto parts = partsOf (rowBounds (timeline.laneTracks().indexOf (lane)));
 
-            if (parts.mute.contains (pos))  return lane->isMuted (false) ? "Unmute this lane" : "Mute this lane";
-            if (parts.solo.contains (pos))  return lane->isSolo (false) ? "Stop soloing this lane" : "Solo this lane: hear it alone, with any other soloed lanes";
-            return "Double-click to rename; right-click for more";
+            const auto cmd = String (app::commands::commandName);
+
+            if (borderAt (pos.y) >= 0)      return "Drag to make this lane taller or shorter; double-click for the default height";
+            if (parts.mute.contains (pos))  return (lane->isMuted (false) ? "Unmute this lane" : "Mute this lane") + String (". ") + cmd + "-click: mute every other lane; again: every lane plays";
+            if (parts.solo.contains (pos))  return (lane->isSolo (false) ? "Stop soloing this lane" : "Solo this lane") + String (". ") + cmd + "-click: this lane alone; again: no solo";
+            return "Click to make it the current lane, drag to move it, double-click to rename; right-click for more";
         }
 
         void startRename (tracktion::AudioTrack& lane)
@@ -210,9 +308,25 @@ namespace carthage::ui
 
         struct Parts { Rectangle<int> colourBar, name, mute, solo, detail; };
 
+        int resizing = -1, heightAtStart = 0, dropIndex = -1, borderUnderPointer = -1;
+        tracktion::EditItemID moving;
+
+        /** The lane whose bottom border is within 3 px of `y`, or -1. */
+        int borderAt (int y) const
+        {
+            const auto contentY = y + timeline.scrollY;
+            const auto count = timeline.laneTracks().size();
+
+            for (int i = 0; i < count; ++i)
+                if (std::abs (timeline.laneTop (i + 1) - contentY) <= 3)
+                    return i;
+
+            return -1;
+        }
+
         Rectangle<int> rowBounds (int index) const
         {
-            return { 0, index * timeline.laneHeight - timeline.scrollY, getWidth() - 1, timeline.laneHeight };
+            return { 0, timeline.laneTop (index) - timeline.scrollY, getWidth() - 1, timeline.heightOfLane (index) };
         }
 
         static Parts partsOf (Rectangle<int> row)
@@ -257,7 +371,7 @@ namespace carthage::ui
         tracktion::AudioTrack* laneAt (int y) const
         {
             const auto tracks = timeline.laneTracks();
-            const auto index = (y + timeline.scrollY) / timeline.laneHeight;
+            const auto index = timeline.laneIndexAt (y + timeline.scrollY);
             return y >= 0 && index < tracks.size() ? tracks[index] : nullptr;
         }
 
@@ -295,7 +409,10 @@ namespace carthage::ui
             m.addItem (lane.isMuted (false) ? "Unmute" : "Mute", [held] { editing::setLaneMuted (*held, ! held->isMuted (false)); });
             m.addItem (lane.isSolo (false) ? "Stop soloing" : "Solo", [held] { editing::setLaneSoloed (*held, ! held->isSolo (false)); });
             m.addSeparator();
-            m.addItem ("Add lane below", [this, held] { timeline.addLane (held.get()); });
+            PopupMenu add;
+            for (int n : { 1, 2, 4, 8 })
+                add.addItem (n == 1 ? String ("1 lane") : String (n) + " lanes", [this, held, n] { timeline.addLane (held.get(), n); });
+            m.addSubMenu ("Add lanes below", add);
             m.addItem (&lane == &recordLane ? "Delete lane (the input records here)" : "Delete lane", deletable, false, [this, held]
             {
                 const auto name = held->getName();
@@ -351,13 +468,14 @@ namespace carthage::ui
 
             for (int i = 0; i < tracks.size(); ++i)
             {
-                const auto y = i * timeline.laneHeight - timeline.scrollY;
+                const auto y = timeline.laneTop (i) - timeline.scrollY;
+                const auto h = timeline.heightOfLane (i);
 
-                if (y + timeline.laneHeight < clip.getY() || y > clip.getBottom())
+                if (y + h < clip.getY() || y > clip.getBottom())
                     continue;   // lane out of view
 
                 g.setColour (theme::line);
-                g.fillRect (clip.getX(), y + timeline.laneHeight - 1, clip.getWidth(), 1);
+                g.fillRect (clip.getX(), y + h - 1, clip.getWidth(), 1);
 
                 for (auto* c : tracks[i]->getClips())
                     paintClip (g, *c, i, y, first, last);
@@ -387,7 +505,7 @@ namespace carthage::ui
             const auto colour = timeline.laneColour (lane);
             const auto x0 = timeline.xAtBeat (startBeat) - static_cast<float> (getX());
             const auto x1 = timeline.xAtBeat (endBeat) - static_cast<float> (getX());
-            const Rectangle<float> body (x0, static_cast<float> (laneY + 3), std::max (2.0f, x1 - x0), static_cast<float> (timeline.laneHeight - 7));
+            const Rectangle<float> body (x0, static_cast<float> (laneY + 3), std::max (2.0f, x1 - x0), static_cast<float> (timeline.heightOfLane (lane) - 7));
 
             const bool muted = c.disabled.get();
             // Solid, so a clip laid over another hides it (its name and waveform would read
@@ -469,7 +587,7 @@ namespace carthage::ui
         static constexpr int edgePixels = 6;
 
         double beatAt (int x) const   { return timeline.beatAtX (static_cast<float> (x + getX())); }
-        int laneAt (int y) const      { return (y + timeline.scrollY) / timeline.laneHeight; }
+        int laneAt (int y) const      { return timeline.laneIndexAt (y + timeline.scrollY); }
 
         Hit clipAt (Point<int> p) const
         {
@@ -799,9 +917,9 @@ namespace carthage::ui
 
             for (int i = 0; i < lanesList.size(); ++i)
             {
-                const auto y = i * timeline.laneHeight - timeline.scrollY;
+                const auto y = timeline.laneTop (i) - timeline.scrollY;
 
-                if (y + timeline.laneHeight < marquee.getY() || y > marquee.getBottom())
+                if (y + timeline.heightOfLane (i) < marquee.getY() || y > marquee.getBottom())
                     continue;
 
                 for (auto* c : lanesList[i]->getClips())
@@ -982,7 +1100,7 @@ namespace carthage::ui
             if (! dropping.isEmpty() && dropLane >= 0)
             {
                 auto start = dropBeat;
-                const auto y = static_cast<float> (dropLane * timeline.laneHeight - timeline.scrollY + 3);
+                const auto y = static_cast<float> (timeline.laneTop (dropLane) - timeline.scrollY + 3);
 
                 for (size_t i = 0; i < static_cast<size_t> (dropping.size()); ++i)
                 {
@@ -991,7 +1109,7 @@ namespace carthage::ui
                     const auto end = timeline.secondsToBeats (startSeconds + seconds);
                     const auto x0 = timeline.xAtBeat (start) - static_cast<float> (getX());
                     const auto x1 = timeline.xAtBeat (end) - static_cast<float> (getX());
-                    const Rectangle<float> ghost (x0, y, std::max (4.0f, x1 - x0), static_cast<float> (timeline.laneHeight - 7));
+                    const Rectangle<float> ghost (x0, y, std::max (4.0f, x1 - x0), static_cast<float> (timeline.heightOfLane (dropLane) - 7));
 
                     g.setColour (theme::accent.withAlpha (0.10f));
                     g.fillRoundedRectangle (ghost, theme::radiusXs);
@@ -1056,6 +1174,12 @@ namespace carthage::ui
         addLaneButton.onClick = [this] { addLane(); };
         addAndMakeVisible (addLaneButton);
 
+        headerEdge.setTooltip ("Drag to widen the lane names; double-click to fit the longest name");
+        headerEdge.getCurrentWidth = [this] { return headerWidth; };
+        headerEdge.onResize = [this] (int w) { setHeaderWidth (w); };
+        headerEdge.onFit = [this] { setHeaderWidth (fittingHeaderWidth()); };
+        addAndMakeVisible (headerEdge);
+
         hScroll.setAutoHide (false);
         vScroll.setAutoHide (true);
         hScroll.addListener (this);
@@ -1098,6 +1222,7 @@ namespace carthage::ui
         v.setProperty ("scrollBeat", scrollBeat, nullptr);
         v.setProperty ("scrollY", scrollY, nullptr);
         v.setProperty ("laneHeight", laneHeight, nullptr);
+        v.setProperty ("headerWidth", headerWidth, nullptr);
         v.setProperty ("gridDivision", static_cast<int> (grid.division), nullptr);
         v.setProperty ("gridFeel", static_cast<int> (grid.feel), nullptr);
         v.setProperty ("gridAdaptive", grid.adaptive, nullptr);
@@ -1120,6 +1245,8 @@ namespace carthage::ui
         pixelsPerBeat = std::clamp (static_cast<double> (v.getProperty ("pixelsPerBeat", 24.0)), minPixelsPerBeat, maxPixelsPerBeat);
         scrollY = std::max (0, static_cast<int> (v.getProperty ("scrollY", 0)));
         laneHeight = std::clamp (static_cast<int> (v.getProperty ("laneHeight", defaultLaneHeight)), minLaneHeight, maxLaneHeight);
+        tops.clear();
+        headerWidth = std::clamp (static_cast<int> (v.getProperty ("headerWidth", defaultHeaderWidth)), minHeaderWidth, maxHeaderWidth);
         setScrollBeat (v.getProperty ("scrollBeat", 0.0));
         resized();
     }
@@ -1193,9 +1320,33 @@ namespace carthage::ui
         return *slot;
     }
 
-    void Timeline::addLane (tracktion::AudioTrack* after)
+    tracktion::AudioTrack* Timeline::findCurrentLane() const
     {
-        auto* lane = editing::addLane (session.getEdit(), after);
+        for (auto* t : laneTracks())
+            if (t->itemID == currentLane)
+                return t;
+
+        return nullptr;
+    }
+
+    void Timeline::addLaneBelowCurrent()   { addLane (findCurrentLane()); }
+
+    void Timeline::moveCurrentLane (int delta)
+    {
+        auto* lane = findCurrentLane();
+
+        if (lane == nullptr)
+        {
+            if (onStatus) onStatus ("Click a lane's name first, then move it");
+            return;
+        }
+
+        editing::moveLane (*lane, laneTracks().indexOf (lane) + delta);
+    }
+
+    void Timeline::addLane (tracktion::AudioTrack* after, int count)
+    {
+        auto* lane = editing::addLanes (session.getEdit(), count, after);
 
         if (lane == nullptr)
             return;
@@ -1203,21 +1354,25 @@ namespace carthage::ui
         // Bring the new lane into view.
         const auto index = laneTracks().indexOf (lane);
         const auto visible = lanesArea().getHeight();
-        const auto top = index * laneHeight;
+        const auto top = laneTop (index);
 
-        if (top < scrollY || top + laneHeight > scrollY + visible)
+        if (top < scrollY || top + heightOfLane (index) > scrollY + visible)
         {
-            scrollY = std::max (0, top + laneHeight - visible);
+            scrollY = std::max (0, top + heightOfLane (index) - visible);
             repaintLanes();
             resized();
         }
 
+        currentLane = lane->itemID;
+
         if (onStatus)
-            onStatus ("Added " + lane->getName() + ". Double-click its name to rename it.");
+            onStatus (count == 1 ? "Added " + lane->getName() + ". Double-click its name to rename it."
+                                 : "Added " + String (count) + " lanes");
     }
 
     void Timeline::repaintLanes()
     {
+        tops.clear();   // a lane added, moved, removed or resized
         lanes->repaint();
         headers->repaint();
         updateScrollBars();
@@ -1418,7 +1573,7 @@ namespace carthage::ui
         hScroll.setRangeLimits (0.0, std::max (endBeat + viewBeats * 0.5, scrollBeat + viewBeats), dontSendNotification);
         hScroll.setCurrentRange (scrollBeat, viewBeats, dontSendNotification);
 
-        const auto content = laneTracks().size() * laneHeight;
+        const auto content = lanesHeight();
         vScroll.setRangeLimits (0.0, std::max (content, lanesArea().getHeight()), dontSendNotification);
         vScroll.setCurrentRange (scrollY, lanesArea().getHeight(), dontSendNotification);
     }
@@ -1459,10 +1614,101 @@ namespace carthage::ui
             setScrollBeat (scrollBeat - static_cast<double> (delta) * 400.0 / pixelsPerBeat);
         else
         {
-            const auto maxY = std::max (0, laneTracks().size() * laneHeight - lanesArea().getHeight());
+            const auto maxY = std::max (0, lanesHeight() - lanesArea().getHeight());
             scrollY = std::clamp (scrollY - static_cast<int> (delta * 400.0f), 0, maxY);
             repaintLanes();
         }
+    }
+
+    namespace
+    {
+        const Identifier laneHeightProp ("carthageHeight");   // a lane's own height, in its state
+    }
+
+    const std::vector<int>& Timeline::laneTops() const
+    {
+        if (tops.empty())
+        {
+            const auto tracks = laneTracks();
+            tops.reserve (static_cast<size_t> (tracks.size()) + 1);
+            tops.push_back (0);
+
+            for (auto* t : tracks)
+            {
+                const auto& state = t->state;
+                const auto h = state.hasProperty (laneHeightProp) ? std::clamp (static_cast<int> (state[laneHeightProp]), minLaneHeight, maxLaneHeight)
+                                                                  : laneHeight;
+                tops.push_back (tops.back() + h);
+            }
+        }
+
+        return tops;
+    }
+
+    int Timeline::heightOfLane (int index) const
+    {
+        const auto& t = laneTops();
+        const auto count = static_cast<int> (t.size()) - 1;
+        return index >= 0 && index < count ? t[static_cast<size_t> (index) + 1] - t[static_cast<size_t> (index)] : laneHeight;
+    }
+
+    int Timeline::laneTop (int index) const
+    {
+        const auto& t = laneTops();
+        const auto count = static_cast<int> (t.size()) - 1;
+
+        if (index <= 0)
+            return index * laneHeight;
+
+        return index <= count ? t[static_cast<size_t> (index)] : t.back() + (index - count) * laneHeight;
+    }
+
+    int Timeline::lanesHeight() const   { return laneTops().back(); }
+
+    int Timeline::laneIndexAt (int contentY) const
+    {
+        if (contentY < 0)
+            return -1;
+
+        const auto& t = laneTops();
+        const auto count = static_cast<int> (t.size()) - 1;
+
+        if (contentY >= t.back())
+            return count + (contentY - t.back()) / laneHeight;   // below the lanes, in default-height steps
+
+        const auto above = std::upper_bound (t.begin(), t.end(), contentY);
+        return static_cast<int> (std::distance (t.begin(), above)) - 1;
+    }
+
+    void Timeline::setLaneOwnHeight (tracktion::AudioTrack& lane, std::optional<int> height)
+    {
+        if (height)
+            lane.state.setProperty (laneHeightProp, std::clamp (*height, minLaneHeight, maxLaneHeight), nullptr);
+        else
+            lane.state.removeProperty (laneHeightProp, nullptr);
+
+        updateScrollBars();
+        repaintLanes();
+        lastPlayheadSeconds = -1.0;
+    }
+
+    int Timeline::fittingHeaderWidth() const
+    {
+        // The row's fixed parts (paddings, colour bar, M and S) plus the longest name.
+        int widest = 0;
+
+        for (auto* t : laneTracks())
+            widest = std::max (widest, GlyphArrangement::getStringWidthInt (theme::uiFont (theme::textMd, true), t->getName()));
+
+        return widest + 2 * theme::space3 + 4 + theme::space2 + 2 * 20 + 2 * theme::space1 + 2;
+    }
+
+    void Timeline::setHeaderWidth (int w)
+    {
+        headerWidth = std::clamp (w, minHeaderWidth, maxHeaderWidth);
+        resized();
+        repaintLanes();
+        ruler->repaint();
     }
 
     void Timeline::setLaneHeight (int newHeight, std::optional<int> keepLaneAtY)
@@ -1472,13 +1718,22 @@ namespace carthage::ui
         if (newHeight == laneHeight)
             return;
 
-        // The point under the pointer (or the top) stays put: scale the scroll around it.
+        // Every lane changes by the same step, its own height kept relative; the point under the
+        // pointer (or the top) stays put.
         const auto anchor = keepLaneAtY.value_or (0);
-        const auto contentY = static_cast<double> (scrollY + anchor) / laneHeight;
+        const auto before = std::max (1, lanesHeight());
+        const auto contentY = static_cast<double> (scrollY + anchor) / before;
+        const auto step = newHeight - laneHeight;
         laneHeight = newHeight;
-        scrollY = std::max (0, static_cast<int> (std::lround (contentY * laneHeight)) - anchor);
+        tops.clear();
+
+        for (auto* lane : laneTracks())
+            if (lane->state.hasProperty (laneHeightProp))
+                lane->state.setProperty (laneHeightProp, std::clamp (static_cast<int> (lane->state[laneHeightProp]) + step, minLaneHeight, maxLaneHeight), nullptr);
+
+        scrollY = std::max (0, static_cast<int> (std::lround (contentY * lanesHeight())) - anchor);
         updateScrollBars();
-        scrollY = std::clamp (scrollY, 0, std::max (0, laneTracks().size() * laneHeight - lanesArea().getHeight()));
+        scrollY = std::clamp (scrollY, 0, std::max (0, lanesHeight() - lanesArea().getHeight()));
         resized();
         repaintLanes();
     }
@@ -1506,8 +1761,8 @@ namespace carthage::ui
         {
             const auto x0 = std::max (static_cast<float> (area.getX()), xAtBeat (secondsToBeats (*recordingFrom)));
             const auto lane = laneTracks().indexOf (&session.getTrack());
-            const auto y = area.getY() + lane * laneHeight - scrollY;
-            recording->setBounds (Rectangle<float> (x0, static_cast<float> (y + 3), std::max (2.0f, x - x0), static_cast<float> (laneHeight - 7))
+            const auto y = area.getY() + laneTop (lane) - scrollY;
+            recording->setBounds (Rectangle<float> (x0, static_cast<float> (y + 3), std::max (2.0f, x - x0), static_cast<float> (heightOfLane (lane) - 7))
                                       .toNearestInt().getIntersection (area));
             recording->setVisible (true);
         }
@@ -1522,6 +1777,8 @@ namespace carthage::ui
         const auto area = lanesArea();
         ruler->setBounds (area.getX(), 0, area.getWidth(), rulerHeight);
         headers->setBounds (0, area.getY(), headerWidth, area.getHeight());
+        headerEdge.setBounds (headerWidth - PanelEdge::thickness / 2, area.getY(), PanelEdge::thickness, area.getHeight());
+        headerEdge.toFront (false);
         addLaneButton.setBounds (Rectangle<int> (0, 0, headerWidth, rulerHeight).reduced (theme::space2, 3).removeFromRight (88));   // the pop-out button sits on the left
         lanes->setBounds (area);
         hScroll.setBounds (area.getX(), area.getBottom(), area.getWidth(), getHeight() - area.getBottom());

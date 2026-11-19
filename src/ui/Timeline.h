@@ -60,8 +60,13 @@ namespace carthage::ui
         void nudgeSelection (int steps);
         void addMarkerAtPlayhead();
 
-        /** Adds a lane below `after` (or at the end) and scrolls to it. */
-        void addLane (tracktion::AudioTrack* after = nullptr);
+        /** Adds `count` lanes below `after` (or at the end) and scrolls to the first. */
+        void addLane (tracktion::AudioTrack* after = nullptr, int count = 1);
+
+        /** The current lane: the one whose name was clicked last (highlighted). ⌥⌘N adds a lane
+            below it, ⌘↑/⌘↓ move it (owner's list). */
+        void addLaneBelowCurrent();
+        void moveCurrentLane (int delta);
         void loopSelection();
 
         /** Once per frame: where the playhead is, and the start of the take in progress (if any). */
@@ -92,9 +97,16 @@ namespace carthage::ui
         void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
         void mouseMagnify (const juce::MouseEvent&, float scale) override;
 
-        static constexpr int rulerHeight = 28, headerWidth = 168;
+        static constexpr int rulerHeight = 28;
 
-        /** Lane height (W38): Option + scroll, Option+Cmd+= / -; saved with the view. */
+        /** The lane names' column (owner's list): drag its border, double-click fits the names. */
+        static constexpr int defaultHeaderWidth = 168, minHeaderWidth = 120, maxHeaderWidth = 400;
+        int getHeaderWidth() const noexcept   { return headerWidth; }
+        void setHeaderWidth (int);
+
+        /** Lane height (W38): Option + scroll and Option+Cmd+plus / minus change every lane, the
+            default with them; a lane's own border sets that lane alone (kept in the project),
+            and a double-click there returns it to the default. */
         static constexpr int defaultLaneHeight = 72, minLaneHeight = 40, maxLaneHeight = 240, laneHeightStep = 12;
         int getLaneHeight() const noexcept   { return laneHeight; }
         void setLaneHeight (int newHeight, std::optional<int> keepLaneAtY = {});
@@ -116,7 +128,22 @@ namespace carthage::ui
         double pixelsPerBeat = 24.0;
         double scrollBeat = 0.0;
         int scrollY = 0;
-        int laneHeight = defaultLaneHeight;
+        int laneHeight = defaultLaneHeight;   // the default for lanes without a height of their own
+        int headerWidth = defaultHeaderWidth;
+        tracktion::EditItemID currentLane;
+        tracktion::AudioTrack* findCurrentLane() const;
+
+        // Lane geometry, in content pixels (before scrolling).
+        int heightOfLane (int index) const;
+        int laneTop (int index) const;
+        int lanesHeight() const;
+        int laneIndexAt (int contentY) const;   // -1 above, size() and up below the last lane
+
+        // Each lane's top, and the end of the last, worked out once per change of the lanes
+        // (repaintLanes clears it): painting asks for them per lane, per frame.
+        mutable std::vector<int> tops;
+        const std::vector<int>& laneTops() const;
+        void setLaneOwnHeight (tracktion::AudioTrack&, std::optional<int>);
 
         std::shared_ptr<const editing::Copied> copied;
 
@@ -132,6 +159,8 @@ namespace carthage::ui
         std::unique_ptr<RecordingRegion> recording;
         juce::ScrollBar hScroll { false }, vScroll { true };
         juce::TextButton addLaneButton { "Add lane" };   // in the corner above the lane headers
+        PanelEdge headerEdge;                            // the border between lane names and the grid
+        int fittingHeaderWidth() const;
 
         double lastPlayheadSeconds = -1.0;
         std::optional<double> lastRecordingFrom;

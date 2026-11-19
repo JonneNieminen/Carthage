@@ -1064,6 +1064,9 @@ namespace carthage::ui
             case cmd::uiLarger:         setUiScale (uiScale() + 0.125); return true;
             case cmd::uiSmaller:        setUiScale (uiScale() - 0.125); return true;
             case cmd::uiActualSize:     setUiScale (1.0); return true;
+            case cmd::addLaneBelow:     timeline.addLaneBelowCurrent(); return true;
+            case cmd::moveLaneUp:       timeline.moveCurrentLane (-1); return true;
+            case cmd::moveLaneDown:     timeline.moveCurrentLane (1); return true;
             case cmd::lanesTaller:      timeline.setLaneHeight (timeline.getLaneHeight() + Timeline::laneHeightStep); return true;
             case cmd::lanesShorter:     timeline.setLaneHeight (timeline.getLaneHeight() - Timeline::laneHeightStep); return true;
             case cmd::keepPluginOnTop:

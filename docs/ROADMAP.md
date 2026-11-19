@@ -480,6 +480,14 @@ Deliver (F22, W38, W39):
       CI, fuzzing the project and sample readers, signposts, waveform overviews cached on disk;
       dependabot for GitHub Actions
 
+- [x] Lanes (W41): Add lanes below 1/2/4/8, Option+Cmd+N, Cmd-click M and S, move by drag and
+      Cmd+Up/Down, each lane's height from its border, the name column's border
+- [ ] Timeline (W41): free slice cut with a line, shading steps inside the beat
+- [ ] Tick-tock metronome (W41)
+- [ ] Settings search, views palette (Cmd+J), Cmd+1 to Cmd+9 for tabs (W41)
+- [ ] Settings test at the first launch and from Settings, with Yes/No (W41)
+- [ ] Pictures of every window with each project version, in a Restore window (W41)
+
 Exit checks:
 - [ ] Every item exercised in the running app by the owner
 - [ ] CI runs clang-tidy, the sanitizers and RTSan on every push, and is green

@@ -65,6 +65,7 @@ namespace carthage::app
             lanesTaller = afterLayouts, lanesShorter,
             uiLarger, uiSmaller, uiActualSize,
             toggleMetronome, undoHistory, exportLog, projectNotes, restoreVersion,
+            addLaneBelow, moveLaneUp, moveLaneDown,
         };
 
         /** Layout slots there can be; Settings chooses how many are offered (F21). */
@@ -86,7 +87,8 @@ namespace carthage::app
                      copyClips, cutClips, pasteClips, sampleBrowser,
                      windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings,
                      defaultLayout, commandPalette, keepPluginOnTop, lanesTaller, lanesShorter,
-                     uiLarger, uiSmaller, uiActualSize, toggleMetronome, undoHistory, exportLog, projectNotes, restoreVersion };
+                     uiLarger, uiSmaller, uiActualSize, toggleMetronome, undoHistory, exportLog, projectNotes, restoreVersion,
+                     addLaneBelow, moveLaneUp, moveLaneDown };
         }
 
         /** The layout commands, recall then save, slot 1 first. */
@@ -214,6 +216,9 @@ namespace carthage::app
                 case commandPalette:  info.setInfo (juce::String::fromUTF8 ("Find a command\xe2\x80\xa6"), "Type to find any command and run it", "Window", 0); info.addDefaultKeypress ('k', primary); break;
                 case lanesTaller:     info.setInfo ("Taller lanes", "Make every lane taller (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('+', primary | juce::ModifierKeys::altModifier); info.addDefaultKeypress ('=', primary | juce::ModifierKeys::altModifier); break;
                 case lanesShorter:    info.setInfo ("Shorter lanes", "Make every lane shorter (Option + scroll does it too)", "View", 0); info.addDefaultKeypress ('-', primary | juce::ModifierKeys::altModifier); break;
+                case addLaneBelow:    info.setInfo ("Add lane", "Add a lane below the current lane (the one whose name you clicked last)", "Lanes", 0); info.addDefaultKeypress ('n', primary | juce::ModifierKeys::altModifier); break;
+                case moveLaneUp:      info.setInfo ("Move lane up", "Move the current lane one place up", "Lanes", 0); info.addDefaultKeypress (KP::upKey, primary); break;
+                case moveLaneDown:    info.setInfo ("Move lane down", "Move the current lane one place down", "Lanes", 0); info.addDefaultKeypress (KP::downKey, primary); break;
                 case restoreVersion:  info.setInfo (juce::String::fromUTF8 ("Restore a version\xe2\x80\xa6"), "Go back to how this project was at an earlier save", "File", 0); break;
                 case projectNotes:    info.setInfo ("Project notes", "Notes kept with this project: lyrics, settings you used, what to try next", "File", 0); info.addDefaultKeypress ('n', primary | juce::ModifierKeys::shiftModifier); break;
                 case exportLog:       info.setInfo (juce::String::fromUTF8 ("Export log\xe2\x80\xa6"), "Save or copy Carthage's log, to send with a problem report", "Help", 0); break;

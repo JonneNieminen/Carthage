@@ -321,6 +321,40 @@ public:
             lanes = editing::lanes (*edit);
         }
 
+        beginTest ("Lanes: several added at once, moved, muted around and soloed alone (owner's list)");
+        {
+            const auto before = editing::lanes (*edit).size();
+            auto* first = editing::addLanes (*edit, 4, editing::lanes (*edit)[0]);
+            auto all = editing::lanes (*edit);
+            expectEquals (all.size(), before + 4);
+            expectEquals (all.indexOf (first), 1, "below the lane asked for");
+            um.undo();
+            expectEquals (editing::lanes (*edit).size(), before, "one undo step");
+
+            all = editing::lanes (*edit);
+            auto* moving = all[0];
+            editing::moveLane (*moving, all.size() - 1);
+            expect (editing::lanes (*edit).getLast() == moving, "to the bottom");
+            editing::moveLane (*moving, 0);
+            expect (editing::lanes (*edit).getFirst() == moving, "back to the top");
+            um.undo();
+            expect (editing::lanes (*edit).getLast() == moving, "undo moves it back");
+            um.undo();
+            expect (editing::lanes (*edit).getFirst() == moving);
+
+            all = editing::lanes (*edit);
+            editing::muteOthers (*all[1]);
+            for (auto* t : all) expect (t->isMuted (false) == (t != all[1]), "others muted");
+            editing::muteOthers (*all[1]);
+            for (auto* t : all) expect (! t->isMuted (false), "again: all play");
+
+            editing::soloAlone (*all[0]);
+            for (auto* t : all) expect (t->isSolo (false) == (t == all[0]), "soloed alone");
+            editing::soloAlone (*all[0]);
+            for (auto* t : all) expect (! t->isSolo (false), "again: no solo");
+            lanes = editing::lanes (*edit);
+        }
+
         expectEquals (editing::named ("Move", 1), juce::String ("Move clip"));
         expectEquals (editing::named ("Move", 3), juce::String ("Move 3 clips"));
     }

@@ -211,19 +211,98 @@ namespace carthage::editing
         return "Lane " + juce::String (n);
     }
 
+    namespace
+    {
+        AudioTrack* insertLane (Edit& edit, AudioTrack* after)
+        {
+            const auto name = nextLaneName (edit);
+            auto all = lanes (edit);
+            Track* preceding = after != nullptr ? after : all.getLast();
+            auto lane = edit.insertNewAudioTrack (TrackInsertPoint (nullptr, preceding), nullptr);
+
+            if (lane == nullptr)
+                return nullptr;
+
+            lane->setName (name);
+            return lane.get();
+        }
+    }
+
+    AudioTrack* addLanes (Edit& edit, int count, AudioTrack* after)
+    {
+        edit.getUndoManager().beginNewTransaction (count == 1 ? juce::String ("Add lane") : "Add " + juce::String (count) + " lanes");
+        AudioTrack* first = nullptr;
+
+        for (int i = 0; i < count; ++i)
+        {
+            after = insertLane (edit, after);
+
+            if (first == nullptr)
+                first = after;
+        }
+
+        return first;
+    }
+
+    void moveLane (AudioTrack& lane, int newIndex)
+    {
+        auto& edit = lane.edit;
+        auto others = lanes (edit);
+        others.removeFirstMatchingValue (&lane);
+        newIndex = std::clamp (newIndex, 0, others.size());
+
+        if (lanes (edit).indexOf (&lane) == newIndex)
+            return;
+
+        // After the lane before the new place; at the top, after whatever track precedes the
+        // first lane (Tracktion keeps its own tracks, such as markers and tempo, above them).
+        Track* preceding = nullptr;
+
+        if (newIndex > 0)
+        {
+            preceding = others[newIndex - 1];
+        }
+        else if (! others.isEmpty())
+        {
+            const auto all = getAllTracks (edit);
+            const auto first = all.indexOf (others.getFirst());
+            preceding = first > 0 ? all[first - 1] : nullptr;
+        }
+
+        edit.getUndoManager().beginNewTransaction ("Move lane");
+        edit.moveTrack (&lane, TrackInsertPoint (nullptr, preceding));
+    }
+
+    void muteOthers (AudioTrack& lane)
+    {
+        const auto all = lanes (lane.edit);
+        bool alreadyAlone = ! lane.isMuted (false);
+
+        for (auto* t : all)
+            if (t != &lane && ! t->isMuted (false))
+                alreadyAlone = false;
+
+        for (auto* t : all)
+            t->setMute (alreadyAlone ? false : t != &lane);
+    }
+
+    void soloAlone (AudioTrack& lane)
+    {
+        const auto all = lanes (lane.edit);
+        bool alreadyAlone = lane.isSolo (false);
+
+        for (auto* t : all)
+            if (t != &lane && t->isSolo (false))
+                alreadyAlone = false;
+
+        for (auto* t : all)
+            t->setSolo (alreadyAlone ? false : t == &lane);
+    }
+
     AudioTrack* addLane (Edit& edit, AudioTrack* after)
     {
         edit.getUndoManager().beginNewTransaction ("Add lane");
-        const auto name = nextLaneName (edit);
-        auto all = lanes (edit);
-        Track* preceding = after != nullptr ? after : all.getLast();
-        auto lane = edit.insertNewAudioTrack (TrackInsertPoint (nullptr, preceding), nullptr);
-
-        if (lane == nullptr)
-            return nullptr;
-
-        lane->setName (name);
-        return lane.get();
+        return insertLane (edit, after);
     }
 
     bool canDeleteLane (AudioTrack& lane, const AudioTrack& recordingLane)

@@ -123,6 +123,18 @@ namespace carthage::editing
     /** Adds a lane below `after` (or at the end), named by nextLaneName; one undo step. */
     tracktion::AudioTrack* addLane (tracktion::Edit&, tracktion::AudioTrack* after = nullptr);
 
+    /** Adds `count` lanes below `after` (or at the end) as one undo step; returns the first. */
+    tracktion::AudioTrack* addLanes (tracktion::Edit&, int count, tracktion::AudioTrack* after = nullptr);
+
+    /** Moves a lane to `newIndex` among the lanes, clips and all; one undo step. */
+    void moveLane (tracktion::AudioTrack&, int newIndex);
+
+    /** ⌘-click on M: every other lane muted and this one playing; if that is already so, every
+        lane plays again (owner's list). ⌘-click on S: this lane soloed alone; if it already is,
+        no lane is soloed. Not undo steps, as mute and solo are not. */
+    void muteOthers (tracktion::AudioTrack&);
+    void soloAlone (tracktion::AudioTrack&);
+
     /** Deletes a lane and its clips; one undo step. The caller keeps the recording lane and the
         last lane (canDeleteLane). */
     void deleteLane (tracktion::AudioTrack&);
