@@ -26,6 +26,29 @@ namespace carthage::ui
         bool lit = false;
     };
 
+    /** A tool in the toolbar: its icon, and the key that picks it in small figures beside it.
+        The chosen tool is live, so it takes the accent (AGENTS.md, UI). */
+    class ToolButton final : public juce::Button
+    {
+    public:
+        /** The tools' icons, in the order of Timeline::Tool. */
+        enum class Glyph { select, draw, paint, slice, erase, mute, zoom, stretch };
+
+        explicit ToolButton (Glyph);
+
+        void setKeyText (const juce::String& k)  { keyText = k; repaint(); }
+        void setChosen (bool on)                 { chosen = on; repaint(); }
+
+        static constexpr int width = 38, height = 28;
+
+        void paintButton (juce::Graphics&, bool highlighted, bool down) override;
+
+    private:
+        Glyph glyph;
+        juce::String keyText;
+        bool chosen = false;
+    };
+
     /** Peak meter with a held peak, in a recessed well: ok below -18 dBFS, warn to -6, clip above. */
     class LevelMeter final : public juce::Component
     {
@@ -43,7 +66,6 @@ namespace carthage::ui
         double holdTime = 0.0, clipHold = 0.0;
     };
 
-    /** The audio-thread load: a thin bar and a figure. Turns warn above 70 %, clip above 90 %. */
     /** Every control that adjusts a value is one of these (DECISIONS W37): a double-click puts it
         back to its default, and the scroll wheel over it adjusts it, with Shift for fine steps (a
         tenth). Switches and menus are not, and ignore the wheel, so scrolling a panel never
@@ -73,6 +95,7 @@ namespace carthage::ui
         }
     };
 
+    /** The audio-thread load: a thin bar and a figure. Turns warn above 70 %, clip above 90 %. */
     class LoadMeter final : public juce::Component, public juce::SettableTooltipClient
     {
     public:

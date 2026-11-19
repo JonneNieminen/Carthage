@@ -33,6 +33,141 @@ namespace carthage::ui
     }
 
     //==============================================================================================
+    ToolButton::ToolButton (Glyph g) : Button ({}), glyph (g)
+    {
+        setWantsKeyboardFocus (false);   // the tools have keys; focus stays on the time line
+        setMouseCursor (MouseCursor::PointingHandCursor);
+    }
+
+    namespace
+    {
+        /** Each tool's icon, drawn in a 16 x 16 box. */
+        Path toolGlyph (ToolButton::Glyph glyph)
+        {
+            using G = ToolButton::Glyph;
+            Path p;
+
+            switch (glyph)
+            {
+                case G::select:   // an arrow pointer
+                    p.startNewSubPath (4.0f, 2.0f);
+                    p.lineTo (4.0f, 13.5f);
+                    p.lineTo (7.0f, 10.5f);
+                    p.lineTo (9.2f, 15.0f);
+                    p.lineTo (11.0f, 14.2f);
+                    p.lineTo (8.8f, 9.8f);
+                    p.lineTo (13.0f, 9.8f);
+                    p.closeSubPath();
+                    break;
+
+                case G::draw:     // a pencil
+                    p.startNewSubPath (2.5f, 13.5f);
+                    p.lineTo (3.3f, 10.2f);
+                    p.lineTo (11.0f, 2.5f);
+                    p.lineTo (13.5f, 5.0f);
+                    p.lineTo (5.8f, 12.7f);
+                    p.closeSubPath();
+                    p.startNewSubPath (9.3f, 4.2f);
+                    p.lineTo (11.8f, 6.7f);
+                    break;
+
+                case G::paint:    // a roller
+                    p.addRoundedRectangle (2.5f, 2.0f, 9.5f, 4.0f, 1.0f);
+                    p.startNewSubPath (12.0f, 4.0f);
+                    p.lineTo (14.0f, 4.0f);
+                    p.lineTo (14.0f, 8.5f);
+                    p.lineTo (8.0f, 8.5f);
+                    p.lineTo (8.0f, 14.0f);
+                    break;
+
+                case G::slice:    // scissors
+                    p.addEllipse (2.0f, 10.0f, 4.0f, 4.0f);
+                    p.addEllipse (10.0f, 10.0f, 4.0f, 4.0f);
+                    p.startNewSubPath (5.4f, 10.4f);
+                    p.lineTo (11.5f, 2.0f);
+                    p.startNewSubPath (10.6f, 10.4f);
+                    p.lineTo (4.5f, 2.0f);
+                    break;
+
+                case G::erase:    // an eraser on its line
+                    p.startNewSubPath (6.0f, 13.5f);
+                    p.lineTo (2.5f, 10.0f);
+                    p.lineTo (9.0f, 3.5f);
+                    p.lineTo (13.5f, 8.0f);
+                    p.lineTo (8.0f, 13.5f);
+                    p.closeSubPath();
+                    p.startNewSubPath (5.2f, 6.3f);
+                    p.lineTo (10.0f, 11.1f);
+                    p.startNewSubPath (8.0f, 13.5f);
+                    p.lineTo (14.0f, 13.5f);
+                    break;
+
+                case G::mute:     // a speaker, crossed out
+                    p.startNewSubPath (2.0f, 6.0f);
+                    p.lineTo (4.8f, 6.0f);
+                    p.lineTo (8.5f, 3.0f);
+                    p.lineTo (8.5f, 13.0f);
+                    p.lineTo (4.8f, 10.0f);
+                    p.lineTo (2.0f, 10.0f);
+                    p.closeSubPath();
+                    p.startNewSubPath (11.0f, 6.0f);
+                    p.lineTo (14.5f, 9.5f);
+                    p.startNewSubPath (14.5f, 6.0f);
+                    p.lineTo (11.0f, 9.5f);
+                    break;
+
+                case G::zoom:     // a magnifier
+                    p.addEllipse (2.0f, 2.0f, 9.0f, 9.0f);
+                    p.startNewSubPath (10.0f, 10.0f);
+                    p.lineTo (14.0f, 14.0f);
+                    break;
+
+                case G::stretch:  // two edges pulled apart
+                    p.startNewSubPath (2.0f, 3.0f);
+                    p.lineTo (2.0f, 13.0f);
+                    p.startNewSubPath (14.0f, 3.0f);
+                    p.lineTo (14.0f, 13.0f);
+                    p.startNewSubPath (4.5f, 8.0f);
+                    p.lineTo (11.5f, 8.0f);
+                    p.startNewSubPath (6.5f, 6.0f);
+                    p.lineTo (4.5f, 8.0f);
+                    p.lineTo (6.5f, 10.0f);
+                    p.startNewSubPath (9.5f, 6.0f);
+                    p.lineTo (11.5f, 8.0f);
+                    p.lineTo (9.5f, 10.0f);
+                    break;
+            }
+
+            return p;
+        }
+    }
+
+    void ToolButton::paintButton (Graphics& g, bool highlighted, bool down)
+    {
+        const auto r = getLocalBounds().toFloat().reduced (0.5f);
+
+        if (chosen || highlighted || down)
+        {
+            g.setColour (chosen ? theme::accent : down ? theme::hover.darker (0.15f) : theme::hover);
+            g.fillRoundedRectangle (r, theme::radiusSm);
+        }
+
+        const auto ink = chosen ? theme::onAccent : highlighted ? theme::text : theme::mist;
+        auto area = getLocalBounds().reduced (theme::space1 + 2, 0);
+
+        // The icon on the left, the key on the right: the key is how the tool is picked.
+        auto icon = toolGlyph (glyph);
+        const auto box = area.removeFromLeft (16).withSizeKeepingCentre (16, 16).toFloat();
+        icon.applyTransform (AffineTransform::translation (box.getX(), box.getY()));
+        g.setColour (ink);
+        g.strokePath (icon, PathStrokeType (1.4f, PathStrokeType::curved, PathStrokeType::rounded));
+
+        g.setColour (chosen ? theme::onAccent : theme::muted);
+        g.setFont (theme::timeFont (theme::textXs));
+        g.drawText (keyText, area, Justification::centredRight, false);
+    }
+
+    //==============================================================================================
     IconButton::IconButton (Glyph g) : Button ({}), glyph (g)
     {
         setWantsKeyboardFocus (true);
@@ -157,7 +292,11 @@ namespace carthage::ui
         level = std::max (peak, fallen < 0.001f ? 0.0f : fallen);
 
         if (peak >= held) { held = peak; holdTime = 1.0; }
-        else if ((holdTime -= dt) <= 0.0) held = level;
+        else
+        {
+            holdTime -= dt;
+            if (holdTime <= 0.0) held = level;
+        }
 
         if (peak >= 1.0f) clipHold = 3.0;
         else clipHold = std::max (0.0, clipHold - dt);

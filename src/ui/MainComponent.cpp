@@ -460,6 +460,7 @@ namespace carthage::ui
                                                               signalRow.get(), &timeline, &statusLabel })
             addAndMakeVisible (comp);
 
+        loadMeter.setVisible (props().getBoolValue ("showLoad", false));
         addChildComponent (settings);
         addAndMakeVisible (browser);
         addChildComponent (samples);
@@ -483,6 +484,7 @@ namespace carthage::ui
         settings.onPanelWidthChanged = [this] (int w) { setPanelWidth (w); };
         settings.onBrowserTextSizeChanged = [this] (float px) { samples.setTextSize (px); };
         settings.onPlayWhileHeldChanged = [this] (bool held) { samples.setPlayWhileHeld (held); };
+        settings.onShowLoadChanged = [this] (bool show) { loadMeter.setVisible (show); resized(); };
         showPanel (panelShowsSamples, false);
 
         // Views in their own windows (F21): a pop-out button on each, the way back on its window.
@@ -534,10 +536,29 @@ namespace carthage::ui
         // The toolbar: a button per tool, labelled with its current key, and the grid.
         for (int i = 0; i < 8; ++i)
         {
-            auto* b = toolButtons.add (new TextButton());
+            auto* b = toolButtons.add (new ToolButton (static_cast<ToolButton::Glyph> (i)));
             b->onClick = [this, i] { timeline.setTool (static_cast<Timeline::Tool> (i)); refreshToolbar(); };
             addAndMakeVisible (b);
         }
+
+        styleLabel (masterLabel, theme::textSm, theme::muted);
+        masterLabel.setText ("Master", dontSendNotification);
+        masterVolume.setSliderStyle (Slider::LinearHorizontal);
+        masterVolume.setTextBoxStyle (Slider::TextBoxRight, false, 50, 22);   // click the figure to type one
+        masterVolume.setRange (-60.0, 6.0, 0.1);
+        masterVolume.setTextValueSuffix (" dB");
+        masterVolume.setNumDecimalPlacesToDisplay (1);
+        masterVolume.setTooltip ("The project's master level. Drag, scroll, or click the figure and type one; "
+                                 "double-click returns to " + String (newProjectMasterDb, 1) + " dB.");
+        masterVolume.onValueChange = [this]
+        {
+            if (auto master = session.getEdit().getMasterVolumePlugin())
+                master->setVolumeDb (static_cast<float> (masterVolume.getValue()));
+        };
+        masterVolume.onDragStart = [this] { session.getEdit().getUndoManager().beginNewTransaction ("Master level"); };
+        for (auto* comp : std::initializer_list<Component*> { &masterLabel, &masterVolume })
+            addAndMakeVisible (comp);
+        refreshMasterVolume();
 
         snapButton.onClick = [this] { commands.invokeDirectly (cmd::toggleGrid, false); };
         addAndMakeVisible (snapButton);
@@ -569,6 +590,7 @@ namespace carthage::ui
             tabs.refresh();
             timeline.projectChanged();
             refreshToolbar();
+            refreshMasterVolume();
             signalRow->refreshPlugin();
             signalRow->setMessage ({}, false);
             updateTransportButtons();
@@ -626,8 +648,8 @@ namespace carthage::ui
 
             // The label is the tool's key, so a rebound tool shows its new key; one with no key
             // shows the first letter of its name.
-            b->setButtonText (keys.isEmpty() ? commands.getNameOfCommand (id).substring (0, 1)
-                                             : keys.getFirst().getTextDescriptionWithIcons().toUpperCase());
+            b->setKeyText (keys.isEmpty() ? commands.getNameOfCommand (id).substring (0, 1)
+                                          : keys.getFirst().getTextDescriptionWithIcons().toUpperCase());
             b->setTooltip (cmd::tooltip (commands, id));
         }
     }
@@ -901,14 +923,17 @@ namespace carthage::ui
         refreshToolbar();
     }
 
+    void MainComponent::refreshMasterVolume()
+    {
+        if (auto master = session.getEdit().getMasterVolumePlugin())
+            masterVolume.setValue (master->getVolumeDb(), dontSendNotification);
+    }
+
     void MainComponent::refreshToolbar()
     {
         for (int i = 0; i < toolButtons.size(); ++i)
         {
-            const bool on = static_cast<int> (timeline.getTool()) == i;
-            // The active tool is live: the accent (AGENTS.md, UI).
-            toolButtons[i]->setColour (TextButton::buttonColourId, on ? theme::accent : theme::bg);
-            toolButtons[i]->setColour (TextButton::textColourOffId, on ? theme::onAccent : theme::muted);
+            toolButtons[i]->setChosen (static_cast<int> (timeline.getTool()) == i);
         }
 
         snapButton.setColour (TextButton::buttonColourId, timeline.getGrid().enabled ? theme::hover : theme::bg);
@@ -1229,9 +1254,13 @@ namespace carthage::ui
         timeLabel.setBounds (top.removeFromLeft (140));
         top.removeFromLeft (theme::space4);
 
+        masterLabel.setBounds (top.removeFromLeft (46));
+        masterVolume.setBounds (top.removeFromLeft (116).withSizeKeepingCentre (116, 24));
+        top.removeFromLeft (theme::space4);
+
         for (auto* b : toolButtons)
         {
-            b->setBounds (top.removeFromLeft (28).withSizeKeepingCentre (28, 28));
+            b->setBounds (top.removeFromLeft (ToolButton::width).withSizeKeepingCentre (ToolButton::width, ToolButton::height));
             top.removeFromLeft (2);
         }
 
@@ -1246,7 +1275,8 @@ namespace carthage::ui
         top.removeFromRight (theme::space1);   // the figure and its words read as "6.3 ms round trip"
         latencyLabel.setBounds (top.removeFromRight (72));
         top.removeFromRight (theme::space6);
-        loadMeter.setBounds (top.removeFromRight (140).withSizeKeepingCentre (140, 20));
+        if (loadMeter.isVisible())   // hidden unless Settings shows it (owner's list F22)
+            loadMeter.setBounds (top.removeFromRight (140).withSizeKeepingCentre (140, 20));
 
         // The panel docks on the left, under the transport; the rest of the window shifts over.
         // Its switch sits on the panel's own surface at the top. A browser in its own window

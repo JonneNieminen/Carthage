@@ -37,6 +37,9 @@ namespace carthage::ui
         std::function<void (float)> onBrowserTextSizeChanged;
         std::function<void (bool)> onPlayWhileHeldChanged;
 
+        /** "Show the load in the toolbar" (off by default, owner's list F22). */
+        std::function<void (bool)> onShowLoadChanged;
+
         /** "Check now", beside the version: the same as "Check for updates…" in the menu. */
         std::function<void()> onCheckForUpdates;
         void setBetaUpdates (bool on, bool available, const juce::String& note);
@@ -88,12 +91,13 @@ namespace carthage::ui
 
         juce::Label cpuLabel, cpuValue, threadLabel, threadValue, dropoutsLabel, dropoutsValue;
         juce::TextButton resetDropouts { "Reset" };
+        juce::ToggleButton showLoad { "Show the load in the toolbar" };
         int dropoutBase = 0, lastXruns = 0;
         float threadPeakShown = 0.0f;
 
         std::optional<engine::LatencyProbe::Measurement> lastMeasurement;
 
-        void applyDevice (std::function<void (juce::AudioDeviceManager::AudioDeviceSetup&)>);
+        void applyDevice (const std::function<void (juce::AudioDeviceManager::AudioDeviceSetup&)>&);
         void updateLatency();
         void startMeasurement();
 

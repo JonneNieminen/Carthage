@@ -122,8 +122,16 @@ namespace carthage::ui
 
 
 
-        // Toolbar: the tools (labelled by their keys), the grid menu and the snap toggle.
-        juce::OwnedArray<juce::TextButton> toolButtons;
+        // The project's master level, beside the transport (owner's list F22): a drag, the wheel or
+        // a typed figure; double-click returns to a new project's level. Phase 5 makes it the
+        // master fader's twin.
+        static constexpr double newProjectMasterDb = -3.0;   // Tracktion's level for a new edit
+        ValueSlider masterVolume { newProjectMasterDb };
+        juce::Label masterLabel;
+        void refreshMasterVolume();
+
+        // Toolbar: the tools (icons with their keys), the grid menu and the snap toggle.
+        juce::OwnedArray<ToolButton> toolButtons;
         juce::ComboBox gridMenu;
         juce::TextButton snapButton { "Snap" };
         void refreshToolbar();

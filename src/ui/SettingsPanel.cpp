@@ -106,6 +106,14 @@ namespace carthage::ui
             if (onBrowserTextSizeChanged) onBrowserTextSizeChanged (static_cast<float> (textSize.getSelectedId()));
         };
 
+        showLoad.setToggleState (props.getBoolValue ("showLoad", false), dontSendNotification);
+        showLoad.setTooltip ("A bar beside the latency figure: the audio thread's average load and its worst recent block");
+        showLoad.onClick = [this]
+        {
+            session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("showLoad", showLoad.getToggleState());
+            if (onShowLoadChanged) onShowLoadChanged (showLoad.getToggleState());
+        };
+
         playWhileHeld.setToggleState (props.getBoolValue ("playWhileHeld", false), dontSendNotification);
         playWhileHeld.setTooltip ("Off: a click plays the whole sound. On: a sound plays while the mouse button, Enter or Space is held.");
         playWhileHeld.onClick = [this]
@@ -151,7 +159,7 @@ namespace carthage::ui
                                                            &rateLabel, &bufferLabel, &formatLabel, &reportedLabel, &reportedValue,
                                                            &measuredLabel, &measuredValue, &loopOutLabel, &loopInLabel, &loopHint,
                                                            &measureButton, &useMeasured, &cpuLabel, &cpuValue, &threadLabel,
-                                                           &threadValue, &dropoutsLabel, &dropoutsValue, &resetDropouts,
+                                                           &threadValue, &dropoutsLabel, &dropoutsValue, &resetDropouts, &showLoad,
                                                            &shortcutsHeading, &shortcuts })
             body.addAndMakeVisible (c);
 
@@ -218,7 +226,7 @@ namespace carthage::ui
         refresh();
     }
 
-    void SettingsPanel::applyDevice (std::function<void (AudioDeviceManager::AudioDeviceSetup&)> change)
+    void SettingsPanel::applyDevice (const std::function<void (AudioDeviceManager::AudioDeviceSetup&)>& change)
     {
         if (session.isRecording())
             return;   // never pull the device out from under a take
@@ -484,6 +492,7 @@ namespace carthage::ui
         dropoutsLabel.setBounds (drops.removeFromLeft (labelWidth));
         resetDropouts.setBounds (drops.removeFromRight (64));
         dropoutsValue.setBounds (drops);
+        showLoad.setBounds (r.removeFromTop (rowHeight));
 
         heading (projectsHeading);
         row (atLaunchLabel, atLaunch);

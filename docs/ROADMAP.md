@@ -463,7 +463,7 @@ Deliver (F22, W38, W39):
 - [ ] App-wide UI size (Settings 75-150 %, Cmd+= / Cmd+- / Cmd+0); rename layouts; Cmd+W on a view's
       window sends it back
 - [ ] Tooltips on every tool; Cmd+C copies a showing tooltip, Copy tooltip on right-click
-- [ ] Toolbar: icons with their letters, space used well; the CPU bar hidden by default (Settings);
+- [x] Toolbar: icons with their letters, space used well; the CPU bar hidden by default (Settings);
       a master volume slider beside the transport that also takes a typed value
 - [ ] Lanes: Lane 1, 2… renamable; add, delete, mute and solo from the lane header
 - [ ] Projects renamed from their tabs (asks first); tap tempo; a question when the tempo changes
