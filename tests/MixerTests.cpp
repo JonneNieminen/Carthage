@@ -218,6 +218,35 @@ public:
             expect (editing::insertsOf (*ch).isEmpty(), "a channel's own fader and meters are not inserts");
         }
 
+        beginTest ("Each channel keeps its own input, monitoring and the record channel (W51)");
+        {
+            const auto chs = editing::channels (*edit);
+            expect (! editing::inputOf (*chs[3]).isSet(), "no input until chosen");
+            um.clearUndoHistory();   // earlier routing calls here ran outside a named step
+
+            editing::setInput (*chs[3], { 2, false });
+            editing::setMonitoring (*chs[3], true);
+            expect (editing::inputOf (*chs[3]) == editing::ChannelInput { 2, false });
+            expect (editing::isMonitoring (*chs[3]));
+
+            editing::setInput (*chs[4], { 3, true });
+            expect (editing::inputOf (*chs[4]) == editing::ChannelInput { 2, true }, "a stereo pair starts on its even input");
+
+            editing::syncMix (*edit, nullptr);
+            expect (chs[3]->isProcessing (false), "a channel hearing its input is in the graph");
+            expect (! chs[4]->isProcessing (false), "one not hearing it is not (nothing else plays through it)");
+
+            expect (editing::recordChannel (*edit) == chs[0], "takes record through the first channel by default");
+            editing::setRecordChannel (*edit, *chs[3]);
+            expect (editing::recordChannel (*edit) == chs[3]);
+            expect (! um.canUndo(), "inputs, monitoring, the record channel and syncing are not undo steps");
+
+            editing::setInput (*chs[3], {});
+            editing::setInput (*chs[4], {});
+            editing::setMonitoring (*chs[3], false);
+            editing::setRecordChannel (*edit, *chs[0]);
+        }
+
         beginTest ("A project from before 5a keeps its sound: lane n plays through channel n");
         {
             auto old = tracktion::createEmptyEdit (engine, folder.getChildFile ("Old.tracktionedit"));

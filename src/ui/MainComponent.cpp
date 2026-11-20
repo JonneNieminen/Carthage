@@ -103,335 +103,6 @@ namespace carthage::ui
         Holder holder;
     };
 
-    //==============================================================================================
-    class PluginWindow final : public DocumentWindow
-    {
-    public:
-        PluginWindow (AudioPluginInstance& instance, std::function<void()> closed)
-            : DocumentWindow (instance.getName(), theme::bg, DocumentWindow::closeButton), onClosed (std::move (closed))
-        {
-            setUsingNativeTitleBar (true);
-
-            // A plugin without its own editor gets JUCE's generic parameter view.
-            AudioProcessorEditor* editor = instance.hasEditor() ? instance.createEditorAndMakeActive() : nullptr;
-
-            if (editor == nullptr)
-                editor = new GenericAudioProcessorEditor (instance);
-
-            setContentOwned (editor, true);
-            setResizable (editor->isResizable(), false);
-            centreWithSize (std::max (getWidth(), 200), std::max (getHeight(), 100));
-            setVisible (true);
-        }
-
-        void closeButtonPressed() override   { if (onClosed) onClosed(); }
-
-    private:
-        std::function<void()> onClosed;
-    };
-
-    //==============================================================================================
-    /** The signal path on one line: input, plugin, output, joined by a cable that lights when the
-        input is audible. The plugin is the one raised thing on it. */
-    class MainComponent::SignalRow final : public Component, public DragAndDropTarget
-    {
-    public:
-        SignalRow (engine::Session& s, ApplicationCommandManager& c) : session (s), commands (c)
-        {
-            styleLabel (inputHeading, theme::textSm, theme::muted, true);
-            styleLabel (outputHeading, theme::textSm, theme::muted, true);
-            styleLabel (pluginName, theme::textLg, theme::text, true);
-            styleLabel (pluginDetail, theme::textSm, theme::muted);
-            inputHeading.setText ("Input", dontSendNotification);
-            outputHeading.setText ("Output", dontSendNotification);
-
-            input.setTooltip ("The input your guitar is plugged into");
-            output.setTooltip ("Where you hear Carthage");
-            refreshTooltips();
-            remove.setTooltip ("Take the plugin out of the path");
-
-            monitor.setToggleState (session.isMonitoring(), dontSendNotification);
-            monitor.onClick = [this] { commands.invokeDirectly (cmd::toggleMonitoring, false); };
-            choose.onClick = [this] { commands.invokeDirectly (cmd::choosePlugin, false); };
-            open.onClick = [this] { commands.invokeDirectly (cmd::openPluginEditor, false); };
-            bypass.onClick = [this] { commands.invokeDirectly (cmd::bypassPlugin, false); };
-            remove.onClick = [this] { if (onRemove) onRemove(); };
-
-            input.onChange = [this]
-            {
-                const auto id = input.getSelectedId();
-                session.setInput ((id - 1) % 1000, id > 1000);
-            };
-
-            output.onChange = [this]
-            {
-                auto& dm = session.getEngine().getDeviceManager();
-                if (auto* wo = dm.getWaveOutDevice (output.getSelectedId() - 1))
-                    dm.setDefaultWaveOutDevice (wo->getDeviceID());
-            };
-
-            for (auto* child : std::initializer_list<Component*> { &inputHeading, &input, &meterL, &meterR, &monitor,
-                                                                   &pluginName, &pluginDetail, &choose, &open, &bypass,
-                                                                   &remove, &outputHeading, &output })
-                addAndMakeVisible (child);
-
-            // Buttons sit on the card, so they take the next surface up.
-            for (auto* b : { &choose, &open, &bypass, &remove })
-                b->setColour (TextButton::buttonColourId, theme::hover);
-
-            refreshDevices();
-            refreshPlugin();
-        }
-
-        void refreshDevices()
-        {
-            input.clear (dontSendNotification);
-            output.clear (dontSendNotification);
-
-            if (auto* device = session.getDeviceManager().getCurrentAudioDevice())
-            {
-                // The interface's own channel names when it has them ("Analogue 1"). A bare number, or
-                // nothing (the built-in microphone calls its channel "1"), reads as "Input 1".
-                const auto names = device->getInputChannelNames();
-                const auto ins = names.size();
-                const auto nameOf = [&] (int i)
-                {
-                    const auto n = names[i].trim();
-                    return n.isEmpty() || n.containsOnly ("0123456789") ? "Input " + String (i + 1) : n;
-                };
-
-                // Ids: channel + 1 for mono, 1000 + channel + 1 for a stereo pair.
-                for (int i = 0; i < ins; ++i)
-                    input.addItem (nameOf (i), i + 1);
-
-                if (ins > 1)
-                {
-                    input.addSeparator();
-                    for (int i = 0; i + 1 < ins; i += 2)
-                        input.addItem (nameOf (i) + " + " + nameOf (i + 1), 1000 + i + 1);
-                }
-
-                input.setSelectedId (session.isInputStereo() ? 1000 + session.getInputChannel() + 1
-                                                             : session.getInputChannel() + 1, dontSendNotification);
-            }
-
-            auto& dm = session.getEngine().getDeviceManager();
-
-            for (int i = 0; i < dm.getNumWaveOutDevices(); ++i)
-                if (auto* wo = dm.getWaveOutDevice (i))
-                {
-                    output.addItem (wo->getName(), i + 1);
-                    if (wo->getDeviceID() == dm.getDefaultWaveOutDeviceID())
-                        output.setSelectedId (i + 1, dontSendNotification);
-                }
-
-            meterR.setVisible (session.isInputStereo());
-            resized();
-        }
-
-        void refreshPlugin()
-        {
-            auto* plugin = session.getInsertedPlugin();
-            const bool has = plugin != nullptr;
-
-            if (scanning.isNotEmpty())
-            {
-                pluginName.setText (scanning, dontSendNotification);
-                pluginDetail.setText ("Checking it in a separate process first", dontSendNotification);
-            }
-            else if (has)
-            {
-                pluginName.setText (plugin->getName(), dontSendNotification);
-                String detail = plugin->getVendor();
-
-                if (auto* ext = dynamic_cast<tracktion::ExternalPlugin*> (plugin))
-                    detail << "  " << (ext->desc.pluginFormatName == "AudioUnit" ? "Audio Unit" : ext->desc.pluginFormatName);
-
-                if (! plugin->isEnabled())
-                    detail << "  bypassed";
-
-                pluginDetail.setText (detail, dontSendNotification);
-            }
-            else
-            {
-                pluginName.setText ("No plugin", dontSendNotification);
-                pluginDetail.setText (message.isNotEmpty() ? message : "Choose an amp sim or effect to play through",
-                                      dontSendNotification);
-            }
-
-            pluginDetail.setColour (Label::textColourId, messageIsWarning && ! has ? theme::warn : theme::muted);
-            choose.setButtonText (has ? "Change" : "Choose a plugin");
-            choose.setEnabled (scanning.isEmpty());
-            open.setVisible (has);
-            bypass.setVisible (has);
-            remove.setVisible (has);
-            bypass.setToggleState (has && ! plugin->isEnabled(), dontSendNotification);
-            resized();
-            repaint();
-        }
-
-        /** A take records the input it started with: the pickers lock until it ends. Changing either
-            would rebuild the engine's device list, which stops playback under the take. */
-        void setRecording (bool recording)
-        {
-            if (input.isEnabled() != recording)
-                return;
-
-            input.setEnabled (! recording);
-            output.setEnabled (! recording);
-            input.setTooltip (recording ? "Stop recording to change the input" : "The input your guitar is plugged into");
-            output.setTooltip (recording ? "Stop recording to change the output" : "Where you hear Carthage");
-        }
-
-        /** Tooltips name the current shortcuts. */
-        void refreshTooltips()
-        {
-            monitor.setTooltip (cmd::tooltip (commands, cmd::toggleMonitoring));
-            choose.setTooltip (cmd::tooltip (commands, cmd::choosePlugin));
-            open.setTooltip (cmd::tooltip (commands, cmd::openPluginEditor));
-            bypass.setTooltip (cmd::tooltip (commands, cmd::bypassPlugin));
-        }
-
-        void setMessage (const String& m, bool warning)   { message = m; messageIsWarning = warning; refreshPlugin(); }
-        void setScanning (const String& name)             { scanning = name; refreshPlugin(); }
-
-        void frame (std::array<float, 2> peaks, double dt)
-        {
-            meterL.push (peaks[0], dt);
-            if (meterR.isVisible()) meterR.push (peaks[1], dt);
-
-            // The cable is live when the input is audible: monitoring on, and some signal arriving.
-            const bool live = session.isMonitoring() && std::max (peaks[0], peaks[1]) > 0.0005f;
-            if (live != cableLive) { cableLive = live; repaint (cableArea()); }
-            if (monitor.getToggleState() != session.isMonitoring()) monitor.setToggleState (session.isMonitoring(), dontSendNotification);
-        }
-
-        std::function<void()> onRemove;
-
-        /** A plugin dragged from the browser onto the card: its library key. */
-        std::function<void (const String&)> onPluginDropped;
-
-        bool isInterestedInDragSource (const SourceDetails& d) override
-        {
-            return d.description.toString().startsWith (PluginBrowser::dragPrefix);
-        }
-
-        void itemDragEnter (const SourceDetails&) override   { dropHover = true; repaint(); }
-        void itemDragExit (const SourceDetails&) override    { dropHover = false; repaint(); }
-
-        void itemDropped (const SourceDetails& d) override
-        {
-            dropHover = false;
-            repaint();
-
-            if (onPluginDropped)
-                onPluginDropped (d.description.toString().fromFirstOccurrenceOf (PluginBrowser::dragPrefix, false, false));
-        }
-
-        void paint (Graphics& g) override
-        {
-            g.fillAll (theme::bg2);
-            g.setColour (theme::line);
-            g.fillRect (0, getHeight() - 1, getWidth(), 1);
-
-            // The cable: one line through the row, behind the plugin card.
-            const auto cable = cableArea().toFloat();
-            const auto y = cable.getCentreY();
-            g.setColour (cableLive ? theme::accent : theme::lineStrong);
-            Path p;
-            p.startNewSubPath (cable.getX(), y);
-            p.lineTo (cable.getRight(), y);
-            g.strokePath (p, PathStrokeType (2.0f, PathStrokeType::curved, PathStrokeType::rounded));
-            g.fillEllipse (cable.getX() - 3.0f, y - 3.0f, 6.0f, 6.0f);
-            g.fillEllipse (cable.getRight() - 3.0f, y - 3.0f, 6.0f, 6.0f);
-
-            // The plugin card.
-            const auto r = cardBounds.toFloat();
-            g.setColour (theme::card);
-            g.fillRoundedRectangle (r, theme::radiusMd);
-            g.setColour (session.getInsertedPlugin() != nullptr && session.getInsertedPlugin()->isEnabled() && cableLive
-                             ? theme::accent.withAlpha (0.6f) : theme::line);
-            g.drawRoundedRectangle (r.reduced (0.5f), theme::radiusMd, theme::stroke);
-
-            if (dropHover)
-            {
-                // A plugin is being dragged over the row: the card is where it lands.
-                g.setColour (theme::accent);
-                g.drawRoundedRectangle (r.expanded (2.0f), theme::radiusMd + 2.0f, 2.0f);
-            }
-        }
-
-        void resized() override
-        {
-            auto r = getLocalBounds().reduced (theme::space4, theme::space3);
-
-            auto in = r.removeFromLeft (220);
-            inputHeading.setBounds (in.removeFromTop (16));
-            in.removeFromTop (theme::space1);
-            input.setBounds (in.removeFromTop (28));
-            in.removeFromTop (theme::space2);
-            auto meters = in.removeFromTop (meterR.isVisible() ? 14 : 6);
-            if (meterR.isVisible())
-            {
-                meterL.setBounds (meters.removeFromTop (6));
-                meters.removeFromTop (2);
-                meterR.setBounds (meters.removeFromTop (6));
-            }
-            else
-            {
-                meterL.setBounds (meters);
-            }
-            in.removeFromTop (theme::space2);
-            monitor.setBounds (in.removeFromTop (22));
-
-            auto out = r.removeFromRight (200);
-            outputHeading.setBounds (out.removeFromTop (16));
-            out.removeFromTop (theme::space1);
-            output.setBounds (out.removeFromTop (28));
-
-            inputEdge = in.getRight() + theme::space2;
-            outputEdge = out.getX() - theme::space2;
-
-            const auto middle = Rectangle<int> (inputEdge, r.getY(), outputEdge - inputEdge, r.getHeight());
-            cardBounds = middle.withSizeKeepingCentre (std::min (460, middle.getWidth() - 2 * theme::space8), 76);
-
-            auto card = cardBounds.reduced (theme::space4, theme::space3);
-            auto buttons = card.removeFromRight (open.isVisible() ? 236 : 132).withSizeKeepingCentre (open.isVisible() ? 236 : 132, 28);
-            choose.setBounds (buttons.removeFromLeft (open.isVisible() ? 72 : 132));
-
-            if (open.isVisible())
-            {
-                buttons.removeFromLeft (theme::space1);
-                open.setBounds (buttons.removeFromLeft (52));
-                buttons.removeFromLeft (theme::space1);
-                bypass.setBounds (buttons.removeFromLeft (64));
-                buttons.removeFromLeft (theme::space1);
-                remove.setBounds (buttons);
-            }
-
-            pluginName.setBounds (card.removeFromTop (card.getHeight() / 2).withTrimmedRight (theme::space2));
-            pluginDetail.setBounds (card.withTrimmedRight (theme::space2));
-        }
-
-    private:
-        engine::Session& session;
-        ApplicationCommandManager& commands;
-        Label inputHeading, outputHeading, pluginName, pluginDetail;
-        ComboBox input, output;
-        LevelMeter meterL, meterR;
-        Switch monitor { "Hear the input" };
-        TextButton choose { "Choose a plugin" }, open { "Open" }, bypass { "Bypass" }, remove { "Remove" };
-        Rectangle<int> cardBounds;
-        bool dropHover = false;
-        int inputEdge = 0, outputEdge = 0;
-        bool cableLive = false, messageIsWarning = false;
-        String message, scanning;
-
-        Rectangle<int> cableArea() const
-        {
-            return { inputEdge, cardBounds.getCentreY() - 4, outputEdge - inputEdge, 8 };
-        }
-    };
 
     //==============================================================================================
     /** The front project's notes, typed straight into the project. */
@@ -583,8 +254,6 @@ namespace carthage::ui
                                       s.getEngine().getPropertyStorage().getPropertiesFile().getIntValue ("sampleEditorHeight", SampleEditor::defaultHeight))),
           session (s), commands (c), timeline (s), mixer (s, pluginWindows), settings (s, c, cmd::inMenuOrder()), browser (s), samples (s)
     {
-        signalRow = std::make_unique<SignalRow> (session, commands);
-        signalRow->onRemove = [this] { closePluginWindow(); session.removePlugin(); signalRow->setMessage ({}, false); };
 
 
         recordButton.onClick = [this] { commands.invokeDirectly (cmd::record, false); };
@@ -613,7 +282,7 @@ namespace carthage::ui
 
         for (auto* comp : std::initializer_list<Component*> { &recordButton, &playButton, &toStartButton, &metronomeButton, &loopButton, &timeLabel,
                                                               &loadMeter, &latencyLabel, &latencyWords, &settingsButton, &mixerButton,
-                                                              signalRow.get(), &timeline, &statusLabel })
+                                                              &timeline, &statusLabel })
             addAndMakeVisible (comp);
 
         addChildComponent (settings);
@@ -682,8 +351,6 @@ namespace carthage::ui
         // Views in their own windows (F21): a pop-out button on each, the way back on its window.
         popTimeline.setTooltip ("The timeline in a window of its own");
         popTimeline.onClick = [this] { setDetached (View::timeline, true); };
-        popSignal.setTooltip ("The signal path in a window of its own");
-        popSignal.onClick = [this] { setDetached (View::signal, true); };
         popPanel.onClick = [this]
         {
             const auto samplesHere = ! isDetached (View::samples), pluginsHere = ! isDetached (View::plugins);
@@ -695,7 +362,7 @@ namespace carthage::ui
         timelineAway.setText ("The timeline is in its own window.", dontSendNotification);
         timelineBack.onClick = [this] { setDetached (View::timeline, false); };
 
-        for (auto* pop : std::initializer_list<Component*> { &popTimeline, &popSignal, &popPanel })
+        for (auto* pop : std::initializer_list<Component*> { &popTimeline, &popPanel })
             addAndMakeVisible (pop);
 
         addChildComponent (timelineAway);
@@ -747,11 +414,6 @@ namespace carthage::ui
         };
         browser.onInsert = [this] (const PluginDescription& d) { mixer.addPluginToSelected (d); };   // onto the selected channel's Line (5b)
         pluginWindows.keepOnTop = [this] { return keepPluginOnTop(); };
-        signalRow->onPluginDropped = [this] (const String& key)
-        {
-            if (const auto* e = session.getPluginLibrary().findEntry (key))
-                insertPlugin (e->description);
-        };
         session.onPluginsChanged = [this] { browser.refresh(); };
 
         // The toolbar: a button per tool, labelled with its current key, and the grid.
@@ -818,7 +480,7 @@ namespace carthage::ui
 
         session.onDeviceChanged = [this]
         {
-            signalRow->refreshDevices();
+            mixer.devicesChanged();
             settings.refresh();
             updateFigures();
         };
@@ -839,8 +501,6 @@ namespace carthage::ui
             refreshNotes();
             ++tempoChanges;
             refreshTempo();
-            signalRow->refreshPlugin();
-            signalRow->setMessage ({}, false);
             updateTransportButtons();
             commands.commandStatusChanged();
         };
@@ -890,7 +550,6 @@ namespace carthage::ui
         settingsButton.setTooltip (cmd::tooltip (commands, cmd::audioSettings));
         mixerButton.setTooltip (cmd::tooltip (commands, cmd::toggleMixer));
         snapButton.setTooltip (cmd::tooltip (commands, cmd::toggleGrid));
-        signalRow->refreshTooltips();
 
         for (int i = 0; i < toolButtons.size(); ++i)
         {
@@ -939,7 +598,7 @@ namespace carthage::ui
             case cmd::windowTimeline:    info.setTicked (isDetached (View::timeline)); break;
             case cmd::windowMixer:       info.setTicked (isDetached (View::mixer)); break;
             case cmd::toggleMixer:       info.setTicked (mixerShown || isDetached (View::mixer)); break;
-            case cmd::windowSignal:      info.setTicked (isDetached (View::signal)); break;
+            case cmd::windowSignal:      info.setActive (false); break;   // the signal row is gone (W51); the id stays for saved shortcuts
             case cmd::windowSettings:    info.setTicked (isDetached (View::settings)); break;
             case cmd::keepPluginOnTop:   info.setTicked (keepPluginOnTop()); break;
             case cmd::toggleMetronome:   info.setTicked (session.isMetronomeOn()); break;
@@ -1366,7 +1025,7 @@ namespace carthage::ui
                 resized();
                 commands.commandStatusChanged();
                 return true;
-            case cmd::windowSignal:     toggleDetached (View::signal); return true;
+            case cmd::windowSignal:     return true;
             case cmd::windowSettings:   toggleDetached (View::settings); return true;
             case cmd::defaultLayout:    defaultLayout(); setStatus ("Back to the default layout"); return true;
             case cmd::commandPalette:   viewsPalette.close(); if (palette.isVisible()) palette.close(); else palette.open(); return true;
@@ -1381,7 +1040,7 @@ namespace carthage::ui
             case cmd::lanesShorter:     timeline.setLaneHeight (timeline.getLaneHeight() - Timeline::laneHeightStep); return true;
             case cmd::keepPluginOnTop:
                 props().setValue ("keepPluginOnTop", ! keepPluginOnTop());
-                if (pluginWindow != nullptr) pluginWindow->setAlwaysOnTop (keepPluginOnTop());
+                pluginWindows.setAlwaysOnTop (keepPluginOnTop());
                 commands.commandStatusChanged();
                 return true;
             case cmd::deleteClips:      timeline.deleteSelection(); return true;
@@ -1389,12 +1048,16 @@ namespace carthage::ui
             case cmd::nudgeRight:       timeline.nudgeSelection (1); return true;
             case cmd::addMarker:        timeline.addMarkerAtPlayhead(); return true;
             case cmd::loopSelection:    timeline.loopSelection(); return true;
-            case cmd::openPluginEditor: openPluginWindow(); return true;
+            case cmd::openPluginEditor:
+                if (auto* p = mixer.firstPluginOfSelected())
+                    pluginWindows.open (*p);
+                return true;
             case cmd::bypassPlugin:
-                if (auto* p = session.getInsertedPlugin())
+                if (auto* p = mixer.firstPluginOfSelected())
                 {
-                    p->setEnabled (! p->isEnabled());
-                    signalRow->refreshPlugin();
+                    editing::begin (session.getEdit(), (editing::isBypassed (*p) ? "Turn on " : "Bypass ") + p->getName());
+                    editing::setBypassed (*p, ! editing::isBypassed (*p));
+                    mixer.repaint();
                 }
                 return true;
             case cmd::audioSettings:    toggleSettings(); return true;
@@ -1507,7 +1170,6 @@ namespace carthage::ui
         metronomeButton.setLit (theme::accent, session.isMetronomeOn());   // live: it sounds when playing
         loopButton.setLit (theme::accent, editing::isLooping (session.getEdit()));
         loopButton.setEnabled (editing::loopRegion (session.getEdit()).has_value());
-        signalRow->setRecording (session.isRecording());
     }
 
     //==============================================================================================
@@ -1786,41 +1448,6 @@ namespace carthage::ui
         resized();
     }
 
-    void MainComponent::insertPlugin (const PluginDescription& d)
-    {
-        closePluginWindow();
-        const auto r = session.insertPlugin (d);
-        signalRow->setMessage (r.failed() ? r.getErrorMessage() : String(), r.failed());
-        setStatus (r.failed() ? d.name + " could not be loaded" : d.name + " is in the path", r.failed() ? theme::warn : theme::muted);
-        browser.refresh();   // Recent
-        commands.commandStatusChanged();
-    }
-
-    void MainComponent::openPluginWindow()
-    {
-        if (pluginWindow != nullptr)
-        {
-            pluginWindow->toFront (true);
-            return;
-        }
-
-        if (auto* ext = dynamic_cast<tracktion::ExternalPlugin*> (session.getInsertedPlugin()))
-            if (auto* instance = ext->getAudioPluginInstance())
-                pluginWindow = std::make_unique<PluginWindow> (*instance, [this]
-                {
-                    MessageManager::callAsync ([safe = SafePointer<MainComponent> (this)] { if (safe) safe->closePluginWindow(); });
-                });
-
-        if (pluginWindow == nullptr)
-            return;
-
-        // Above Carthage's own windows unless switched off, where the last layout put it (F21).
-        pluginWindow->setAlwaysOnTop (keepPluginOnTop());
-
-        if (pluginWindowBounds)
-            pluginWindow->setTopLeftPosition (pluginWindowBounds->getPosition());
-    }
-
     bool MainComponent::closeFrontWindow()
     {
         // The sample editor, while it is in front, closes first (W42).
@@ -1844,11 +1471,8 @@ namespace carthage::ui
             }
         }
 
-        if (pluginWindow != nullptr && static_cast<Component*> (pluginWindow.get()) == front)
-        {
-            closePluginWindow();
+        if (pluginWindows.closeIfFront (front))
             return true;
-        }
 
         // The notes and the versions close by themselves; the notes are already in the project.
         if (notesWindow != nullptr && static_cast<Component*> (notesWindow.get()) == front)
@@ -1868,7 +1492,7 @@ namespace carthage::ui
 
     void MainComponent::closePluginWindow()
     {
-        pluginWindow.reset();
+        pluginWindows.closeAll();
     }
 
     //==============================================================================================
@@ -1934,12 +1558,11 @@ namespace carthage::ui
         if (frameLog)
             logFrame (t);
 
-        const auto dt = lastFrameTime > 0.0 ? std::clamp (t - lastFrameTime, 0.0, 0.1) : 1.0 / 60.0;
         lastFrameTime = t;
         ++frameCount;
 
         auto& callback = session.getCallback();
-        signalRow->frame (callback.takeInputPeaks(), dt);
+        juce::ignoreUnused (callback.takeInputPeaks());   // the channels' meters show the input now
 
         if (samples.isVisible())
             samples.frame();   // the playing sound's progress
@@ -2183,13 +1806,6 @@ namespace carthage::ui
             panelEdge.setVisible (false);
         }
 
-        if (! isDetached (View::signal))
-        {
-            signalRow->setBounds (r.removeFromTop (132));
-            popSignal.setBounds (signalRow->getRight() - 34, signalRow->getBottom() - 34, 28, 28);
-        }
-
-        popSignal.setVisible (! isDetached (View::signal));
         statusLabel.setBounds (r.removeFromBottom (28).reduced (theme::space4, 0));
 
         // The timeline away: its place says where it is, and brings it back.
@@ -2270,7 +1886,7 @@ namespace carthage::ui
             case View::samples:  return "Samples";
             case View::plugins:  return "Plugins";
             case View::timeline: return "Timeline";
-            case View::signal:   return "Signal path";
+            case View::signal:   return "Signal path (gone)";
             case View::settings: return "Settings";
             case View::mixer:    return "Mixer";
         }
@@ -2284,8 +1900,8 @@ namespace carthage::ui
         {
             case View::samples:  return samples;
             case View::plugins:  return browser;
-            case View::timeline: return timeline;
-            case View::signal:   return *signalRow;
+            case View::timeline:
+            case View::signal:   return timeline;   // signal: not a view any more (W51)
             case View::settings: return settings;
             case View::mixer:    return mixer;
         }
@@ -2421,8 +2037,6 @@ namespace carthage::ui
             t.appendChild (view, nullptr);
         }
 
-        if (pluginWindow != nullptr)
-            t.setProperty ("plugin", pluginWindow->getBounds().toString(), nullptr);
 
         return t;
     }
@@ -2439,6 +2053,9 @@ namespace carthage::ui
         {
             const auto v = static_cast<View> (static_cast<int> (view["id"]));
 
+            if (std::find (views.begin(), views.end(), v) == views.end())
+                continue;   // a view that is gone (the signal row, W51)
+
             if (static_cast<bool> (view["detached"]))
                 setDetached (v, true, Rectangle<int>::fromString (view["bounds"].toString()));
             else
@@ -2451,13 +2068,6 @@ namespace carthage::ui
         if (! isDetached (View::settings))
             settingsOpen = static_cast<bool> (t.getProperty ("settingsOpen", false));
 
-        if (t.hasProperty ("plugin"))
-        {
-            pluginWindowBounds = onScreen (Rectangle<int>::fromString (t["plugin"].toString()));
-
-            if (pluginWindow != nullptr)
-                pluginWindow->setBounds (*pluginWindowBounds);
-        }
 
         showPanel (static_cast<bool> (t.getProperty ("panelShowsSamples", false)), false);
         browserOpen = static_cast<bool> (t.getProperty ("panelOpen", true));

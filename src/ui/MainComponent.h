@@ -90,7 +90,7 @@ namespace carthage::ui
         // Views in their own windows (F21). Each view is docked in this window or shown in a
         // window of its own; a layout is where every view and window is.
         enum class View { samples, plugins, timeline, signal, settings, mixer };
-        static constexpr std::array<View, 6> views { View::samples, View::plugins, View::timeline, View::signal, View::settings, View::mixer };
+        static constexpr std::array<View, 5> views { View::samples, View::plugins, View::timeline, View::settings, View::mixer };   // signal: gone (W51)
         static juce::String nameOf (View);
 
         bool isDetached (View view) const   { return viewWindows.count (static_cast<int> (view)) > 0; }
@@ -156,7 +156,6 @@ namespace carthage::ui
         class VersionsWindow;
         std::unique_ptr<VersionsWindow> versionsWindow;
         void refreshNotes();
-        class SignalRow;
 
         engine::Session& session;
         juce::ApplicationCommandManager& commands;
@@ -172,7 +171,6 @@ namespace carthage::ui
         juce::Label timeLabel, latencyLabel, latencyWords, statusLabel;
         LoadMeter loadMeter;
 
-        std::unique_ptr<SignalRow> signalRow;
         Timeline timeline;
         PluginWindows pluginWindows;
         MixerView mixer;
@@ -240,15 +238,11 @@ namespace carthage::ui
         bool usedWhileHeld = false;
         void toolCommand (const InvocationInfo&);
 
-        std::unique_ptr<PluginWindow> pluginWindow;
-
         class ViewWindow;
         std::map<int, std::unique_ptr<ViewWindow>> viewWindows;   // by View
-        IconButton popPanel { IconButton::Glyph::popOut }, popTimeline { IconButton::Glyph::popOut },
-                   popSignal { IconButton::Glyph::popOut };
+        IconButton popPanel { IconButton::Glyph::popOut }, popTimeline { IconButton::Glyph::popOut };
         juce::Label timelineAway;
         juce::TextButton timelineBack { "Bring it back" };
-        std::optional<juce::Rectangle<int>> pluginWindowBounds;   // from the last layout applied
         juce::Component& componentOf (View);
         void viewsChanged();
         juce::PropertiesFile& props();
@@ -269,9 +263,7 @@ namespace carthage::ui
         void updateTransportButtons();
         void updateFigures();
         void choosePlugin();
-        void insertPlugin (const juce::PluginDescription&);
         void toggleBrowser();
-        void openPluginWindow();
         void closePluginWindow();
         void setStatus (const juce::String&, juce::Colour = theme::muted);
         void layoutSettings (bool animate);

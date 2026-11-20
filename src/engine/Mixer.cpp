@@ -15,7 +15,9 @@ namespace carthage::editing
         const juce::Identifier roleProp ("carthageRole"), carrierLaneProp ("carthageLane");
         const juce::Identifier colourProp ("carthageColour"), heightProp ("carthageHeight");   // the timeline's own (4d)
         const juce::Identifier channelMutedProp ("carthageMuted"), channelSoloedProp ("carthageSoloed");
-        const juce::Identifier meterProp ("carthageMeter");   // "peak" or "rms" on the meters Carthage adds
+        const juce::Identifier meterProp ("carthageMeter");
+        const juce::Identifier inputProp ("carthageInput"), inputStereoProp ("carthageInputStereo"), monitorProp ("carthageMonitor");
+        const juce::Identifier recordChannelProp ("carthageRecordChannel");   // on CARTHAGELANES: the record channel's item ID   // "peak" or "rms" on the meters Carthage adds
         constexpr const char* channelRole = "channel";
         constexpr const char* carrierRole = "carrier";
 
@@ -581,6 +583,48 @@ namespace carthage::editing
         applyMutes (t.edit);
     }
 
+    ChannelInput inputOf (const AudioTrack& t)
+    {
+        if (! t.state.hasProperty (inputProp))
+            return {};
+
+        return { static_cast<int> (t.state[inputProp]), static_cast<bool> (t.state[inputStereoProp]) };
+    }
+
+    void setInput (AudioTrack& t, ChannelInput input)
+    {
+        if (input.isSet())
+        {
+            t.state.setProperty (inputProp, input.stereo ? (input.firstChannel & ~1) : input.firstChannel, nullptr);
+            t.state.setProperty (inputStereoProp, input.stereo, nullptr);
+        }
+        else
+        {
+            t.state.removeProperty (inputProp, nullptr);
+            t.state.removeProperty (inputStereoProp, nullptr);
+        }
+    }
+
+    bool isMonitoring (const AudioTrack& t)        { return flag (t, monitorProp); }
+    void setMonitoring (AudioTrack& t, bool on)    { t.state.setProperty (monitorProp, on, nullptr); }
+
+    AudioTrack* recordChannel (const Edit& edit)
+    {
+        const auto chosen = lanesState (edit)[recordChannelProp].toString();
+        const auto all = channels (edit);
+
+        for (auto* ch : all)
+            if (ch->itemID.toString() == chosen)
+                return ch;
+
+        return all.getFirst();
+    }
+
+    void setRecordChannel (Edit& edit, AudioTrack& channel)
+    {
+        lanesStateForWriting (edit).setProperty (recordChannelProp, channel.itemID.toString(), nullptr);
+    }
+
     LevelMeterPlugin* peakMeterOf (AudioTrack& t)   { return meterIn (t.pluginList, "peak"); }
 
     LevelMeterPlugin* rmsMeterOf (AudioTrack& t)
@@ -798,7 +842,7 @@ namespace carthage::editing
         const auto all = channels (edit);
 
         for (auto* ch : all)
-            if (ch == inputChannel || hasOwnPlugins (*ch))
+            if (ch == inputChannel || hasOwnPlugins (*ch) || (inputOf (*ch).isSet() && isMonitoring (*ch)))
                 for (auto* dest = ch; dest != nullptr && ! fed.contains (dest); dest = dest->getOutput().getDestinationTrack())
                     fed.insert (dest);
 

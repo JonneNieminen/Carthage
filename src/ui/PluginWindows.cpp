@@ -75,6 +75,24 @@ namespace carthage::ui
         std::erase_if (windows, [] (const auto& entry) { return entry.second->plugin->getOwnerList() == nullptr; });
     }
 
+    bool PluginWindows::closeIfFront (const Component* front)
+    {
+        for (auto it = windows.begin(); it != windows.end(); ++it)
+            if (static_cast<const Component*> (it->second.get()) == front)
+            {
+                windows.erase (it);
+                return true;
+            }
+
+        return false;
+    }
+
+    void PluginWindows::setAlwaysOnTop (bool on)
+    {
+        for (auto& [id, window] : windows)
+            window->setAlwaysOnTop (on);
+    }
+
     //==============================================================================================
     PluginChooser::PluginChooser (engine::PluginLibrary& lib, std::function<void (const PluginDescription&)> chosen)
         : library (lib), onChosen (std::move (chosen))

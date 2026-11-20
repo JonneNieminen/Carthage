@@ -128,6 +128,27 @@ namespace carthage::editing
     void setChannelMuted (tracktion::AudioTrack&, bool);
     void setChannelSoloed (tracktion::AudioTrack&, bool);
 
+    /** A channel's input (W51): the interface input it takes, mono or a stereo pair, or none;
+        and whether it is heard (monitored). Kept with the channel, outside undo; the session puts
+        it into effect (Session::applyInputRouting). */
+    struct ChannelInput
+    {
+        int firstChannel = -1;   // the interface's input, from 0; -1: none
+        bool stereo = false;
+
+        bool isSet() const noexcept   { return firstChannel >= 0; }
+        bool operator== (const ChannelInput&) const = default;
+    };
+
+    ChannelInput inputOf (const tracktion::AudioTrack&);
+    void setInput (tracktion::AudioTrack&, ChannelInput);
+    bool isMonitoring (const tracktion::AudioTrack&);
+    void setMonitoring (tracktion::AudioTrack&, bool);
+
+    /** The channel takes are recorded through (one at a time until 5d). */
+    tracktion::AudioTrack* recordChannel (const tracktion::Edit&);
+    void setRecordChannel (tracktion::Edit&, tracktion::AudioTrack&);
+
     /** A channel's meters: the fader's peak meter, and the RMS meter Carthage adds beside it
         (Tracktion's measurer reports one or the other). Null on a channel without them. For
         master: the master's pair, added by prepareMix. */
@@ -171,7 +192,7 @@ namespace carthage::editing
 
     /** After any edit or undo: lane mute and solo onto the carriers, and only what could sound
         in the audio graph (an empty channel costs nothing, W49). `inputChannel` is processing
-        while it has the live input. Not an undo step. */
+        while it has the live input (and so does any channel monitoring an input). Not an undo step. */
     void syncMix (tracktion::Edit&, const tracktion::AudioTrack* inputChannel);
 
     /** Channels created by default (brief, feature 3). */

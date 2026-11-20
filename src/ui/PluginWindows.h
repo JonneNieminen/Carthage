@@ -26,6 +26,11 @@ namespace carthage::ui
         /** Closes the windows of plugins that are no longer in any Line (deleted, undone, moved). */
         void closeMissing();
 
+        /** Cmd/Ctrl+W: closes `front` if it is one of these windows. */
+        bool closeIfFront (const juce::Component* front);
+
+        void setAlwaysOnTop (bool);
+
         /** Above Carthage's own windows unless switched off (F21); asked when a window opens. */
         std::function<bool()> keepOnTop;
 

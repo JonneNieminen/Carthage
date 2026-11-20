@@ -11,6 +11,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Every mixer channel picks its own interface input and can be heard as you play ("Hear the input");
+  choose which channel takes record. The input row above the lanes is gone: its plugin is channel
+  1's Line, and master's output is chosen at the foot of the master strip.
 - Insert Lines: every channel and master take as many plugins as you like, in order. Double-click
   the empty slot to choose one, or drag a plugin from the browser onto a strip or a slot; drag slots
   to reorder them or onto another channel; each has a bypass dot and a wet/dry knob; a click opens

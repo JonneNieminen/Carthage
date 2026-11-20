@@ -250,6 +250,13 @@ namespace carthage::engine
         int getInputChannel() const noexcept        { return inputChannel; }
         bool isInputStereo() const noexcept         { return inputStereo; }
         void setMonitoring (bool);
+
+        /** Every channel's input and monitoring (W51), put into effect at once. */
+        void setChannelInput (tracktion::AudioTrack&, editing::ChannelInput);
+        void setChannelMonitoring (tracktion::AudioTrack&, bool);
+
+        /** The channel takes record through (the armed one); getTrack() returns it. */
+        void setRecordChannel (tracktion::AudioTrack&);
         bool isMonitoring() const noexcept          { return monitoring; }
 
         //==========================================================================================

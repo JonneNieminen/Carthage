@@ -203,14 +203,45 @@ namespace carthage::engine
     //==============================================================================================
     void Session::setInput (int firstDeviceChannel, bool stereo)
     {
+        // The record channel's input (the settings, the bench): kept on the channel (W51).
         inputChannel = std::max (0, stereo ? (firstDeviceChannel & ~1) : firstDeviceChannel);
         inputStereo = stereo;
+
+        if (! projects.empty())
+            editing::setInput (*front().track, { inputChannel, inputStereo });
+
         applyInputRouting();
     }
 
     void Session::setMonitoring (bool shouldMonitor)
     {
         monitoring = shouldMonitor;
+
+        if (! projects.empty())
+            editing::setMonitoring (*front().track, monitoring);
+
+        applyInputRouting();
+    }
+
+    void Session::setChannelInput (tracktion::AudioTrack& channel, editing::ChannelInput input)
+    {
+        editing::setInput (channel, input);
+        applyInputRouting();
+    }
+
+    void Session::setChannelMonitoring (tracktion::AudioTrack& channel, bool on)
+    {
+        editing::setMonitoring (channel, on);
+        applyInputRouting();
+    }
+
+    void Session::setRecordChannel (tracktion::AudioTrack& channel)
+    {
+        if (projects.empty() || isRecording())
+            return;
+
+        editing::setRecordChannel (*front().edit, channel);
+        front().track = &channel;
         applyInputRouting();
     }
 
@@ -236,7 +267,22 @@ namespace carthage::engine
         auto& edit = front().edit;
         auto* track = front().track;
         auto& dm = engine->getDeviceManager();
-        const auto wanted = inputStereo ? 2u : 1u;
+        const auto channels = editing::channels (*edit);
+
+        // The record channel's input is what takes record (Carthage's own recorder reads the
+        // interface directly); the figures elsewhere follow it.
+        if (const auto rec = editing::inputOf (*track); rec.isSet())
+        {
+            inputChannel = rec.firstChannel;
+            inputStereo = rec.stereo;
+        }
+
+        monitoring = editing::isMonitoring (*track);
+
+        // Inputs are grouped one way for the whole interface: in stereo pairs if any channel takes
+        // a pair, else one by one. A mono input then arrives within its pair.
+        const auto anyStereo = std::any_of (channels.begin(), channels.end(), [] (auto* ch) { return editing::inputOf (*ch).stereo; });
+        const auto wanted = anyStereo ? 2u : 1u;
 
         if (groupedChannels != wanted)
         {
@@ -249,8 +295,6 @@ namespace carthage::engine
         auto& transport = edit->getTransport();
         transport.ensureContextAllocated();
 
-        auto* chosen = findWaveInput();
-
         for (auto* instance : edit->getAllInputDevices())
         {
             auto& device = instance->getInputDevice();
@@ -258,20 +302,34 @@ namespace carthage::engine
             if (device.getDeviceType() != tracktion::InputDevice::waveDevice)
                 continue;
 
-            const bool isChosen = &device == chosen;
+            const auto* wave = dynamic_cast<tracktion::WaveInputDevice*> (&device);
+
+            // A channel hears this input when it takes it and is monitoring (Tracktion's monitor
+            // switch is per input, so a channel not monitoring is simply not connected; takes
+            // do not need the connection).
+            juce::Array<tracktion::EditItemID> heard;
+
+            for (auto* ch : channels)
+                if (const auto in = editing::inputOf (*ch); in.isSet() && editing::isMonitoring (*ch)
+                        && wave != nullptr && wave->getChannels().containsDeviceChannel (in.firstChannel))
+                    heard.add (ch->itemID);
 
             for (auto target : instance->getTargets())
-                if (! isChosen || target != track->itemID)
+                if (! heard.contains (target))
                     [[maybe_unused]] auto r = instance->removeTarget (target, nullptr);
 
-            if (isChosen)
+            if (! heard.isEmpty())
             {
                 device.setEnabled (true);
-                device.setMonitorMode (monitoring ? tracktion::InputDevice::MonitorMode::on
-                                                  : tracktion::InputDevice::MonitorMode::off);
+                device.setMonitorMode (tracktion::InputDevice::MonitorMode::on);
 
-                if (! instance->getTargets().contains (track->itemID))
-                    [[maybe_unused]] auto r = instance->setTarget (track->itemID, true, nullptr, 0);
+                for (auto id : heard)
+                    if (! instance->getTargets().contains (id))
+                        [[maybe_unused]] auto r = instance->setTarget (id, false, nullptr);
+            }
+            else
+            {
+                device.setMonitorMode (tracktion::InputDevice::MonitorMode::off);
             }
         }
 
@@ -659,7 +717,17 @@ namespace carthage::engine
         // sound, lane n playing through channel n (W47). The first channel has the input.
         const auto fresh = isNew || tracktion::getAudioTracks (edit).isEmpty();
         editing::prepareMix (edit, fresh);
-        p->track = editing::channels (edit).getFirst();
+        p->track = editing::recordChannel (edit);
+
+        // A project with no channel inputs yet (new, or from before W51): the record channel
+        // takes the input chosen before, as the signal row had it.
+        if (const auto chs = editing::channels (edit);
+            std::none_of (chs.begin(), chs.end(), [] (auto* ch) { return editing::inputOf (*ch).isSet(); }) && p->track != nullptr)
+        {
+            editing::setInput (*p->track, { inputChannel, inputStereo });
+            editing::setMonitoring (*p->track, monitoring);
+        }
+
         editing::syncMix (edit, p->track);
 
         // A new project's metronome marks the first beat of the bar (the tick-tock's deeper tock).

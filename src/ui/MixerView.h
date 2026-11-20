@@ -46,6 +46,19 @@ namespace carthage::ui
         /** The plugin browser's double-click: onto the selected channel's Line (channel 1 if none). */
         void addPluginToSelected (const juce::PluginDescription&);
 
+        /** The selected channel's (or master's) first plugin: the commands that open or bypass one. */
+        tracktion::Plugin* firstPluginOfSelected();
+
+        /** The interface changed: input and output choices again. */
+        void devicesChanged();
+
+        /** The choices for an input picker, and their ids: channel + 1 mono, 1000 + channel + 1 a pair. */
+        void fillInputs (juce::ComboBox&) const;
+        void fillInputs (juce::PopupMenu&, tracktion::AudioTrack&);
+        static editing::ChannelInput inputForId (int id);
+        static int idForInput (editing::ChannelInput);
+        juce::String inputName (editing::ChannelInput) const;
+
         /** The plugin dragged from a Line, by its drag description. */
         tracktion::Plugin* draggedInsert (const juce::var& description) const;
 
@@ -62,7 +75,9 @@ namespace carthage::ui
         bool rebuildPending = false;
 
         // The selected channel's column.
-        juce::Label columnName, columnInto, columnFrom, columnFromList, columnPlugins;
+        juce::Label columnName, columnInto, columnFrom, columnFromList, columnPlugins, columnInput;
+        juce::ComboBox input, masterOutput;
+        Switch hear { "Hear the input" }, recordHere { "Takes record here" };
         std::unique_ptr<InsertLine> line;
         juce::ComboBox output;
         void refreshColumn();

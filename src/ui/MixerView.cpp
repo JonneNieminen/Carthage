@@ -190,8 +190,26 @@ namespace carthage::ui
                 g.drawFittedText (String::fromUTF8 ("\xe2\x86\x92 ") + (into != nullptr ? shortName (into->getName()) : String ("Master")),
                                   outputArea, Justification::centred, 1, 0.8f);
 
+                // Its input: where it comes from, lit while heard (live).
+                const auto in = editing::inputOf (*track);
+                const auto heard = in.isSet() && editing::isMonitoring (*track);
+                g.setColour (heard ? theme::accentText : in.isSet() ? theme::muted : theme::faint);
+                g.setFont (theme::denseFont (theme::textXs, heard));
+                g.drawFittedText ((in.isSet() ? String::fromUTF8 ("\xe2\x86\x90 ") + view.inputName (in) : String::fromUTF8 ("\xe2\x86\x90 no input")),
+                                  inputArea, Justification::centred, 1, 0.8f);
+
                 pill (g, muteArea, "M", editing::isChannelMuted (*track), theme::warn);
                 pill (g, soloArea, "S", editing::isChannelSoloed (*track), theme::ok);
+            }
+
+            if (track == nullptr)
+            {
+                auto& dm = view.session.getEngine().getDeviceManager();
+                auto* out = dm.getDefaultWaveOutDevice();
+                g.setColour (outputArea.contains (getMouseXYRelative()) && isMouseOver() ? theme::text : theme::muted);
+                g.setFont (theme::denseFont (theme::textXs));
+                g.drawFittedText (String::fromUTF8 ("\xe2\x86\x92 ") + (out != nullptr ? out->getName() : String ("no output")),
+                                  outputArea, Justification::centred, 1, 0.7f);
             }
 
             // The figure under the fader, in the time face: it holds still as it changes.
@@ -212,7 +230,10 @@ namespace carthage::ui
             nameArea = r.removeFromTop (16);
 
             if (track != nullptr)
+            {
+                inputArea = r.removeFromTop (14);
                 outputArea = r.removeFromTop (14);
+            }
 
             r.removeFromTop (theme::space1);
             pan.setBounds (r.removeFromTop (24).withSizeKeepingCentre (36, 24));
@@ -226,6 +247,9 @@ namespace carthage::ui
                 r.removeFromTop (theme::space1);
             }
 
+            if (track == nullptr)
+                outputArea = r.removeFromBottom (14);   // master's output: the interface (owner)
+
             figureArea = r.removeFromBottom (16);
             r.removeFromBottom (theme::space1);
             meterArea = r.removeFromRight (track != nullptr ? 14 : 18);
@@ -237,6 +261,20 @@ namespace carthage::ui
             if (track == nullptr)
             {
                 view.selectMaster();   // master has a Line too (owner)
+
+                if (outputArea.contains (e.getPosition()))
+                {
+                    PopupMenu m;
+                    auto& dm = view.session.getEngine().getDeviceManager();
+
+                    for (int i = 0; i < dm.getNumWaveOutDevices(); ++i)
+                        if (auto* wo = dm.getWaveOutDevice (i))
+                            m.addItem (wo->getName(), true, wo->getDeviceID() == dm.getDefaultWaveOutDeviceID(),
+                                       [&dm, id = wo->getDeviceID(), this] { dm.setDefaultWaveOutDevice (id); repaint(); });
+
+                    m.showMenuAsync (PopupMenu::Options().withTargetComponent (this));
+                }
+
                 return;
             }
 
@@ -254,6 +292,12 @@ namespace carthage::ui
                 editing::setChannelSoloed (*track, ! editing::isChannelSoloed (*track));
             else if (outputArea.contains (e.getPosition()))
                 view.showOutputMenu (*track, *this);
+            else if (inputArea.contains (e.getPosition()))
+            {
+                PopupMenu m;
+                view.fillInputs (m, *track);
+                m.showMenuAsync (PopupMenu::Options().withTargetComponent (this));
+            }
             else if (meterArea.contains (e.getPosition()))
                 clipped = false;   // a click on the meter clears its clip light
 
@@ -334,7 +378,7 @@ namespace carthage::ui
         bool clipped = false;
 
         ValueSlider fader { 0.0 }, pan { 0.0 };
-        Rectangle<int> colourBar, nameArea, outputArea, muteArea, soloArea, meterArea, figureArea;
+        Rectangle<int> colourBar, nameArea, outputArea, inputArea, muteArea, soloArea, meterArea, figureArea;
 
         String nameForUndo() const   { return track != nullptr ? track->getName() : String ("Master"); }
 
@@ -646,6 +690,47 @@ namespace carthage::ui
         line = std::make_unique<InsertLine> (*this);
 
         columnInto.setText ("Plays into", dontSendNotification);
+        columnInput.setText ("Input", dontSendNotification);
+        styleLabel (columnInput, theme::textSm, theme::text, true);
+        input.setTooltip ("The interface input this channel takes: plug your guitar in there");
+        input.onChange = [this]
+        {
+            if (auto* channel = selectedChannel())
+            {
+                session.setChannelInput (*channel, inputForId (input.getSelectedId()));
+                repaint();
+            }
+        };
+        hear.setTooltip ("Hear the input through this channel's plugins as you play");
+        hear.onClick = [this]
+        {
+            if (auto* channel = selectedChannel())
+            {
+                session.setChannelMonitoring (*channel, hear.getToggleState());
+                repaint();
+            }
+        };
+        recordHere.setTooltip ("Takes are recorded from this channel's input, onto the recording lane");
+        recordHere.onClick = [this]
+        {
+            if (auto* channel = selectedChannel(); channel != nullptr && recordHere.getToggleState())
+            {
+                session.setRecordChannel (*channel);
+
+                if (onStatus)
+                    onStatus ("Takes now record through " + channel->getName());
+            }
+
+            refreshColumn();
+        };
+        masterOutput.setTooltip ("Where you hear Carthage: the interface's outputs");
+        masterOutput.onChange = [this]
+        {
+            auto& dm = session.getEngine().getDeviceManager();
+            if (auto* wo = dm.getWaveOutDevice (masterOutput.getSelectedId() - 1))
+                dm.setDefaultWaveOutDevice (wo->getDeviceID());
+            repaint();
+        };
         columnFrom.setText ("Sound from", dontSendNotification);
         columnPlugins.setText ("Plugins", dontSendNotification);
         output.setTooltip ("Where this channel's sound goes: master, or another channel (a loop back is refused)");
@@ -661,7 +746,8 @@ namespace carthage::ui
             chooseOutput (*channel, id == 1 ? nullptr : all[id - 2]);
         };
 
-        for (auto* c : std::initializer_list<Component*> { &columnName, &columnInto, &output, &columnFrom, &columnFromList, &columnPlugins, line.get() })
+        for (auto* c : std::initializer_list<Component*> { &columnName, &columnInput, &input, &hear, &recordHere, &masterOutput,
+                                                           &columnInto, &output, &columnFrom, &columnFromList, &columnPlugins, line.get() })
             addAndMakeVisible (c);
 
         projectChanged();
@@ -790,6 +876,100 @@ namespace carthage::ui
         addPlugin (channel, -1, description);
     }
 
+    tracktion::Plugin* MixerView::firstPluginOfSelected()
+    {
+        auto* channel = selectedChannel();
+
+        if (channel == nullptr && ! masterSelected)
+            channel = &session.getTrack();
+
+        const auto inserts = editing::insertsOf (editing::pluginListOf (session.getEdit(), channel));
+        return inserts.isEmpty() ? nullptr : inserts.getFirst();
+    }
+
+    void MixerView::devicesChanged()
+    {
+        refreshColumn();
+        repaint();
+    }
+
+    editing::ChannelInput MixerView::inputForId (int id)
+    {
+        if (id <= 0) return {};
+        return { (id - 1) % 1000, id > 1000 };
+    }
+
+    int MixerView::idForInput (editing::ChannelInput in)
+    {
+        if (! in.isSet()) return 1 + 100000;   // "No input"
+        return (in.stereo ? 1000 : 0) + in.firstChannel + 1;
+    }
+
+    String MixerView::inputName (editing::ChannelInput in) const
+    {
+        // The interface's own channel names when it has them ("Analogue 1"). A bare number, or
+        // nothing (the built-in microphone calls its channel "1"), reads as "Input 1".
+        StringArray names;
+        if (auto* device = session.getDeviceManager().getCurrentAudioDevice())
+            names = device->getInputChannelNames();
+
+        const auto nameOf = [&] (int i)
+        {
+            const auto n = names[i].trim();
+            return n.isEmpty() || n.containsOnly ("0123456789") ? "Input " + String (i + 1) : n;
+        };
+
+        return in.stereo ? nameOf (in.firstChannel) + " + " + nameOf (in.firstChannel + 1) : nameOf (in.firstChannel);
+    }
+
+    void MixerView::fillInputs (ComboBox& box) const
+    {
+        box.clear (dontSendNotification);
+        box.addItem ("No input", idForInput ({}));
+        const auto ins = session.getDeviceManager().getCurrentAudioDevice() != nullptr
+                       ? session.getDeviceManager().getCurrentAudioDevice()->getInputChannelNames().size() : 0;
+
+        for (int i = 0; i < ins; ++i)
+            box.addItem (inputName ({ i, false }), idForInput ({ i, false }));
+
+        if (ins > 1)
+        {
+            box.addSeparator();
+            for (int i = 0; i + 1 < ins; i += 2)
+                box.addItem (inputName ({ i, true }), idForInput ({ i, true }));
+        }
+    }
+
+    void MixerView::fillInputs (PopupMenu& m, tracktion::AudioTrack& channel)
+    {
+        const auto current = editing::inputOf (channel);
+        auto* held = &channel;
+        const auto choose = [this, held] (editing::ChannelInput in) { session.setChannelInput (*held, in); select (held); repaint(); };
+        const auto ins = session.getDeviceManager().getCurrentAudioDevice() != nullptr
+                       ? session.getDeviceManager().getCurrentAudioDevice()->getInputChannelNames().size() : 0;
+
+        m.addItem ("No input", true, ! current.isSet(), [choose] { choose ({}); });
+        m.addSeparator();
+
+        for (int i = 0; i < ins; ++i)
+            m.addItem (inputName ({ i, false }), true, current == editing::ChannelInput { i, false }, [choose, i] { choose ({ i, false }); });
+
+        if (ins > 1)
+        {
+            m.addSeparator();
+            for (int i = 0; i + 1 < ins; i += 2)
+                m.addItem (inputName ({ i, true }), true, current == editing::ChannelInput { i, true }, [choose, i] { choose ({ i, true }); });
+        }
+
+        m.addSeparator();
+        m.addItem ("Hear the input", current.isSet(), editing::isMonitoring (channel), [this, held]
+        {
+            session.setChannelMonitoring (*held, ! editing::isMonitoring (*held));
+            select (held);
+            repaint();
+        });
+    }
+
     tracktion::Plugin* MixerView::draggedInsert (const var& description) const
     {
         const auto id = tracktion::EditItemID::fromVar (description.toString().fromFirstOccurrenceOf (insertDragPrefix, false, false));
@@ -818,8 +998,11 @@ namespace carthage::ui
         auto& edit = session.getEdit();
         const auto any = channel != nullptr || masterSelected;
 
-        for (auto* c : std::initializer_list<Component*> { &columnName, &columnInto, &output, &columnFrom, &columnFromList, &columnPlugins, line.get() })
+        for (auto* c : std::initializer_list<Component*> { &columnName, &columnInput, &input, &hear, &recordHere,
+                                                           &columnInto, &output, &columnFrom, &columnFromList, &columnPlugins, line.get() })
             c->setVisible (any);
+
+        masterOutput.setVisible (false);
 
         if (! any)
             return;
@@ -830,11 +1013,33 @@ namespace carthage::ui
         {
             columnName.setText ("Master", dontSendNotification);
 
-            for (auto* c : std::initializer_list<Component*> { &columnInto, &output, &columnFrom, &columnFromList })
+            for (auto* c : std::initializer_list<Component*> { &input, &hear, &recordHere, &columnFrom, &columnFromList, &output })
                 c->setVisible (false);
+
+            // Master's place in the column: where it goes, the interface's outputs.
+            columnInput.setVisible (false);
+            columnInto.setVisible (true);
+            masterOutput.setVisible (true);
+            masterOutput.clear (dontSendNotification);
+            auto& dm = session.getEngine().getDeviceManager();
+
+            for (int i = 0; i < dm.getNumWaveOutDevices(); ++i)
+                if (auto* wo = dm.getWaveOutDevice (i))
+                {
+                    masterOutput.addItem (wo->getName(), i + 1);
+                    if (wo->getDeviceID() == dm.getDefaultWaveOutDeviceID())
+                        masterOutput.setSelectedId (i + 1, dontSendNotification);
+                }
 
             return;
         }
+
+        fillInputs (input);
+        input.setSelectedId (idForInput (editing::inputOf (*channel)), dontSendNotification);
+        hear.setToggleState (editing::isMonitoring (*channel), dontSendNotification);
+        const auto records = channel == editing::recordChannel (edit);
+        recordHere.setToggleState (records, dontSendNotification);
+        recordHere.setEnabled (! records && ! session.isRecording());   // one channel records: choose another to move it
 
         columnName.setText (channel->getName(), dontSendNotification);
 
@@ -852,8 +1057,8 @@ namespace carthage::ui
         // What plays into it: the samples routed here, channels routed here, the live input.
         StringArray from;
 
-        if (channel == &session.getTrack())
-            from.add ("The live input");
+        if (const auto in = editing::inputOf (*channel); in.isSet())
+            from.add (inputName (in) + (editing::isMonitoring (*channel) ? String (" (heard)") : String (" (not heard)")));
 
         std::set<String> samples;
         for (auto* c : editing::allClips (edit))
@@ -1010,8 +1215,24 @@ namespace carthage::ui
 
         columnName.setBounds (column.removeFromTop (28));
         column.removeFromTop (theme::space2);
-        columnInto.setBounds (column.removeFromTop (18));
-        output.setBounds (column.removeFromTop (28));
+
+        if (masterSelected)
+        {
+            columnInto.setBounds (column.removeFromTop (18));
+            masterOutput.setBounds (column.removeFromTop (28));
+            column.removeFromTop (theme::space4);
+        }
+        else
+        {
+            columnInput.setBounds (column.removeFromTop (18));
+            input.setBounds (column.removeFromTop (28));
+            column.removeFromTop (theme::space1);
+            hear.setBounds (column.removeFromTop (24));
+            recordHere.setBounds (column.removeFromTop (24));
+            column.removeFromTop (theme::space3);
+            columnInto.setBounds (column.removeFromTop (18));
+            output.setBounds (column.removeFromTop (28));
+        }
         column.removeFromTop (theme::space4);
         columnFrom.setBounds (column.removeFromTop (18));
         columnFromList.setBounds (column.removeFromTop (std::min (96, column.getHeight() / 3)));

@@ -265,3 +265,8 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Insert Lines built (engine: pluginListOf, placeInsert, moveInsert, bypass, mix; UI: InsertLine in
   the mixer column, PluginChooser call-out, strip and slot drops). Half-ring knobs and fader caps in
   the LookAndFeel. Next: per-channel input and monitor, signal row removed, master output.
+- Per-channel input, monitoring and record channel (Mixer.h ChannelInput; Session setChannelInput,
+  setChannelMonitoring, setRecordChannel; applyInputRouting connects inputs to every monitoring
+  channel). Signal row removed (its command id `windowSignal` kept, inactive, so saved shortcuts
+  keep their ids; old layouts naming it are skipped). Master output at the master strip's foot and in
+  its column. Next: FL-style routing (sends, sidechain, cables), then Pre-Master, then scroll/zoom.

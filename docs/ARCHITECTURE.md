@@ -112,7 +112,14 @@ The mapping onto Tracktion that F5 asked to be written down once proven:
 - **The mixer view** (`ui/MixerView`) reads all of this and keeps nothing: master's strip and one
   per channel, rebuilt when the edit's tracks change; meters poll the channels' measurers at 30 Hz,
   the one thing in it that moves during playback. F9 shows it in place of the lanes (W48).
-- **The live input** plays through channel 1, whose insert Line is the phase 1 input chain; takes go
+- **Inputs** (W51) are each channel's own: an interface input (mono or a stereo pair) and whether it
+  is heard, kept on the channel's track state outside undo. `Session::applyInputRouting` connects
+  each Tracktion wave input to every channel that takes it and is monitoring (Tracktion's monitor
+  switch is per input, so a channel not monitoring is simply not connected). Inputs are grouped in
+  stereo pairs for the whole interface if any channel takes a pair. One channel is the record
+  channel: takes come from its input through Carthage's own recorder, onto the recording lane.
+  The signal row is gone; its parts are channel features and master's output picker.
+- **The live input** (before W51) played through channel 1, whose insert Line is the phase 1 input chain; takes go
   to the recording lane's carrier for channel 1.
 - **Older projects** (before 5a) open with each old lane track turned into the carrier of lane n
   playing into channel n, so they sound the same (`editing::prepareMix`).
