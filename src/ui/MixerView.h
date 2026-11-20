@@ -82,6 +82,7 @@ namespace carthage::ui
         juce::TextButton addButton { "Add channel" };
         tracktion::EditItemID selected;
         bool masterSelected = false;
+        int pinned = 1;   // strips left of the scrolling channels: master, and the Pre-Master while on
         bool rebuildPending = false;
 
         // The selected channel's column.

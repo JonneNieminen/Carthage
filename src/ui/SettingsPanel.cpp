@@ -137,6 +137,10 @@ namespace carthage::ui
         fitLoops.setTooltip ("A loop dropped on a lane is stretched to the project's tempo, keeping its pitch, when its tempo is known. "
                              "Off: loops play as recorded.");
         fitLoops.onClick = [this] { session.setFitLoopsToTempo (fitLoops.getToggleState()); };
+        preMaster.setToggleState (session.getUsePreMaster(), dontSendNotification);
+        preMaster.setTooltip ("A channel between every channel and master, beside master in the mixer, for the processing the whole mix shares. "
+                              "Off, everything goes straight to master; its plugins stay, unused.");
+        preMaster.onClick = [this] { session.setUsePreMaster (preMaster.getToggleState()); };
 
         // Windows (F21): how many layouts the Layouts menu offers.
         styleLabel (slotsLabel, theme::textMd, theme::muted);
@@ -161,7 +165,7 @@ namespace carthage::ui
         for (auto* c : std::initializer_list<Component*> { &windowsHeading, &slotsLabel, &slots, &uiScaleLabel, &uiScale })
             body.addAndMakeVisible (c);
 
-        for (auto* c : std::initializer_list<Component*> { &browserHeading, &panelWidthLabel, &panelWidth, &textSizeLabel, &textSize, &playWhileHeld, &fitLoops })
+        for (auto* c : std::initializer_list<Component*> { &browserHeading, &panelWidthLabel, &panelWidth, &textSizeLabel, &textSize, &playWhileHeld, &fitLoops, &preMaster })
             body.addAndMakeVisible (c);
 
         styleLabel (atLaunchLabel, theme::textMd, theme::muted);
@@ -685,7 +689,7 @@ namespace carthage::ui
                                                          } } } });
         sections.push_back ({ &windowsHeading, { row (slotsLabel, slots), row (uiScaleLabel, uiScale) } });
         sections.push_back ({ &browserHeading, { row (panelWidthLabel, panelWidth), row (textSizeLabel, textSize),
-                                                 whole (playWhileHeld, rowHeight), whole (fitLoops, rowHeight), whole (checkPlugins, rowHeight) } });
+                                                 whole (playWhileHeld, rowHeight), whole (fitLoops, rowHeight), whole (preMaster, rowHeight), whole (checkPlugins, rowHeight) } });
         sections.push_back ({ &metronomeHeading, { row (clickSoundLabel, clickSound), row (clickLevelLabel, clickLevel),
                                                    whole (clickAccent, rowHeight), whole (clickWhileRecording, rowHeight) } });
         sections.push_back ({ &timelineHeading, { row (beatShadingLabel, beatShading), whole (clickPlaces, rowHeight), whole (rightClickDeletes, rowHeight) } });

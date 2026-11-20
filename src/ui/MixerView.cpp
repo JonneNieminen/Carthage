@@ -48,7 +48,8 @@ namespace carthage::ui
     class MixerView::Strip final : public Component, public SettableTooltipClient, public DragAndDropTarget
     {
     public:
-        Strip (MixerView& v, tracktion::AudioTrack* t, int indexIn) : view (v), track (t), index (indexIn)
+        Strip (MixerView& v, tracktion::AudioTrack* t, int indexIn) : view (v), track (t), index (indexIn),
+                                                                      pre (t != nullptr && t == editing::preMaster (v.session.getEdit()))
         {
             auto& edit = view.session.getEdit();
             volume = track != nullptr ? tracktion::VolumeAndPanPlugin::Ptr (editing::faderOf (*track)) : edit.getMasterVolumePlugin();
@@ -121,12 +122,17 @@ namespace carthage::ui
 
         tracktion::AudioTrack* getTrack() const noexcept   { return track; }
 
+        /** A channel's strip: not master's, not the Pre-Master's (no input, route or mute here). */
+        bool channelStrip() const noexcept   { return track != nullptr && ! pre; }
+
         /** The route button and send knob follow the selected channel. */
         void refreshRoute()
         {
             auto* from = view.selectedChannel();
-            route = from != nullptr && from != track ? view.routeTo (track) : Route::none;
-            showsRoute = from != nullptr && from != track;
+            // Routes are between channels and master; the Pre-Master is passed through, not chosen.
+            const auto shown = from != nullptr && from != track && ! pre && from != editing::preMaster (view.session.getEdit());
+            route = shown ? view.routeTo (track) : Route::none;
+            showsRoute = shown;
             sendLevel.setVisible (route == Route::send);
 
             if (route == Route::send)
@@ -194,7 +200,7 @@ namespace carthage::ui
             const auto r = getLocalBounds().toFloat();
             const auto chosen = track != nullptr ? view.selected == track->itemID : view.masterSelected;
 
-            g.setColour (track == nullptr ? theme::card : theme::bg2);
+            g.setColour (! channelStrip() ? theme::card : theme::bg2);
             g.fillRoundedRectangle (r, theme::radiusSm);
 
             if (chosen || dropHover)
@@ -204,15 +210,15 @@ namespace carthage::ui
             }
 
             // Colour, name, where it goes.
-            const auto colour = track != nullptr ? colourOf (*track, index) : theme::text;
+            const auto colour = channelStrip() ? colourOf (*track, index) : theme::text;
             g.setColour (track != nullptr && editing::isChannelMuted (*track) ? colour.withMultipliedAlpha (0.35f) : colour);
             g.fillRoundedRectangle (colourBar.toFloat(), 1.5f);
 
             g.setColour (theme::text);
             g.setFont (theme::denseFont (theme::textSm, true));
-            g.drawFittedText (track != nullptr ? shortName (track->getName()) : String ("Master"), nameArea, Justification::centred, 1, 0.8f);
+            g.drawFittedText (track != nullptr ? shortName (track->getName()) : String ("Master"), nameArea, Justification::centred, 1, 0.7f);
 
-            if (track != nullptr)
+            if (channelStrip())
             {
                 auto* into = editing::outputOf (*track);
                 g.setColour (outputArea.contains (getMouseXYRelative()) && isMouseOver() ? theme::text : theme::muted);
@@ -294,7 +300,7 @@ namespace carthage::ui
             r.removeFromTop (theme::space1);
             nameArea = r.removeFromTop (16);
 
-            if (track != nullptr)
+            if (channelStrip())
             {
                 inputArea = r.removeFromTop (14);
                 outputArea = r.removeFromTop (14);
@@ -304,7 +310,7 @@ namespace carthage::ui
             pan.setBounds (r.removeFromTop (24).withSizeKeepingCentre (36, 24));
             r.removeFromTop (theme::space1);
 
-            if (track != nullptr)
+            if (channelStrip())
             {
                 auto pills = r.removeFromTop (18);
                 muteArea = pills.removeFromLeft (pills.getWidth() / 2).reduced (2, 0);
@@ -321,7 +327,7 @@ namespace carthage::ui
             r.removeFromBottom (theme::space1);
             figureArea = r.removeFromBottom (16);
             r.removeFromBottom (theme::space1);
-            meterArea = r.removeFromRight (track != nullptr ? 14 : 18);
+            meterArea = r.removeFromRight (channelStrip() ? 14 : 18);
             fader.setBounds (r);
         }
 
@@ -359,6 +365,9 @@ namespace carthage::ui
 
             view.select (track);
 
+            if (pre)
+                return;   // the Pre-Master: selected for its Line; nothing else to set here
+
             if (e.mods.isPopupMenu())
             {
                 view.showMenu (*track);
@@ -385,7 +394,7 @@ namespace carthage::ui
 
         void mouseDoubleClick (const MouseEvent& e) override
         {
-            if (track == nullptr || ! nameArea.contains (e.getPosition()))
+            if (! channelStrip() || ! nameArea.contains (e.getPosition()))
                 return;
 
             auto* editor = new TextEditor();   // owned by the CallOutBox below
@@ -450,6 +459,7 @@ namespace carthage::ui
         bool dropHover = false;
         tracktion::AudioTrack* track;
         int index;
+        bool pre;   // the Pre-Master's strip
         tracktion::VolumeAndPanPlugin::Ptr volume;
         juce::ReferenceCountedObjectPtr<tracktion::LevelMeterPlugin> peakMeter, rmsMeter;   // held: the clients are inside them
         tracktion::LevelMeasurer::Client peakClient, rmsClient;
@@ -999,6 +1009,15 @@ namespace carthage::ui
 
         strips.add (std::make_unique<Strip> (*this, nullptr, -1));   // master
         addAndMakeVisible (*strips.getFirst());
+        pinned = 1;
+
+        // The Pre-Master, pinned beside master while it is on (owner).
+        if (auto* pm = editing::preMaster (session.getEdit()); pm != nullptr && editing::usesPreMaster (session.getEdit()))
+        {
+            addAndMakeVisible (strips.add (std::make_unique<Strip> (*this, pm, -2)));
+            pinned = 2;
+        }
+
         int i = 0;
 
         for (auto* channel : editing::channels (session.getEdit()))
@@ -1022,6 +1041,9 @@ namespace carthage::ui
         for (auto* ch : editing::channels (session.getEdit()))
             if (ch->itemID == selected)
                 return ch;
+
+        if (auto* pm = editing::preMaster (session.getEdit()); pm != nullptr && pm->itemID == selected)
+            return pm;
 
         return nullptr;
     }
@@ -1332,6 +1354,18 @@ namespace carthage::ui
             return;
         }
 
+        if (channel == editing::preMaster (edit))
+        {
+            // The Pre-Master: its Line, and where it goes (always master).
+            columnName.setText ("Pre-Master", dontSendNotification);
+
+            for (auto* c : std::initializer_list<Component*> { &columnInput, &input, &hear, &recordHere, &output, &columnFrom, &columnFromList })
+                c->setVisible (false);
+
+            columnInto.setVisible (false);
+            return;
+        }
+
         fillInputs (input);
         input.setSelectedId (idForInput (editing::inputOf (*channel)), dontSendNotification);
         hear.setToggleState (editing::isMonitoring (*channel), dontSendNotification);
@@ -1498,22 +1532,21 @@ namespace carthage::ui
         r.removeFromBottom (theme::space1);
         const auto height = r.getHeight() - viewport.getScrollBarThickness();
 
-        if (! strips.isEmpty())
+        // Master, then the Pre-Master close beside it, then a wider gap before the channels.
+        for (int i = 0; i < std::min (pinned, strips.size()); ++i)
         {
-            strips.getFirst()->setBounds (r.removeFromLeft (masterWidth).withHeight (height));   // master, pinned
-            r.removeFromLeft (theme::space2);
+            strips[i]->setBounds (r.removeFromLeft (masterWidth).withHeight (height - cableBand));
+            r.removeFromLeft (i + 1 < pinned ? theme::space1 + 2 : theme::space4);
         }
 
         addButton.setBounds (bottom.withX (r.getX()).withWidth (120).reduced (0, 2));
         viewport.setBounds (r);
-        stripHolder->setSize (std::max (r.getWidth(), (strips.size() - 1) * (stripWidth + stripGap)), height);
+        const auto channelCount = strips.size() - pinned;
+        stripHolder->setSize (std::max (r.getWidth(), channelCount * (stripWidth + stripGap)), height);
 
         // The strips leave a band under them for the cables (W51).
-        for (int i = 1; i < strips.size(); ++i)
-            strips[i]->setBounds ((i - 1) * (stripWidth + stripGap), 0, stripWidth, height - cableBand);
-
-        if (! strips.isEmpty())
-            strips.getFirst()->setSize (masterWidth, height - cableBand);
+        for (int i = pinned; i < strips.size(); ++i)
+            strips[i]->setBounds ((i - pinned) * (stripWidth + stripGap), 0, stripWidth, height - cableBand);
 
         columnName.setBounds (column.removeFromTop (28));
         column.removeFromTop (theme::space2);

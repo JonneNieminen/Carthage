@@ -20,6 +20,8 @@ namespace carthage::editing
         const juce::Identifier recordChannelProp ("carthageRecordChannel");   // on CARTHAGELANES: the record channel's item ID   // "peak" or "rms" on the meters Carthage adds
         constexpr const char* channelRole = "channel";
         constexpr const char* carrierRole = "carrier";
+        constexpr const char* preMasterRole = "premaster";
+        const juce::Identifier preMasterOnProp ("carthagePreMasterOn");   // on CARTHAGELANES
 
         juce::ValueTree lanesState (const Edit& edit)   { return edit.state.getChildWithName (lanesTag); }
 
@@ -42,6 +44,27 @@ namespace carthage::editing
         }
 
         int carrierLaneID (const Track& t)   { return static_cast<int> (t.state[carrierLaneProp]); }
+
+        /** "Master" in a route: the Pre-Master while it is on, else the interface (null). */
+        AudioTrack* physicalMaster (const Edit& edit)
+        {
+            return usesPreMaster (edit) ? preMaster (edit) : nullptr;
+        }
+
+        /** A track's destination as Carthage names it: the Pre-Master reads as master. */
+        AudioTrack* logicalDestination (const AudioTrack& t)
+        {
+            auto* d = t.getOutput().getDestinationTrack();
+            return d != nullptr && d->state[roleProp].toString() == preMasterRole ? nullptr : d;
+        }
+
+        void sendTo (AudioTrack& t, AudioTrack* physical)
+        {
+            if (physical == nullptr)
+                t.getOutput().setOutputToDefaultDevice (false);
+            else
+                t.getOutput().setOutputToTrack (physical);
+        }
 
         Lane newLaneState (Edit& edit, const juce::String& name)
         {
@@ -105,7 +128,7 @@ namespace carthage::editing
             {
                 const auto lane = laneWithID (edit, carrierLaneID (*c));
                 const auto laneSilent = lane.isValid() && (lane.isMuted() || (anyLaneSolo && ! lane.isSoloed()));
-                const auto toMaster = c->getOutput().getDestinationTrack() == nullptr;
+                const auto toMaster = logicalDestination (*c) == nullptr;
                 const auto silent = laneSilent || (anyChannelSolo && toMaster);
 
                 if (c->isMuted (false) != silent)
@@ -634,7 +657,7 @@ namespace carthage::editing
     AudioTrack* routeOf (const Clip& c)
     {
         if (auto* t = dynamic_cast<AudioTrack*> (c.getTrack()))
-            return t->getOutput().getDestinationTrack();
+            return logicalDestination (*t);
 
         return nullptr;
     }
@@ -645,7 +668,7 @@ namespace carthage::editing
             return nullptr;
 
         for (auto* c : carriers (edit))
-            if (carrierLaneID (*c) == lane.id() && c->getOutput().getDestinationTrack() == channel)
+            if (carrierLaneID (*c) == lane.id() && logicalDestination (*c) == channel)
                 return c;
 
         // A new carrier, kept after the last track so it never sits between channels.
@@ -659,8 +682,7 @@ namespace carthage::editing
         carrier->state.setProperty (carrierLaneProp, lane.id(), um);
         carrier->setName ("Lane " + juce::String (lane.id()) + (channel != nullptr ? " > " + channel->getName() : juce::String (" > Master")));
 
-        if (channel != nullptr)
-            carrier->getOutput().setOutputToTrack (channel);
+        sendTo (*carrier, channel != nullptr ? channel : physicalMaster (edit));
 
         applyMutes (edit);
         return carrier;
@@ -685,7 +707,7 @@ namespace carthage::editing
 
     AudioTrack* outputOf (const AudioTrack& channel)
     {
-        return channel.getOutput().getDestinationTrack();
+        return logicalDestination (channel);
     }
 
     juce::Result setOutput (AudioTrack& channel, AudioTrack* destination)
@@ -697,11 +719,7 @@ namespace carthage::editing
             return juce::Result::fail (destination->getName() + " already plays into " + channel.getName()
                                        + ", so this would feed the sound back into itself");
 
-        if (destination == nullptr)
-            channel.getOutput().setOutputToDefaultDevice (false);
-        else
-            channel.getOutput().setOutputToTrack (destination);
-
+        sendTo (channel, destination != nullptr ? destination : physicalMaster (channel.edit));
         return juce::Result::ok();
     }
 
@@ -773,7 +791,7 @@ namespace carthage::editing
                 }
                 else
                 {
-                    t->getOutput().setOutputToDefaultDevice (false);
+                    sendTo (*t, physicalMaster (edit));
                 }
             }
 
@@ -993,11 +1011,64 @@ namespace carthage::editing
         }
     }
 
+    AudioTrack* preMaster (const Edit& edit)
+    {
+        for (auto* t : getAudioTracks (const_cast<Edit&> (edit)))
+            if (t->state[roleProp].toString() == preMasterRole)
+                return t;
+
+        return nullptr;
+    }
+
+    bool usesPreMaster (const Edit& edit)
+    {
+        return preMaster (edit) != nullptr && static_cast<bool> (lanesState (edit).getProperty (preMasterOnProp, true));
+    }
+
+    void setUsesPreMaster (Edit& edit, bool on)
+    {
+        if (preMaster (edit) == nullptr)
+            return;
+
+        lanesStateForWriting (edit).setProperty (preMasterOnProp, on, nullptr);
+        auto* target = physicalMaster (edit);
+
+        // Everything that plays to master: channels and carriers, through it or not.
+        for (auto* t : getAudioTracks (edit))
+            if ((isChannel (*t) || isCarrier (*t)) && logicalDestination (*t) == nullptr && t->getOutput().getDestinationTrack() != target)
+                sendTo (*t, target);
+    }
+
+    namespace
+    {
+        /** The Pre-Master, made once for every project (new, from before, or from 5a's first
+            builds); outside undo, as setting up is. */
+        void ensurePreMaster (Edit& edit)
+        {
+            if (preMaster (edit) != nullptr)
+                return;
+
+            const auto wasOn = static_cast<bool> (lanesStateForWriting (edit).getProperty (preMasterOnProp, true));
+            auto* t = addChannel (edit);
+
+            if (t == nullptr)
+                return;
+
+            t->state.setProperty (roleProp, preMasterRole, nullptr);
+            t->setName ("Pre-Master");
+            t->getOutput().setOutputToDefaultDevice (false);
+            setUsesPreMaster (edit, wasOn);
+        }
+    }
+
     //==============================================================================================
     void prepareMix (Edit& edit, bool isNew, int newLanes)
     {
         if (lanesState (edit).isValid())
-            return;   // already a 5a project
+        {
+            ensurePreMaster (edit);   // a 5a project from before the Pre-Master
+            return;
+        }
 
         auto lanesTree = lanesStateForWriting (edit);
         const auto oldTracks = isNew ? juce::Array<AudioTrack*>() : getAudioTracks (edit);
@@ -1064,6 +1135,7 @@ namespace carthage::editing
             edit.moveTrack (t, TrackInsertPoint (nullptr, getAllTracks (edit).getLast()));
 
         addMeters (edit.getMasterPluginList(), true);
+        ensurePreMaster (edit);
     }
 
     void syncMix (Edit& edit, const AudioTrack* inputChannel)
@@ -1091,7 +1163,17 @@ namespace carthage::editing
             if (ch == inputChannel || hasOwnPlugins (*ch) || (inputOf (*ch).isSet() && isMonitoring (*ch)))
                 collectDownstream (ch, fed);
 
-        for (auto* ch : all)
+        auto withPreMaster = all;
+
+        if (auto* pm = preMaster (edit))
+        {
+            withPreMaster.add (pm);
+
+            if (hasOwnPlugins (*pm))
+                collectDownstream (pm, fed);
+        }
+
+        for (auto* ch : withPreMaster)
         {
             const auto sounds = fed.contains (ch);
 

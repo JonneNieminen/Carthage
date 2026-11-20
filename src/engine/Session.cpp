@@ -717,6 +717,7 @@ namespace carthage::engine
         // sound, lane n playing through channel n (W47). The first channel has the input.
         const auto fresh = isNew || tracktion::getAudioTracks (edit).isEmpty();
         editing::prepareMix (edit, fresh);
+        editing::setUsesPreMaster (edit, getUsePreMaster());   // the setting, for this project too
         p->track = editing::recordChannel (edit);
 
         // A project with no channel inputs yet (new, or from before W51): the record channel
@@ -1331,7 +1332,23 @@ namespace carthage::engine
                                                                              : a == AtLaunch::emptyProject ? "empty" : "start");
     }
 
-    bool Session::getFitLoopsToTempo() const
+    bool Session::getUsePreMaster() const
+    {
+        return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("usePreMaster", true);
+    }
+
+    void Session::setUsePreMaster (bool on)
+    {
+        engine->getPropertyStorage().getPropertiesFile().setValue ("usePreMaster", on);
+
+        for (auto& p : projects)
+        {
+            editing::setUsesPreMaster (*p->edit, on);
+            editing::syncMix (*p->edit, p->track);
+        }
+    }
+
+        bool Session::getFitLoopsToTempo() const
     {
         return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("fitLoopsToTempo", false);
     }

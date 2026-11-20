@@ -96,6 +96,7 @@ namespace carthage::ui
         juce::ComboBox textSize;
         Switch playWhileHeld { "Play sounds only while held" };
         Switch fitLoops { "Fit loops to the project tempo" };
+        Switch preMaster { "Pre-Master channel before master" };
         Switch checkPlugins { "Check for new plugins at every launch" };
         ShortcutEditor shortcuts;
         juce::Viewport viewport;

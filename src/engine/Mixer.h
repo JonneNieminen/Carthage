@@ -217,6 +217,13 @@ namespace carthage::editing
     float mixOf (const tracktion::Plugin&);
     void setMix (tracktion::Plugin&, float);
 
+    /** The Pre-Master (W51): a channel between everything that plays to master and master
+        itself, on unless the setting turns it off. Routes still name master; while it is on they
+        pass through it. It is not one of channels(). */
+    tracktion::AudioTrack* preMaster (const tracktion::Edit&);
+    bool usesPreMaster (const tracktion::Edit&);
+    void setUsesPreMaster (tracktion::Edit&, bool);
+
     //==============================================================================================
     /** Sets up a project's lanes and channels: a new one gets 8 lanes and 50 channels; one saved
         before 5a keeps its sound, lane n's clips playing through channel n (W47). No undo step. */

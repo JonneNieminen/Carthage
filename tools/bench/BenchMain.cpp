@@ -370,7 +370,7 @@ namespace
             {
                 auto& edit = session->getEdit();
                 clip = carthage::editing::insertFile (edit, carthage::editing::lanes (edit)[1], tone, 8.0);   // beat 8 at 120 bpm: 4 s
-                mask.setBit (tracktion::getAllTracks (edit).indexOf (clip->getTrack()));
+                mask.setRange (0, tracktion::getAllTracks (edit).size(), true);   // the whole mix: lanes play through channels and the Pre-Master
             });
 
             const auto render = [&] (const String& name)
@@ -506,7 +506,7 @@ namespace
             {
                 auto& edit = session->getEdit();
                 track = dynamic_cast<tracktion::AudioTrack*> (carthage::editing::insertFile (edit, carthage::editing::lanes (edit)[1], tone, 8.0)->getTrack());   // 4 s at 120 bpm
-                mask.setBit (tracktion::getAllTracks (edit).indexOf (track));
+                mask.setRange (0, tracktion::getAllTracks (edit).size(), true);   // the whole mix: lanes play through channels and the Pre-Master
             });
 
             const auto render = [&] (const String& name)
@@ -687,7 +687,7 @@ namespace
             {
                 auto& edit = session->getEdit();
                 clip = carthage::editing::insertFile (edit, carthage::editing::lanes (edit)[1], tone, 8.0);   // 4 s
-                mask.setBit (tracktion::getAllTracks (edit).indexOf (clip->getTrack()));
+                mask.setRange (0, tracktion::getAllTracks (edit).size(), true);   // the whole mix: lanes play through channels and the Pre-Master
             });
 
             const auto render = [&] (const String& name)

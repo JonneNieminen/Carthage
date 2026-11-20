@@ -11,6 +11,8 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- A Pre-Master channel beside master: everything heading to master passes through it, for the
+  processing the whole mix shares. On by default; Settings can turn it off.
 - FL-style routing: select a channel and every other strip shows a route button at its foot; click
   to send the selected channel there too (with a level knob), Cmd-click to play only there, master's
   button turns the main output on or off; right-click for sidechain. A cable under the strips shows

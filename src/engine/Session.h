@@ -178,6 +178,10 @@ namespace carthage::engine
         void setAtLaunch (AtLaunch);
 
         /** Settings: a dropped loop whose tempo is known follows the project's tempo (W30). */
+        /** Settings: the Pre-Master channel (W51), on by default; applies to every open project. */
+        bool getUsePreMaster() const;
+        void setUsePreMaster (bool);
+
         bool getFitLoopsToTempo() const;
         void setFitLoopsToTempo (bool);
 

@@ -276,3 +276,7 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   (`setPlaysToOutput`); `faderOf` replaces Tracktion's getVolumePlugin, which returns the last
   volume stage. Bench `carrier` renders a send (2x) and send-only (1x). Sidechain through
   Tracktion's sidechain source. UI: route buttons, send knobs, cable band, route menu, slot menu.
+- Pre-Master (W51): a track with role "premaster", made by prepareMix for every project; routes
+  name master (null) and physically go to it while on (`physicalMaster`, `logicalDestination`);
+  the setting `usePreMaster` (default on) rewires all. Bench renders now take the whole mix (a
+  lane's carrier plays through the Pre-Master, which a one-track render left out).

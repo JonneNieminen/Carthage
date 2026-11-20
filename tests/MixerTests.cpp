@@ -294,6 +294,32 @@ public:
             expect (editing::sendsOf (a).empty());
         }
 
+        beginTest ("The Pre-Master: everything for master passes through it while it is on (W51)");
+        {
+            auto* pm = editing::preMaster (*edit);
+            const auto chs = editing::channels (*edit);
+            expect (pm != nullptr && pm->getName() == "Pre-Master", "every project has one");
+            expect (! chs.contains (pm), "it is not one of the channels");
+            expect (editing::usesPreMaster (*edit), "on by default");
+            expect (editing::outputOf (*chs[20]) == nullptr, "a channel still reads as playing to master");
+            expect (chs[20]->getOutput().getDestinationTrack() == pm, "but its sound goes through the Pre-Master");
+
+            auto* clip = editing::insertFile (*edit, lanes[7], kick, 200.0);
+            expect (editing::routeOf (*clip) == nullptr, "a new sound reads as master");
+            expect (dynamic_cast<tracktion::AudioTrack*> (clip->getTrack())->getOutput().getDestinationTrack() == pm, "and plays through it");
+
+            editing::setUsesPreMaster (*edit, false);
+            expect (! editing::usesPreMaster (*edit));
+            expect (chs[20]->getOutput().getDestinationTrack() == nullptr, "off: straight to master");
+            expect (dynamic_cast<tracktion::AudioTrack*> (clip->getTrack())->getOutput().getDestinationTrack() == nullptr);
+            expect (editing::setOutput (*chs[21], nullptr).wasOk() && chs[21]->getOutput().getDestinationTrack() == nullptr);
+
+            editing::setUsesPreMaster (*edit, true);
+            expect (chs[20]->getOutput().getDestinationTrack() == pm && chs[21]->getOutput().getDestinationTrack() == pm, "on again: through it");
+            expect (editing::outputOf (*chs[4]) == nullptr || editing::outputOf (*chs[4]) != pm, "a channel never names the Pre-Master as its output");
+            editing::remove ({ clip });
+        }
+
         beginTest ("A project from before 5a keeps its sound: lane n plays through channel n");
         {
             auto old = tracktion::createEmptyEdit (engine, folder.getChildFile ("Old.tracktionedit"));
