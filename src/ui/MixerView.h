@@ -59,6 +59,15 @@ namespace carthage::ui
         static int idForInput (editing::ChannelInput);
         juce::String inputName (editing::ChannelInput) const;
 
+        /** How the selected channel reaches `to` (null: master): what the route buttons and cables show. */
+        enum class Route { none, output, send, sidechain };
+        Route routeTo (tracktion::AudioTrack* to);
+
+        /** A click on a strip's route button (FL): send here or stop; with Cmd, play only here. */
+        void toggleRoute (tracktion::AudioTrack* to, bool only);
+        void showRouteMenu (tracktion::AudioTrack& to, juce::Component& from);
+        void routesChanged();
+
         /** The plugin dragged from a Line, by its drag description. */
         tracktion::Plugin* draggedInsert (const juce::var& description) const;
 
@@ -68,7 +77,8 @@ namespace carthage::ui
         juce::ValueTree editState;
         juce::OwnedArray<Strip> strips;   // master first
         juce::Viewport viewport;
-        juce::Component stripHolder;
+        class StripHolder;
+        std::unique_ptr<StripHolder> stripHolder;
         juce::TextButton addButton { "Add channel" };
         tracktion::EditItemID selected;
         bool masterSelected = false;

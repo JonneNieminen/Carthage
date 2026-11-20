@@ -583,7 +583,7 @@ namespace
             onMessageThreadVoid ([&]
             {
                 carrierTrack->getOutput().setOutputToTrack (channel);
-                channel->getVolumePlugin()->setVolumeDb (-6.0206f);
+                carthage::editing::faderOf (*channel)->setVolumeDb (-6.0206f);
                 carthage::editing::syncMix (session->getEdit(), nullptr);   // the channel now has something to play
             });
             const auto routed = render ("routed");
@@ -591,6 +591,29 @@ namespace
             say ("RMS at 4.5 s: straight to master " + String (direct, 4) + ", through a channel at -6.02 dB " + String (routed, 4));
             check (feeds, "the carrier feeds the channel");
             check (direct > 0.05f && std::abs (routed / direct - 0.5f) < 0.02f, "the channel's fader acts on the carrier's clips");
+
+            // Sends (W51): the channel also plays into another, after its fader.
+            tracktion::AudioTrack* other = nullptr;
+            const auto sent = onMessageThread ([&]
+            {
+                other = carthage::editing::channels (session->getEdit())[5];
+                carthage::editing::begin (session->getEdit(), "Send");
+                const auto r = carthage::editing::addSend (*channel, *other, 0.0f);
+                carthage::editing::syncMix (session->getEdit(), nullptr);
+                return r.wasOk();
+            });
+            const auto both = render ("send");
+            onMessageThreadVoid ([&]
+            {
+                carthage::editing::setPlaysToOutput (*channel, false);
+                carthage::editing::syncMix (session->getEdit(), nullptr);
+            });
+            const auto onlySend = render ("send-only");
+            say ("With a send to another channel: " + String (both, 4) + "; main output off, the send alone: " + String (onlySend, 4));
+            check (sent, "the send is made");
+            check (std::abs (both / routed - 2.0f) < 0.05f, "the send adds a second copy after the fader");
+            check (std::abs (onlySend / routed - 1.0f) < 0.05f, "with the main output off, only the send plays");
+            check (! carthage::editing::addSend (*other, *channel).wasOk(), "a send back would loop: refused");
             say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
             return checksFailed == 0 ? 0 : 1;
         }

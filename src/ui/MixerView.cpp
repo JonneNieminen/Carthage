@@ -11,7 +11,7 @@ namespace carthage::ui
 
     namespace
     {
-        constexpr int stripWidth = 64, masterWidth = 80, stripGap = 2, columnWidth = 248;
+        constexpr int stripWidth = 64, masterWidth = 80, stripGap = 2, columnWidth = 248, cableBand = 18;
         constexpr float minDb = -60.0f, maxDb = 6.0f;
 
         const Identifier colourProp ("carthageColour");
@@ -51,7 +51,7 @@ namespace carthage::ui
         Strip (MixerView& v, tracktion::AudioTrack* t, int indexIn) : view (v), track (t), index (indexIn)
         {
             auto& edit = view.session.getEdit();
-            volume = track != nullptr ? tracktion::VolumeAndPanPlugin::Ptr (track->getVolumePlugin()) : edit.getMasterVolumePlugin();
+            volume = track != nullptr ? tracktion::VolumeAndPanPlugin::Ptr (editing::faderOf (*track)) : edit.getMasterVolumePlugin();
 
             if (auto* m = track != nullptr ? editing::peakMeterOf (*track) : editing::masterPeakMeter (edit))
             {
@@ -95,6 +95,20 @@ namespace carthage::ui
             };
             addAndMakeVisible (pan);
 
+            sendLevel.setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
+            sendLevel.setTextBoxStyle (Slider::NoTextBox, true, 0, 0);
+            sendLevel.setRange (minDb, maxDb, 0.1);
+            sendLevel.setSkewFactorFromMidPoint (-12.0);
+            sendLevel.setDefault (0.0);
+            sendLevel.setTooltip ("How much of the selected channel goes into this one. Double-click: 0 dB.");
+            sendLevel.onDragStart = [this] { editing::begin (view.session.getEdit(), "Send level"); };
+            sendLevel.onValueChange = [this]
+            {
+                if (auto* from = view.selectedChannel(); from != nullptr && track != nullptr)
+                    editing::setSendLevel (*from, *track, static_cast<float> (sendLevel.getValue()));
+            };
+            addChildComponent (sendLevel);
+
             readModel();
             setTooltip (track != nullptr ? "Click to select. Right-click to rename, colour, route or delete it." : "Master: everything you hear goes through it");
         }
@@ -106,6 +120,22 @@ namespace carthage::ui
         }
 
         tracktion::AudioTrack* getTrack() const noexcept   { return track; }
+
+        /** The route button and send knob follow the selected channel. */
+        void refreshRoute()
+        {
+            auto* from = view.selectedChannel();
+            route = from != nullptr && from != track ? view.routeTo (track) : Route::none;
+            showsRoute = from != nullptr && from != track;
+            sendLevel.setVisible (route == Route::send);
+
+            if (route == Route::send)
+                for (const auto& send : editing::sendsOf (*from))
+                    if (send.to == track)
+                        sendLevel.setValue (std::clamp (send.gainDb, minDb, maxDb), dontSendNotification);
+
+            repaint();
+        }
 
         /** The fader and pan from the model (an undo, the toolbar's master), unless being dragged. */
         void readModel()
@@ -220,6 +250,41 @@ namespace carthage::ui
 
             paintMeter (g);
             juce::ignoreUnused (edit);
+
+            if (showsRoute)
+            {
+                // FL's route button: an arrow into this strip, lit when the selected channel's
+                // sound comes here (accent: live); "SC" when it keys a plugin here.
+                const auto lit = route != Route::none;
+                auto button = (route == Route::send ? routeArea.withWidth (routeArea.getWidth() / 2) : routeArea).reduced (6, 2).toFloat();
+                g.setColour (lit ? theme::accent : theme::well);
+                g.fillRoundedRectangle (button, theme::radiusXs);
+
+                if (! lit)
+                {
+                    g.setColour (theme::line);
+                    g.drawRoundedRectangle (button.reduced (0.5f), theme::radiusXs, theme::stroke);
+                }
+
+                g.setColour (lit ? theme::onAccent : theme::muted);
+
+                if (route == Route::sidechain)
+                {
+                    g.setFont (theme::uiFont (theme::textXs, true));
+                    g.drawText ("SC", button, Justification::centred, false);
+                }
+                else
+                {
+                    const auto c = button.getCentre();
+                    Path arrow;   // up into the strip
+                    arrow.startNewSubPath (c.x, c.y + 4.0f);
+                    arrow.lineTo (c.x, c.y - 4.0f);
+                    arrow.startNewSubPath (c.x - 3.5f, c.y - 0.5f);
+                    arrow.lineTo (c.x, c.y - 4.0f);
+                    arrow.lineTo (c.x + 3.5f, c.y - 0.5f);
+                    g.strokePath (arrow, PathStrokeType (1.5f, PathStrokeType::curved, PathStrokeType::rounded));
+                }
+            }
         }
 
         void resized() override
@@ -250,6 +315,10 @@ namespace carthage::ui
             if (track == nullptr)
                 outputArea = r.removeFromBottom (14);   // master's output: the interface (owner)
 
+            // The route button (and a send's knob) at the foot: shown while another channel is selected.
+            routeArea = r.removeFromBottom (22);
+            sendLevel.setBounds (routeArea.withTrimmedLeft (routeArea.getWidth() / 2).withSizeKeepingCentre (26, 20));
+            r.removeFromBottom (theme::space1);
             figureArea = r.removeFromBottom (16);
             r.removeFromBottom (theme::space1);
             meterArea = r.removeFromRight (track != nullptr ? 14 : 18);
@@ -258,6 +327,16 @@ namespace carthage::ui
 
         void mouseDown (const MouseEvent& e) override
         {
+            if (showsRoute && routeArea.contains (e.getPosition()) && ! sendLevel.getBounds().contains (e.getPosition()))
+            {
+                if (e.mods.isPopupMenu() && track != nullptr)
+                    view.showRouteMenu (*track, *this);
+                else
+                    view.toggleRoute (track, e.mods.isCommandDown());
+
+                return;   // routing does not change the selection: the source stays selected
+            }
+
             if (track == nullptr)
             {
                 view.selectMaster();   // master has a Line too (owner)
@@ -377,7 +456,10 @@ namespace carthage::ui
         std::array<float, 2> peakDb { -100.0f, -100.0f }, rmsDb { -100.0f, -100.0f };
         bool clipped = false;
 
-        ValueSlider fader { 0.0 }, pan { 0.0 };
+        ValueSlider fader { 0.0 }, pan { 0.0 }, sendLevel { 0.0 };
+        Route route = Route::none;
+        bool showsRoute = false;
+        Rectangle<int> routeArea;
         Rectangle<int> colourBar, nameArea, outputArea, inputArea, muteArea, soloArea, meterArea, figureArea;
 
         String nameForUndo() const   { return track != nullptr ? track->getName() : String ("Master"); }
@@ -428,6 +510,79 @@ namespace carthage::ui
             g.setFont (theme::uiFont (theme::textXs, true));
             g.drawText (letter, r, Justification::centred, false);
         }
+    };
+
+    //==============================================================================================
+    /** The strips side by side, and under them the selected channel's cables (W51): a line from
+        it to every channel its sound reaches, solid for outputs and sends, dashed for sidechains. */
+    class MixerView::StripHolder final : public Component
+    {
+    public:
+        explicit StripHolder (MixerView& v) : view (v) {}
+
+        void paint (Graphics& g) override
+        {
+            auto* from = view.selectedChannel();
+            const Strip* source = nullptr;
+            struct Drop { float x; Route kind; };
+            std::vector<Drop> drops;
+
+            for (auto* s : view.strips)
+            {
+                if (s->getTrack() == nullptr || s->getParentComponent() != this)
+                    continue;
+
+                if (s->getTrack() == from)
+                    source = s;
+                else if (from != nullptr)
+                    if (const auto kind = view.routeTo (s->getTrack()); kind != Route::none)
+                        drops.push_back ({ static_cast<float> (s->getBounds().getCentreX()), kind });
+            }
+
+            if (source == nullptr || drops.empty())
+                return;
+
+            const auto y = static_cast<float> (getHeight()) - static_cast<float> (cableBand) * 0.5f;
+            const auto top = static_cast<float> (getHeight() - cableBand);
+            const auto sx = static_cast<float> (source->getBounds().getCentreX());
+            auto left = sx, right = sx;
+
+            for (const auto& d : drops)
+            {
+                left = std::min (left, d.x);
+                right = std::max (right, d.x);
+            }
+
+            g.setColour (theme::accent.withAlpha (0.8f));
+            g.drawLine (left, y, right, y, 1.5f);
+            g.fillEllipse (Rectangle<float> (7.0f, 7.0f).withCentre ({ sx, y }));   // where it comes from
+            g.drawLine (sx, top, sx, y, 1.5f);
+
+            for (const auto& d : drops)
+            {
+                Path stub;
+                stub.startNewSubPath (d.x, y);
+                stub.lineTo (d.x, top + 1.0f);
+
+                if (d.kind == Route::sidechain)
+                {
+                    const float dashes[] = { 3.0f, 3.0f };
+                    PathStrokeType (1.5f).createDashedStroke (stub, stub, dashes, 2);
+                    g.fillPath (stub);
+                }
+                else
+                {
+                    g.strokePath (stub, PathStrokeType (1.5f));
+                }
+
+                Path head;   // an arrow up into the destination strip
+                head.addTriangle (d.x - 4.0f, top + 5.0f, d.x + 4.0f, top + 5.0f, d.x, top);
+                g.fillPath (head);
+            }
+        }
+
+    private:
+        MixerView& view;
     };
 
     //==============================================================================================
@@ -645,6 +800,33 @@ namespace carthage::ui
                 editing::setBypassed (*held, ! editing::isBypassed (*held));
                 repaint();
             });
+            if (editing::canSidechain (plugin))
+            {
+                // Which channel keys it (FL's sidechain): any channel whose sound does not come from here.
+                PopupMenu keys;
+                auto* current = editing::sidechainSourceOf (plugin);
+                auto& v = view;
+                keys.addItem ("None", true, current == nullptr, [&edit, held, &v]
+                {
+                    editing::begin (edit, "Sidechain " + held->getName());
+                    [[maybe_unused]] auto r = editing::setSidechainSource (*held, nullptr);
+                    v.routesChanged();
+                });
+                keys.addSeparator();
+
+                for (auto* ch : editing::channels (edit))
+                    if (ch != track)
+                        keys.addItem (ch->getName(), true, ch == current, [&edit, held, ch, &v]
+                        {
+                            editing::begin (edit, "Sidechain " + held->getName());
+                            const auto r = editing::setSidechainSource (*held, ch);
+                            if (v.onStatus) v.onStatus (r.failed() ? r.getErrorMessage() : ch->getName() + " keys " + held->getName());
+                            v.routesChanged();
+                        });
+
+                m.addSubMenu ("Sidechain from", keys);
+            }
+
             m.addSeparator();
             m.addItem ("Delete", [this, &edit, held, windowsPtr]
             {
@@ -662,7 +844,8 @@ namespace carthage::ui
     MixerView::MixerView (engine::Session& s, PluginWindows& w) : session (s), windows (w)
     {
         setOpaque (true);
-        viewport.setViewedComponent (&stripHolder, false);
+        stripHolder = std::make_unique<StripHolder> (*this);
+        viewport.setViewedComponent (stripHolder.get(), false);
         viewport.setScrollBarsShown (false, true);
         addAndMakeVisible (viewport);
 
@@ -809,7 +992,7 @@ namespace carthage::ui
         rebuildPending = false;
         windows.closeMissing();   // a plugin deleted or undone away takes its window with it
         strips.clear();
-        stripHolder.removeAllChildren();
+        stripHolder->removeAllChildren();
 
         if (! editState.isValid())
             return;
@@ -821,7 +1004,7 @@ namespace carthage::ui
         for (auto* channel : editing::channels (session.getEdit()))
         {
             auto* strip = strips.add (std::make_unique<Strip> (*this, channel, i++));
-            stripHolder.addAndMakeVisible (strip);
+            stripHolder->addAndMakeVisible (strip);
         }
 
         if (selectedChannel() == nullptr && ! masterSelected)
@@ -830,6 +1013,7 @@ namespace carthage::ui
 
         resized();
         refreshColumn();
+        routesChanged();
         repaint();
     }
 
@@ -846,10 +1030,7 @@ namespace carthage::ui
     {
         selected = {};
         masterSelected = true;
-
-        for (auto* s : strips)
-            s->repaint();
-
+        routesChanged();
         refreshColumn();
     }
 
@@ -874,6 +1055,126 @@ namespace carthage::ui
             channel = editing::channels (session.getEdit()).getFirst();
 
         addPlugin (channel, -1, description);
+    }
+
+    MixerView::Route MixerView::routeTo (tracktion::AudioTrack* to)
+    {
+        auto* from = selectedChannel();
+
+        if (from == nullptr || from == to)
+            return Route::none;
+
+        if (to == nullptr)   // master
+            return editing::playsToOutput (*from) && editing::outputOf (*from) == nullptr ? Route::output : Route::none;
+
+        if (editing::playsToOutput (*from) && editing::outputOf (*from) == to)
+            return Route::output;
+
+        for (const auto& send : editing::sendsOf (*from))
+            if (send.to == to)
+                return Route::send;
+
+        for (auto* p : editing::insertsOf (*to))
+            if (editing::sidechainSourceOf (*p) == from)
+                return Route::sidechain;
+
+        return Route::none;
+    }
+
+    void MixerView::routesChanged()
+    {
+        for (auto* s : strips)
+            s->refreshRoute();
+
+        if (stripHolder != nullptr)
+            stripHolder->repaint();
+    }
+
+    void MixerView::toggleRoute (tracktion::AudioTrack* to, bool only)
+    {
+        auto* from = selectedChannel();
+
+        if (from == nullptr)
+            return;
+
+        auto& edit = session.getEdit();
+        editing::begin (edit, "Route " + from->getName());
+        auto result = Result::ok();
+        const auto toName = to != nullptr ? to->getName() : String ("master");
+
+        if (to == nullptr)
+        {
+            // Master's button: the main output to master, on or off.
+            if (editing::outputOf (*from) != nullptr)
+            {
+                result = editing::setOutput (*from, nullptr);
+                editing::setPlaysToOutput (*from, true);
+            }
+            else
+            {
+                editing::setPlaysToOutput (*from, ! editing::playsToOutput (*from));
+            }
+        }
+        else if (only)
+        {
+            // Cmd-click (FL's "route to this track only"): its main output goes here alone.
+            editing::removeSend (*from, *to);
+            result = editing::setOutput (*from, to);
+            if (result.wasOk()) editing::setPlaysToOutput (*from, true);
+        }
+        else
+        {
+            switch (routeTo (to))
+            {
+                case Route::output:    result = editing::setOutput (*from, nullptr); break;   // back to master
+                case Route::send:      editing::removeSend (*from, *to); break;
+                case Route::sidechain:
+                case Route::none:      result = editing::addSend (*from, *to); break;
+            }
+        }
+
+        if (onStatus)
+            onStatus (result.failed() ? result.getErrorMessage() : from->getName() + ": routes changed (" + toName + ")");
+
+        routesChanged();
+        refreshColumn();
+    }
+
+    void MixerView::showRouteMenu (tracktion::AudioTrack& to, Component& fromComponent)
+    {
+        auto* from = selectedChannel();
+
+        if (from == nullptr)
+            return;
+
+        auto& edit = session.getEdit();
+        auto* held = &to;
+        PopupMenu m;
+        const auto kind = routeTo (&to);
+        m.addItem ("Send here", kind != Route::send && kind != Route::output, kind == Route::send, [this, held] { toggleRoute (held, false); });
+        m.addItem ("Play only here (main output)", true, kind == Route::output, [this, held] { toggleRoute (held, true); });
+
+        PopupMenu keys;
+        for (auto* p : editing::insertsOf (to))
+            if (editing::canSidechain (*p))
+            {
+                tracktion::Plugin::Ptr plugin (p);
+                const auto keyed = editing::sidechainSourceOf (*p) == from;
+                keys.addItem (p->getName(), true, keyed, [this, &edit, plugin, from, keyed]
+                {
+                    editing::begin (edit, "Sidechain " + plugin->getName());
+                    const auto r = editing::setSidechainSource (*plugin, keyed ? nullptr : from);
+
+                    if (onStatus)
+                        onStatus (r.failed() ? r.getErrorMessage()
+                                             : keyed ? plugin->getName() + " has no sidechain now"
+                                                     : from->getName() + " keys " + plugin->getName());
+                    routesChanged();
+                });
+            }
+
+        m.addSubMenu ("Sidechain into", keys, keys.getNumItems() > 0);
+        m.showMenuAsync (PopupMenu::Options().withTargetComponent (&fromComponent));
     }
 
     tracktion::Plugin* MixerView::firstPluginOfSelected()
@@ -985,10 +1286,7 @@ namespace carthage::ui
     {
         masterSelected = false;
         selected = channel != nullptr ? channel->itemID : tracktion::EditItemID();
-
-        for (auto* s : strips)
-            s->repaint();
-
+        routesChanged();
         refreshColumn();
     }
 
@@ -1208,10 +1506,14 @@ namespace carthage::ui
 
         addButton.setBounds (bottom.withX (r.getX()).withWidth (120).reduced (0, 2));
         viewport.setBounds (r);
-        stripHolder.setSize (std::max (r.getWidth(), (strips.size() - 1) * (stripWidth + stripGap)), height);
+        stripHolder->setSize (std::max (r.getWidth(), (strips.size() - 1) * (stripWidth + stripGap)), height);
 
+        // The strips leave a band under them for the cables (W51).
         for (int i = 1; i < strips.size(); ++i)
-            strips[i]->setBounds ((i - 1) * (stripWidth + stripGap), 0, stripWidth, height);
+            strips[i]->setBounds ((i - 1) * (stripWidth + stripGap), 0, stripWidth, height - cableBand);
+
+        if (! strips.isEmpty())
+            strips.getFirst()->setSize (masterWidth, height - cableBand);
 
         columnName.setBounds (column.removeFromTop (28));
         column.removeFromTop (theme::space2);

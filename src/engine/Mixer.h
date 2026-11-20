@@ -107,6 +107,38 @@ namespace carthage::editing
         the channel (a feedback loop) is refused with a reason. One undo step's worth. */
     juce::Result setOutput (tracktion::AudioTrack& channel, tracktion::AudioTrack* destination);
 
+    /** Sends (W51, FL-style routing): besides its main output a channel plays into any number of
+        other channels, each at its own level, after its fader. Implemented as Tracktion aux sends
+        on the source and an aux return on each destination (a bus per destination channel). A send
+        that would bring the sound back to where it started is refused. */
+    struct Send
+    {
+        tracktion::AudioTrack* to = nullptr;
+        float gainDb = 0.0f;
+    };
+
+    std::vector<Send> sendsOf (tracktion::AudioTrack& from);
+    juce::Result addSend (tracktion::AudioTrack& from, tracktion::AudioTrack& to, float gainDb = 0.0f);
+    void removeSend (tracktion::AudioTrack& from, tracktion::AudioTrack& to);
+    void setSendLevel (tracktion::AudioTrack& from, tracktion::AudioTrack& to, float gainDb);
+
+    /** A channel's fader: its own volume and pan (never Tracktion's getVolumePlugin(), which
+        returns the last such stage, and a channel may end in a "main output off" gate). */
+    tracktion::VolumeAndPanPlugin* faderOf (tracktion::AudioTrack&);
+
+    /** Whether the main output plays at all (FL: a channel can go only to its sends). */
+    bool playsToOutput (const tracktion::AudioTrack&);
+    void setPlaysToOutput (tracktion::AudioTrack&, bool);
+
+    /** True if sound leaving `from` reaches `to`, through outputs and sends. */
+    bool reaches (tracktion::AudioTrack& from, tracktion::AudioTrack& to);
+
+    /** Sidechain: a plugin that takes a second input hears `source` there (null: none). Refused if
+        the plugin's channel feeds `source` (the loop would go through the plugin). */
+    bool canSidechain (tracktion::Plugin&);
+    tracktion::AudioTrack* sidechainSourceOf (tracktion::Plugin&);
+    juce::Result setSidechainSource (tracktion::Plugin&, tracktion::AudioTrack* source);
+
     /** "Channel N" with the lowest N no channel uses. */
     juce::String nextChannelName (const tracktion::Edit&);
 

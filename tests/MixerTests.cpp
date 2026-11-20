@@ -247,6 +247,53 @@ public:
             editing::setRecordChannel (*edit, *chs[0]);
         }
 
+        beginTest ("Sends: several destinations, levels, no loops, main output off (W51)");
+        {
+            const auto chs = editing::channels (*edit);
+            auto& a = *chs[10];
+            auto& b = *chs[11];
+            auto& c = *chs[12];
+
+            expect (editing::addSend (a, b, -3.0f).wasOk());
+            expect (editing::addSend (a, c).wasOk());
+            const auto sends = editing::sendsOf (a);
+            expectEquals (static_cast<int> (sends.size()), 2, "one channel into two");
+            expect (sends[0].to == &b && std::abs (sends[0].gainDb + 3.0f) < 0.1f, "at its own level");
+            expect (editing::reaches (a, c) && ! editing::reaches (c, a));
+
+            expect (editing::addSend (c, a).failed(), "a send back is refused");
+            expect (editing::setOutput (b, &a).failed(), "so is an output back, through a send");
+            expect (editing::addSend (a, a).failed());
+
+            editing::setSendLevel (a, b, -12.0f);
+            expect (std::abs (editing::sendsOf (a)[0].gainDb + 12.0f) < 0.1f);
+
+            // The order on a channel: returns, the person's plugins, fader, meters, sends, gate.
+            expect (editing::insertsOf (b).isEmpty() && editing::insertsOf (a).isEmpty(), "sends and returns are not inserts");
+            expect (dynamic_cast<tracktion::AuxReturnPlugin*> (b.pluginList[0]) != nullptr, "the return comes first");
+            const auto slot = editing::listIndexForSlot (b.pluginList, 0);
+            expect (b.pluginList[slot] == editing::faderOf (b), "a new plugin goes after the return, before the fader");
+
+            editing::setPlaysToOutput (a, false);
+            expect (! editing::playsToOutput (a));
+            expect (editing::faderOf (a) != nullptr && std::abs (editing::faderOf (a)->getVolumeDb()) < 0.1f, "the fader is still the fader, not the gate");
+            expect (editing::addSend (a, *chs[13]).wasOk());
+            expect (dynamic_cast<tracktion::VolumeAndPanPlugin*> (a.pluginList[a.pluginList.size() - 1]) != nullptr, "the gate stays last, after a new send");
+            editing::setPlaysToOutput (a, true);
+            expect (editing::playsToOutput (a));
+
+            editing::syncMix (*edit, nullptr);
+            editing::setChannelSoloed (b, true);
+            expect (! a.isMuted (false), "soloing a channel keeps what sends into it");
+            expect (c.isMuted (false), "a sibling destination is silent");
+            editing::setChannelSoloed (b, false);
+
+            editing::removeSend (a, b);
+            editing::removeSend (a, c);
+            editing::removeSend (a, *chs[13]);
+            expect (editing::sendsOf (a).empty());
+        }
+
         beginTest ("A project from before 5a keeps its sound: lane n plays through channel n");
         {
             auto old = tracktion::createEmptyEdit (engine, folder.getChildFile ("Old.tracktionedit"));

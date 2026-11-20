@@ -62,6 +62,26 @@ namespace carthage::editing
             channel is soloed and the carrier plays straight to master. A channel plays unless it
             is muted, or some channel is soloed and it is neither that channel, nor upstream of it
             (feeding it), nor downstream (fed by it). Tracktion's own solo is not used (W50). */
+        /** `start` and everything its sound reaches: outputs and sends (W51). */
+        void collectDownstream (AudioTrack* start, std::set<const AudioTrack*>& into)
+        {
+            std::vector<AudioTrack*> next { start };
+
+            while (! next.empty())
+            {
+                auto* t = next.back();
+                next.pop_back();
+
+                if (t == nullptr || ! into.insert (t).second)
+                    continue;
+
+                next.push_back (t->getOutput().getDestinationTrack());
+
+                for (const auto& send : sendsOf (*t))
+                    next.push_back (send.to);
+            }
+        }
+
         void applyMutes (Edit& edit)
         {
             const auto all = lanes (edit);
@@ -72,11 +92,10 @@ namespace carthage::editing
             for (auto* ch : chs)
                 if (flag (*ch, channelSoloedProp))
                 {
-                    for (auto* d = ch; d != nullptr && ! soloPath.contains (d); d = d->getOutput().getDestinationTrack())
-                        soloPath.insert (d);   // it and what it plays into
+                    collectDownstream (ch, soloPath);   // it and what it plays into, sends too
 
                     for (auto* other : chs)
-                        if (other->getOutput().feedsInto (ch))
+                        if (reaches (*other, *ch))
                             soloPath.insert (other);   // what plays into it
                 }
 
@@ -133,6 +152,225 @@ namespace carthage::editing
         }
 
         bool hasOwnPlugins (AudioTrack& t)   { return ! insertsOf (t).isEmpty(); }
+
+        VolumeAndPanPlugin* outputGateOf (const AudioTrack&);   // below, with setPlaysToOutput
+
+        AuxReturnPlugin* returnOf (AudioTrack& t)
+        {
+            for (auto* p : t.pluginList)
+                if (auto* r = dynamic_cast<AuxReturnPlugin*> (p))
+                    return r;
+
+            return nullptr;
+        }
+
+        /** The channel's bus, and its return, made the first time something sends to it. */
+        int busOf (AudioTrack& t)
+        {
+            if (auto* r = returnOf (t))
+                return r->busNumber;
+
+            int highest = -1;
+            for (auto* ch : channels (t.edit))
+                if (auto* r = returnOf (*ch))
+                    highest = std::max (highest, static_cast<int> (r->busNumber));
+
+            const auto bus = highest + 1;
+
+            if (auto plugin = t.edit.getPluginCache().createNewPlugin (AuxReturnPlugin::xmlTypeName, {}))
+            {
+                plugin->state.setProperty (IDs::busNum, bus, nullptr);
+                t.pluginList.insertPlugin (plugin, 0, nullptr);   // first: what arrives goes through the Line
+            }
+
+            return bus;
+        }
+
+        AuxSendPlugin* sendTo (AudioTrack& from, AudioTrack& to)
+        {
+            auto* r = returnOf (to);
+
+            if (r == nullptr)
+                return nullptr;
+
+            for (auto* p : from.pluginList)
+                if (auto* s = dynamic_cast<AuxSendPlugin*> (p); s != nullptr && s->busNumber == r->busNumber)
+                    return s;
+
+            return nullptr;
+        }
+
+        AudioTrack* channelWithBus (Edit& edit, int bus)
+        {
+            for (auto* ch : channels (edit))
+                if (auto* r = returnOf (*ch); r != nullptr && r->busNumber == bus)
+                    return ch;
+
+            return nullptr;
+        }
+    }
+
+    std::vector<Send> sendsOf (AudioTrack& from)
+    {
+        std::vector<Send> out;
+
+        for (auto* p : from.pluginList)
+            if (auto* s = dynamic_cast<AuxSendPlugin*> (p))
+                if (auto* to = channelWithBus (from.edit, s->busNumber))
+                    out.push_back ({ to, s->getGainDb() });
+
+        return out;
+    }
+
+    bool reaches (AudioTrack& from, AudioTrack& to)
+    {
+        std::set<AudioTrack*> seen;
+        std::vector<AudioTrack*> next { &from };
+
+        while (! next.empty())
+        {
+            auto* t = next.back();
+            next.pop_back();
+
+            if (! seen.insert (t).second)
+                continue;
+
+            if (auto* out = t->getOutput().getDestinationTrack())
+            {
+                if (out == &to) return true;
+                next.push_back (out);
+            }
+
+            for (const auto& s : sendsOf (*t))
+            {
+                if (s.to == &to) return true;
+                next.push_back (s.to);
+            }
+        }
+
+        return false;
+    }
+
+    juce::Result addSend (AudioTrack& from, AudioTrack& to, float gainDb)
+    {
+        if (&from == &to)
+            return juce::Result::fail (from.getName() + " can not play into itself");
+
+        if (reaches (to, from))
+            return juce::Result::fail (to.getName() + " already plays into " + from.getName() + ", so this would feed the sound back into itself");
+
+        if (sendTo (from, to) != nullptr)
+            return juce::Result::ok();
+
+        const auto bus = busOf (to);
+
+        if (auto plugin = from.edit.getPluginCache().createNewPlugin (AuxSendPlugin::xmlTypeName, {}))
+        {
+            plugin->state.setProperty (IDs::busNum, bus, nullptr);
+            // After the fader (FL's sends), before a "main output off" gate.
+            const auto* gate = outputGateOf (from);
+            from.pluginList.insertPlugin (plugin, gate != nullptr ? from.pluginList.indexOf (gate) : -1, nullptr);
+
+            if (auto* send = dynamic_cast<AuxSendPlugin*> (plugin.get()))
+                send->setGainDb (gainDb);
+        }
+
+        return juce::Result::ok();
+    }
+
+    void removeSend (AudioTrack& from, AudioTrack& to)
+    {
+        if (auto* s = sendTo (from, to))
+            s->deleteFromParent();
+    }
+
+    void setSendLevel (AudioTrack& from, AudioTrack& to, float gainDb)
+    {
+        if (auto* s = sendTo (from, to))
+            s->setGainDb (gainDb);
+    }
+
+    namespace
+    {
+        const juce::Identifier outputGateProp ("carthageOutputGate");
+
+        /** "Main output off" is a silent gain stage at the very end, after the sends: the sends
+            still play and the meters still read, only the main output falls silent. (Tracktion's
+            own "no output" still reached master when rendered; this works the same everywhere.) */
+        VolumeAndPanPlugin* outputGateOf (const AudioTrack& t)
+        {
+            for (auto* p : t.pluginList)
+                if (auto* v = dynamic_cast<VolumeAndPanPlugin*> (p); v != nullptr && static_cast<bool> (p->state[outputGateProp]))
+                    return v;
+
+            return nullptr;
+        }
+    }
+
+    bool playsToOutput (const AudioTrack& t)   { return outputGateOf (t) == nullptr; }
+
+    VolumeAndPanPlugin* faderOf (AudioTrack& t)
+    {
+        for (auto* p : t.pluginList)
+            if (auto* v = dynamic_cast<VolumeAndPanPlugin*> (p); v != nullptr && ! static_cast<bool> (p->state[outputGateProp]))
+                return v;
+
+        return nullptr;
+    }
+
+    void setPlaysToOutput (AudioTrack& t, bool on)
+    {
+        if (on == playsToOutput (t))
+            return;
+
+        if (on)
+        {
+            outputGateOf (t)->deleteFromParent();
+            return;
+        }
+
+        if (auto plugin = t.edit.getPluginCache().createNewPlugin (VolumeAndPanPlugin::xmlTypeName, {}))
+        {
+            plugin->state.setProperty (outputGateProp, true, nullptr);
+
+            if (auto* gate = dynamic_cast<VolumeAndPanPlugin*> (plugin.get()))
+                gate->setVolumeDb (-100.0f);
+
+            t.pluginList.insertPlugin (plugin, -1, nullptr);   // last of all
+        }
+    }
+
+    bool canSidechain (Plugin& p)   { return p.canSidechain(); }
+
+    AudioTrack* sidechainSourceOf (Plugin& p)
+    {
+        if (const auto id = p.getSidechainSourceID(); id.isValid())
+            return dynamic_cast<AudioTrack*> (findTrackForID (p.edit, id));
+
+        return nullptr;
+    }
+
+    juce::Result setSidechainSource (Plugin& p, AudioTrack* source)
+    {
+        if (source == nullptr)
+        {
+            p.setSidechainSourceID ({});
+            return juce::Result::ok();
+        }
+
+        if (auto* owner = dynamic_cast<AudioTrack*> (p.getOwnerTrack()); owner != nullptr && (owner == source || reaches (*owner, *source)))
+            return juce::Result::fail (source->getName() + " gets its sound from " + owner->getName() + ", so it can not key a plugin there");
+
+        p.setSidechainSourceID (source->itemID);
+
+        if (p.getNumWires() == 0)
+            p.guessSidechainRouting();
+
+        return juce::Result::ok();
+    }
+
+    namespace
+    {
 
         /** In or out of the audio graph, outside undo. Tracktion's setters for a track and for its
             plugins are undo steps. When a track's flag changes, Tracktion copies it onto its
@@ -455,7 +693,7 @@ namespace carthage::editing
         if (destination == &channel)
             return juce::Result::fail (channel.getName() + " can not play into itself");
 
-        if (destination != nullptr && destination->getOutput().feedsInto (&channel))
+        if (destination != nullptr && reaches (*destination, channel))
             return juce::Result::fail (destination->getName() + " already plays into " + channel.getName()
                                        + ", so this would feed the sound back into itself");
 
@@ -649,12 +887,22 @@ namespace carthage::editing
         return m;
     }
 
+    namespace
+    {
+        /** A channel's own plugins, not the person's: fader, meters, sends and returns. */
+        bool isBuiltIn (const Plugin* p)
+        {
+            return dynamic_cast<const VolumeAndPanPlugin*> (p) != nullptr || dynamic_cast<const LevelMeterPlugin*> (p) != nullptr
+                || dynamic_cast<const AuxSendPlugin*> (p) != nullptr || dynamic_cast<const AuxReturnPlugin*> (p) != nullptr;
+        }
+    }
+
     juce::Array<Plugin*> insertsOf (PluginList& list)
     {
         juce::Array<Plugin*> out;
 
         for (auto* p : list)
-            if (dynamic_cast<VolumeAndPanPlugin*> (p) == nullptr && dynamic_cast<LevelMeterPlugin*> (p) == nullptr)
+            if (! isBuiltIn (p))
                 out.add (p);
 
         return out;
@@ -674,10 +922,10 @@ namespace carthage::editing
         if (slot >= 0 && slot < inserts.size())
             return list.indexOf (inserts[slot]);
 
-        // After the last insert: before the first of the channel's own (fader, meters), so the
-        // fader and meters always see the processed sound.
+        // After the last insert: before the fader (returns come first, then the inserts, then the
+        // fader, meters and sends), so the fader and meters see the processed sound.
         for (int i = 0; i < list.size(); ++i)
-            if (dynamic_cast<VolumeAndPanPlugin*> (list[i]) != nullptr || dynamic_cast<LevelMeterPlugin*> (list[i]) != nullptr)
+            if (isBuiltIn (list[i]) && dynamic_cast<AuxReturnPlugin*> (list[i]) == nullptr)
                 return i;
 
         return list.size();
@@ -834,17 +1082,14 @@ namespace carthage::editing
                 setProcessing (*c, sounds);
 
             if (sounds)
-                for (auto* dest = c->getOutput().getDestinationTrack(); dest != nullptr && ! fed.contains (dest);
-                     dest = dest->getOutput().getDestinationTrack())
-                    fed.insert (dest);
+                collectDownstream (c->getOutput().getDestinationTrack(), fed);
         }
 
         const auto all = channels (edit);
 
         for (auto* ch : all)
             if (ch == inputChannel || hasOwnPlugins (*ch) || (inputOf (*ch).isSet() && isMonitoring (*ch)))
-                for (auto* dest = ch; dest != nullptr && ! fed.contains (dest); dest = dest->getOutput().getDestinationTrack())
-                    fed.insert (dest);
+                collectDownstream (ch, fed);
 
         for (auto* ch : all)
         {

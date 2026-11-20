@@ -11,6 +11,10 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- FL-style routing: select a channel and every other strip shows a route button at its foot; click
+  to send the selected channel there too (with a level knob), Cmd-click to play only there, master's
+  button turns the main output on or off; right-click for sidechain. A cable under the strips shows
+  where the selected channel goes. A route that would loop back is refused.
 - Every mixer channel picks its own interface input and can be heard as you play ("Hear the input");
   choose which channel takes record. The input row above the lanes is gone: its plugin is channel
   1's Line, and master's output is chosen at the foot of the master strip.

@@ -270,3 +270,9 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   channel). Signal row removed (its command id `windowSignal` kept, inactive, so saved shortcuts
   keep their ids; old layouts naming it are skipped). Master output at the master strip's foot and in
   its column. Next: FL-style routing (sends, sidechain, cables), then Pre-Master, then scroll/zoom.
+- Routing (W51): sends via Tracktion aux send/return (a return per destination, first on its
+  channel; sends after the fader, before a "main output off" gate). Tracktion's output "(none)"
+  still reached master in a render, so main output off is a -100 dB volume stage at the end
+  (`setPlaysToOutput`); `faderOf` replaces Tracktion's getVolumePlugin, which returns the last
+  volume stage. Bench `carrier` renders a send (2x) and send-only (1x). Sidechain through
+  Tracktion's sidechain source. UI: route buttons, send knobs, cable band, route menu, slot menu.

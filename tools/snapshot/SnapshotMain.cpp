@@ -268,10 +268,12 @@ namespace
                 channels[4]->setName ("Drum bus");
                 [[maybe_unused]] auto r1 = carthage::editing::setOutput (*channels[2], channels[4]);
                 [[maybe_unused]] auto r2 = carthage::editing::setOutput (*channels[3], channels[4]);
-                channels[2]->getVolumePlugin()->setVolumeDb (-4.5f);
-                channels[3]->getVolumePlugin()->setVolumeDb (-9.0f);
-                channels[3]->getVolumePlugin()->setPan (-0.4f);
+                carthage::editing::faderOf (*channels[2])->setVolumeDb (-4.5f);
+                carthage::editing::faderOf (*channels[3])->setVolumeDb (-9.0f);
+                carthage::editing::faderOf (*channels[3])->setPan (-0.4f);
                 carthage::editing::setChannelMuted (*channels[6], true);
+                channels[7]->setName ("Reverb");
+                [[maybe_unused]] auto r3 = carthage::editing::addSend (*channels[2], *channels[7], -8.0f);   // Kick also into Reverb
                 commands.invokeDirectly (app::commands::toggleMixer, false);
                 content->getMixer().select (channels[2]);
             });
