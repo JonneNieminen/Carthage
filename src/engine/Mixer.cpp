@@ -605,15 +605,100 @@ namespace carthage::editing
         return m;
     }
 
-    juce::Array<Plugin*> insertsOf (AudioTrack& t)
+    juce::Array<Plugin*> insertsOf (PluginList& list)
     {
         juce::Array<Plugin*> out;
 
-        for (auto* p : t.pluginList)
+        for (auto* p : list)
             if (dynamic_cast<VolumeAndPanPlugin*> (p) == nullptr && dynamic_cast<LevelMeterPlugin*> (p) == nullptr)
                 out.add (p);
 
         return out;
+    }
+
+    juce::Array<Plugin*> insertsOf (AudioTrack& t)   { return insertsOf (t.pluginList); }
+
+    PluginList& pluginListOf (Edit& edit, AudioTrack* channel)
+    {
+        return channel != nullptr ? channel->pluginList : edit.getMasterPluginList();
+    }
+
+    int listIndexForSlot (PluginList& list, int slot)
+    {
+        const auto inserts = insertsOf (list);
+
+        if (slot >= 0 && slot < inserts.size())
+            return list.indexOf (inserts[slot]);
+
+        // After the last insert: before the first of the channel's own (fader, meters), so the
+        // fader and meters always see the processed sound.
+        for (int i = 0; i < list.size(); ++i)
+            if (dynamic_cast<VolumeAndPanPlugin*> (list[i]) != nullptr || dynamic_cast<LevelMeterPlugin*> (list[i]) != nullptr)
+                return i;
+
+        return list.size();
+    }
+
+    void placeInsert (PluginList& list, int slot, const Plugin::Ptr& plugin)
+    {
+        list.insertPlugin (plugin, listIndexForSlot (list, slot), nullptr);
+    }
+
+    void moveInsert (Plugin& plugin, PluginList& to, int slot)
+    {
+        auto* from = plugin.getOwnerList();
+
+        if (from == &to)
+        {
+            // Within its Line: the state moves, the plugin keeps running.
+            auto parent = plugin.state.getParent();
+            const auto oldIndex = parent.indexOf (plugin.state);
+            auto newIndex = parent.indexOf (to[listIndexForSlot (to, slot)] != nullptr ? to[listIndexForSlot (to, slot)]->state : juce::ValueTree());
+
+            if (newIndex < 0)
+                newIndex = parent.getNumChildren() - 1;
+            else if (newIndex > oldIndex)
+                --newIndex;   // its own place counts until it moves
+
+            if (oldIndex >= 0 && newIndex != oldIndex)
+                parent.moveChild (oldIndex, newIndex, &plugin.edit.getUndoManager());
+
+            return;
+        }
+
+        // To another channel: rebuilt there from its state, flushed first so nothing is lost.
+        plugin.flushPluginStateToValueTree();
+        auto state = plugin.state.createCopy();
+        EditItemID::remapIDs (state, nullptr, plugin.edit);
+        plugin.deleteFromParent();
+
+        if (auto newPlugin = plugin.edit.getPluginCache().getOrCreatePluginFor (state))
+            to.insertPlugin (newPlugin, listIndexForSlot (to, slot), nullptr);
+    }
+
+    void removeInsert (Plugin& plugin)   { plugin.deleteFromParent(); }
+
+    bool isBypassed (const Plugin& p)    { return ! p.isEnabled(); }
+    void setBypassed (Plugin& p, bool b) { p.setEnabled (! b); }
+
+    bool hasMix (const Plugin& p)        { return dynamic_cast<const ExternalPlugin*> (&p) != nullptr; }
+
+    float mixOf (const Plugin& p)
+    {
+        if (const auto* ext = dynamic_cast<const ExternalPlugin*> (&p))
+            return std::clamp (ext->wetValue.get(), 0.0f, 1.0f);
+
+        return 1.0f;
+    }
+
+    void setMix (Plugin& p, float mix)
+    {
+        if (auto* ext = dynamic_cast<ExternalPlugin*> (&p))
+        {
+            mix = std::clamp (mix, 0.0f, 1.0f);
+            ext->wetValue = mix;          // the plugin's sound
+            ext->dryValue = 1.0f - mix;   // and the sound before it, crossfaded
+        }
     }
 
     //==============================================================================================

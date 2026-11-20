@@ -316,6 +316,39 @@ namespace carthage::engine
         return juce::Result::ok();
     }
 
+    juce::Result Session::insertPlugin (tracktion::PluginList& list, int slot, const juce::PluginDescription& description)
+    {
+        const trace::Scope traced ("Load plugin");
+
+        if (! plugins->isScanned (description))
+            return juce::Result::fail ("This plugin has not been checked by the scanner yet");
+
+        if (plugins->isBlocked (description.fileOrIdentifier))
+            return juce::Result::fail ("This plugin is on the blocklist");
+
+        auto plugin = front().edit->getPluginCache().createNewPlugin (tracktion::ExternalPlugin::xmlTypeName, description);
+
+        if (plugin == nullptr)
+        {
+            log::error ("Plugin " + description.name + " (" + description.pluginFormatName + "): the engine could not create it");
+            return juce::Result::fail ("The engine could not create " + description.name);
+        }
+
+        editing::placeInsert (list, slot, plugin);
+        library->markUsed (description.createIdentifierString());
+
+        if (auto* external = dynamic_cast<tracktion::ExternalPlugin*> (plugin.get()); external != nullptr && external->getLoadError().isNotEmpty())
+        {
+            log::error ("Plugin " + description.name + " (" + description.pluginFormatName + "): " + external->getLoadError());
+            plugin->deleteFromParent();
+            return juce::Result::fail (external->getLoadError());
+        }
+
+        log::info ("Plugin loaded: " + description.name + " " + description.version + " (" + description.pluginFormatName + ", "
+                   + description.manufacturerName + ") into a channel's Line");
+        return juce::Result::ok();
+    }
+
     tracktion::Plugin* Session::getInsertedPlugin() const
     {
         for (auto* p : front().track->pluginList)

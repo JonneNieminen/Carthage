@@ -10,6 +10,7 @@
 
 #include <app/Commands.h>
 #include <engine/Session.h>
+#include <engine/PluginScan.h>
 #include <engine/SampleEdits.h>
 #include <ui/MainComponent.h>
 #include <ui/theme/LookAndFeel.h>
@@ -276,6 +277,51 @@ namespace
             });
             Thread::sleep (400);
             capture (outDir.getChildFile ("mixer.png"));
+
+            // CARTHAGE_SNAPSHOT_PLUGIN=<VST3 file>: a real plugin onto Kick's Line through the
+            // mixer, its window opened as a click on the slot opens it; it must still hold its
+            // editor seconds later (owner, 2026-11-20: windows flashed and vanished).
+            if (const auto pluginPath = SystemStats::getEnvironmentVariable ("CARTHAGE_SNAPSHOT_PLUGIN", {}); pluginPath.isNotEmpty())
+            {
+                const auto scanner = File::getSpecialLocation (File::currentExecutableFile).getParentDirectory().getParentDirectory()
+                                         .getParentDirectory().getSiblingFile ("../src/scan/carthage_scan_artefacts/Release/carthage_scan");
+                const auto outcome = carthage::engine::scan::runScanner (scanner, "VST3", pluginPath, 60000);
+                std::cout << "plugin scan: " << (outcome.kind == carthage::engine::scan::Outcome::Kind::found ? "found" : outcome.detail.toStdString()) << "\n" << std::flush;
+
+                if (outcome.kind == carthage::engine::scan::Outcome::Kind::found)
+                {
+                    onMessageThreadVoid ([this, &outcome]
+                    {
+                        session->getPlugins().addScanned (outcome.descriptions);
+                        content->getMixer().addPluginToSelected (outcome.descriptions.getFirst());
+                    });
+                    Thread::sleep (800);
+                    const auto opened = onMessageThread ([this]
+                    {
+                        auto* kick = carthage::editing::channels (session->getEdit())[2];
+                        auto inserts = carthage::editing::insertsOf (*kick);
+                        if (inserts.isEmpty()) return String ("no plugin on the Line");
+                        content->getPluginWindows().open (*inserts.getFirst());
+                        return String ("opened ") + inserts.getFirst()->getName();
+                    });
+                    std::cout << opened << "\n" << std::flush;
+                    Thread::sleep (3000);
+                    const auto state = onMessageThread ([this]
+                    {
+                        auto* kick = carthage::editing::channels (session->getEdit())[2];
+                        auto inserts = carthage::editing::insertsOf (*kick);
+                        if (inserts.isEmpty()) return String ("FAILED: the plugin is gone");
+                        const auto open = content->getPluginWindows().isOpen (*inserts.getFirst());
+                        auto* ext = dynamic_cast<tracktion::ExternalPlugin*> (inserts.getFirst());
+                        return String (open ? "window open" : "FAILED: window closed") + ", instance "
+                             + (ext != nullptr && ext->getAudioPluginInstance() != nullptr ? "alive" : "FAILED: gone");
+                    });
+                    std::cout << "after 3 s: " << state << "\n" << std::flush;
+                    capture (outDir.getChildFile ("mixer-plugin.png"));
+                    onMessageThreadVoid ([this] { content->getPluginWindows().closeAll(); });
+                }
+            }
+
             onMessageThreadVoid ([this] { commands.invokeDirectly (app::commands::toggleMixer, false); });
 
             onMessageThreadVoid ([this] { content->toggleSettings(); });

@@ -139,6 +139,31 @@ namespace carthage::editing
     /** The plugins a person put on a channel: not its fader or meters. */
     juce::Array<tracktion::Plugin*> insertsOf (tracktion::AudioTrack&);
 
+    /** Insert Lines (5b, W51): the plugins on a channel, or on master (channel null), in order,
+        before its own fader and meters. Each of these changes the model inside the caller's undo
+        step. */
+    tracktion::PluginList& pluginListOf (tracktion::Edit&, tracktion::AudioTrack* channel);
+    juce::Array<tracktion::Plugin*> insertsOf (tracktion::PluginList&);
+
+    /** Where in the plugin list the slot at `slot` goes: before that insert, or after the last. */
+    int listIndexForSlot (tracktion::PluginList&, int slot);
+
+    /** Puts `plugin` into a slot (it must not be in a list yet). */
+    void placeInsert (tracktion::PluginList&, int slot, const tracktion::Plugin::Ptr& plugin);
+
+    /** Moves an insert to another slot, in its own Line or another channel's. In its own Line it
+        keeps running (its window stays open); across channels it is rebuilt from its saved state. */
+    void moveInsert (tracktion::Plugin&, tracktion::PluginList& to, int slot);
+    void removeInsert (tracktion::Plugin&);
+
+    bool isBypassed (const tracktion::Plugin&);
+    void setBypassed (tracktion::Plugin&, bool);
+
+    /** Wet/dry, 0 (dry) to 1 (wet, the default), for plugins that offer it. */
+    bool hasMix (const tracktion::Plugin&);
+    float mixOf (const tracktion::Plugin&);
+    void setMix (tracktion::Plugin&, float);
+
     //==============================================================================================
     /** Sets up a project's lanes and channels: a new one gets 8 lanes and 50 channels; one saved
         before 5a keeps its sound, lane n's clips playing through channel n (W47). No undo step. */

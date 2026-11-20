@@ -581,7 +581,7 @@ namespace carthage::ui
         : sampleEditor (s),
           sampleEditorHeight (jlimit (SampleEditor::minHeight, SampleEditor::maxHeight,
                                       s.getEngine().getPropertyStorage().getPropertiesFile().getIntValue ("sampleEditorHeight", SampleEditor::defaultHeight))),
-          session (s), commands (c), timeline (s), mixer (s), settings (s, c, cmd::inMenuOrder()), browser (s), samples (s)
+          session (s), commands (c), timeline (s), mixer (s, pluginWindows), settings (s, c, cmd::inMenuOrder()), browser (s), samples (s)
     {
         signalRow = std::make_unique<SignalRow> (session, commands);
         signalRow->onRemove = [this] { closePluginWindow(); session.removePlugin(); signalRow->setMessage ({}, false); };
@@ -745,7 +745,8 @@ namespace carthage::ui
 
             askToRenameProject();
         };
-        browser.onInsert = [this] (const PluginDescription& d) { insertPlugin (d); };
+        browser.onInsert = [this] (const PluginDescription& d) { mixer.addPluginToSelected (d); };   // onto the selected channel's Line (5b)
+        pluginWindows.keepOnTop = [this] { return keepPluginOnTop(); };
         signalRow->onPluginDropped = [this] (const String& key)
         {
             if (const auto* e = session.getPluginLibrary().findEntry (key))

@@ -32,5 +32,14 @@ namespace carthage::ui
         juce::Rectangle<int> getTooltipBounds (const juce::String& tipText, juce::Point<int> screenPos,
                                                juce::Rectangle<int> parentArea) override;
         int getPopupMenuBorderSize() override   { return theme::space1; }
+
+        /** Knobs are half rings (owner: a half doughnut): the arc runs across the top, filled from
+            its left end, or from the top centre for a slider marked "bipolar" (pan). */
+        void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height, float position,
+                               float startAngle, float endAngle, juce::Slider&) override;
+
+        /** A slider marked "fader" (the mixer's) gets a larger, grippable cap (owner). */
+        void drawLinearSlider (juce::Graphics&, int x, int y, int width, int height, float position,
+                               float minPosition, float maxPosition, juce::Slider::SliderStyle, juce::Slider&) override;
     };
 }

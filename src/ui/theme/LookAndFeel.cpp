@@ -198,4 +198,61 @@ namespace carthage::ui
         tl.createLayoutWithBalancedLineLengths (s, 280.0f);
         tl.draw (g, r.reduced (static_cast<float> (theme::space2), static_cast<float> (theme::space1) + 2.0f));
     }
+
+    void LookAndFeel::drawRotarySlider (Graphics& g, int x, int y, int width, int height, float position,
+                                        float, float, Slider& slider)
+    {
+        // A half ring over the top: from 9 o'clock (-90 degrees) to 3 o'clock (+90).
+        constexpr auto from = -MathConstants<float>::halfPi, to = MathConstants<float>::halfPi;
+        const auto bounds = Rectangle<int> (x, y, width, height).toFloat();
+        const auto radius = std::min (bounds.getWidth() * 0.5f, bounds.getHeight()) - 2.0f;
+        const auto centre = Point<float> (bounds.getCentreX(), bounds.getY() + (bounds.getHeight() + radius) * 0.5f + 1.0f);
+        const auto thickness = std::max (2.5f, radius * 0.32f);
+        const auto angle = from + position * (to - from);
+        const auto bipolar = static_cast<bool> (slider.getProperties()["bipolar"]);
+        const auto over = slider.isMouseOverOrDragging();
+
+        Path track;
+        track.addCentredArc (centre.x, centre.y, radius, radius, 0.0f, from, to, true);
+        g.setColour (theme::well);
+        g.strokePath (track, PathStrokeType (thickness, PathStrokeType::curved, PathStrokeType::rounded));
+
+        Path value;
+        const auto start = bipolar ? 0.0f : from;
+        value.addCentredArc (centre.x, centre.y, radius, radius, 0.0f, std::min (start, angle), std::max (start, angle), true);
+        g.setColour (over ? theme::text : theme::mist);
+        g.strokePath (value, PathStrokeType (thickness, PathStrokeType::curved, PathStrokeType::rounded));
+
+        // The pointer: a short tick at the value, so a centred pan still shows where it is.
+        const auto tip = centre.getPointOnCircumference (radius + thickness * 0.5f, angle);
+        const auto base = centre.getPointOnCircumference (radius - thickness * 0.9f, angle);
+        g.setColour (theme::text);
+        g.drawLine ({ base, tip }, 1.5f);
+    }
+
+    void LookAndFeel::drawLinearSlider (Graphics& g, int x, int y, int width, int height, float position,
+                                        float minPosition, float maxPosition, Slider::SliderStyle style, Slider& slider)
+    {
+        if (! static_cast<bool> (slider.getProperties()["fader"]) || style != Slider::LinearVertical)
+        {
+            LookAndFeel_V4::drawLinearSlider (g, x, y, width, height, position, minPosition, maxPosition, style, slider);
+            return;
+        }
+
+        // The fader: a thin groove, filled below the cap, and a wide flat cap with a line across.
+        const auto bounds = Rectangle<int> (x, y, width, height).toFloat();
+        const auto groove = Rectangle<float> (bounds.getCentreX() - 2.0f, bounds.getY(), 4.0f, bounds.getHeight());
+        g.setColour (theme::well);
+        g.fillRoundedRectangle (groove, 2.0f);
+        g.setColour (theme::lineStrong);
+        g.fillRoundedRectangle (groove.withTop (position), 2.0f);
+
+        const auto capWidth = std::min (bounds.getWidth() - 2.0f, 28.0f);
+        const auto cap = Rectangle<float> (capWidth, 14.0f).withCentre ({ bounds.getCentreX(), position });
+        g.setColour (slider.isMouseOverOrDragging() ? theme::text : theme::mist);
+        g.fillRoundedRectangle (cap, theme::radiusXs);
+        g.setColour (theme::well);
+        g.fillRect (cap.withSizeKeepingCentre (capWidth - 8.0f, 1.5f));
+    }
 }
+

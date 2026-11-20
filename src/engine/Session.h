@@ -255,6 +255,9 @@ namespace carthage::engine
         //==========================================================================================
         // The insert. Only descriptions the out-of-process scanner confirmed are accepted.
         juce::Result insertPlugin (const juce::PluginDescription&);
+
+        /** Loads a scanned, unblocked plugin into a slot of a channel's or master's Line (5b). */
+        juce::Result insertPlugin (tracktion::PluginList&, int slot, const juce::PluginDescription&);
         tracktion::Plugin* getInsertedPlugin() const;
         void removePlugin();
 

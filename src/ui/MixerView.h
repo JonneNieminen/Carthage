@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Controls.h"
+#include "PluginWindows.h"
 
 #include <engine/Session.h>
 
@@ -13,10 +14,11 @@ namespace carthage::ui
         place of the lanes, and it can move to a window of its own like the other views.
 
         Meters are the only thing in it that moves during playback (AGENTS.md, UI). */
-    class MixerView final : public juce::Component, private juce::ValueTree::Listener, private juce::Timer
+    class MixerView final : public juce::Component, public juce::DragAndDropContainer,
+                            private juce::ValueTree::Listener, private juce::Timer
     {
     public:
-        explicit MixerView (engine::Session&);
+        MixerView (engine::Session&, PluginWindows&);
         ~MixerView() override;
 
         /** The front project changed: strips for its channels. Before it closes: let go. */
@@ -33,24 +35,41 @@ namespace carthage::ui
         void resized() override;
 
         class Strip;
+        class InsertLine;
+
+        /** A plugin from the browser, or an insert dragged from a Line (drag descriptions). */
+        static constexpr const char* insertDragPrefix = "carthage-insert:";
+
+        /** Loads a plugin into a channel's Line (null: master) at `slot` (-1: the end), and selects it. */
+        void addPlugin (tracktion::AudioTrack* channel, int slot, const juce::PluginDescription&);
+
+        /** The plugin browser's double-click: onto the selected channel's Line (channel 1 if none). */
+        void addPluginToSelected (const juce::PluginDescription&);
+
+        /** The plugin dragged from a Line, by its drag description. */
+        tracktion::Plugin* draggedInsert (const juce::var& description) const;
 
     private:
         engine::Session& session;
+        PluginWindows& windows;
         juce::ValueTree editState;
         juce::OwnedArray<Strip> strips;   // master first
         juce::Viewport viewport;
         juce::Component stripHolder;
         juce::TextButton addButton { "Add channel" };
         tracktion::EditItemID selected;
+        bool masterSelected = false;
         bool rebuildPending = false;
 
         // The selected channel's column.
-        juce::Label columnName, columnInto, columnFrom, columnFromList, columnPlugins, columnPluginList;
+        juce::Label columnName, columnInto, columnFrom, columnFromList, columnPlugins;
+        std::unique_ptr<InsertLine> line;
         juce::ComboBox output;
         void refreshColumn();
 
         void rebuild();
         tracktion::AudioTrack* selectedChannel() const;
+        void selectMaster();
         void showMenu (tracktion::AudioTrack&);
         void showOutputMenu (tracktion::AudioTrack&, juce::Component& from);
         void chooseOutput (tracktion::AudioTrack&, tracktion::AudioTrack* destination);

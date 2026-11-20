@@ -253,3 +253,15 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   column with "Plays into" and "Sound from"), F9 / mixer button / Cmd+Option+X window, clip menu
   "Route to" (master, a new channel, any channel). Snapshot `mixer.png`. Next: the owner's 5a
   checks; then routing while playing (exit check) measured with the bench.
+
+### 2026-11-20 (owner's mixer list, W51)
+
+- Plugin windows "flash and vanish": not reproduced in the bench (fresh or pre-5a project, Pro-C 2
+  instance and editor stay 3 s; `carthage-bench plugin-window [--old-project]`). The old window path
+  (signal row) is being replaced; the new `ui/PluginWindows` opens one window per plugin, holds the
+  plugin, never forces a size, and closes windows whose plugin left its Line. Checked through the
+  real mixer code: `CARTHAGE_SNAPSHOT_PLUGIN=<vst3> carthage_snapshot` loads it onto a Line, opens
+  it, and finds window and instance alive after 3 s. Owner to confirm in the app.
+- Insert Lines built (engine: pluginListOf, placeInsert, moveInsert, bypass, mix; UI: InsertLine in
+  the mixer column, PluginChooser call-out, strip and slot drops). Half-ring knobs and fader caps in
+  the LookAndFeel. Next: per-channel input and monitor, signal row removed, master output.

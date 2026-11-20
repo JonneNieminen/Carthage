@@ -81,6 +81,7 @@ namespace carthage::ui
         void showStartScreen (bool);
         bool isStartScreenShowing() const noexcept  { return startScreen.isVisible(); }
         MixerView& getMixer() noexcept               { return mixer; }
+        PluginWindows& getPluginWindows() noexcept   { return pluginWindows; }
 
         /** Shows the left panel on samples or plugins; with `toggle`, the same view again hides it. */
         void showPanel (bool samplesView, bool toggle);
@@ -173,6 +174,7 @@ namespace carthage::ui
 
         std::unique_ptr<SignalRow> signalRow;
         Timeline timeline;
+        PluginWindows pluginWindows;
         MixerView mixer;
         bool mixerShown = false;   // in place of the lanes (W48)
         IconButton popMixer { IconButton::Glyph::popOut };

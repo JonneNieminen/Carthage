@@ -3,6 +3,7 @@ add_library(carthage_ui STATIC
     Controls.cpp Controls.h
     MainComponent.cpp MainComponent.h
     MixerView.cpp MixerView.h
+    PluginWindows.cpp PluginWindows.h
     PluginBrowser.cpp PluginBrowser.h
     SettingsPanel.cpp SettingsPanel.h
     ShortcutEditor.cpp ShortcutEditor.h

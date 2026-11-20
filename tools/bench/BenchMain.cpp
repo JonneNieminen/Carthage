@@ -141,6 +141,7 @@ namespace
             else if (args.command == "clip-envelope") result = clipEnvelope();
             else if (args.command == "clip-formant") result = clipFormant();
             else if (args.command == "overlap") result = overlap();
+            else if (args.command == "plugin-window") result = pluginWindow();
             else if (args.command == "carrier") result = carrier();
             else if (args.command == "idle-mixer") result = idleMixer();
             else say ("unknown command: " + args.command);
@@ -411,6 +412,74 @@ namespace
             const auto moved = render ("moved");
             say ("Moved by 1 s: RMS at 5.25 s " + String (moved (5.25), 4) + ", at 5.75 s " + String (moved (5.75), 4));
             check (moved (5.25) > 0.05f && moved (5.75) < 0.001f, "the envelope moves with the clip");
+            say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
+            return checksFailed == 0 ? 0 : 1;
+        }
+
+        /** A plugin's window stays open (owner, 2026-11-20: "it flashes and disappears"): inserts
+            the plugin as the app does, opens its editor in a window, and checks for a few seconds
+            that the plugin instance and its editor are still the same ones. */
+        int pluginWindow()
+        {
+            if (insertPlugin() != 0)
+                return 1;
+
+            // --old-project: the same, but in a project saved before 5a, where the input plugin sat
+            // on the first lane's track and opening moves it to channel 1.
+            if (args.has ("old-project"))
+            {
+                const auto r = onMessageThread ([this]
+                {
+                    const auto file = carthage::project::fileIn (folder.getChildFile ("Old"));
+                    auto old = tracktion::createEmptyEdit (session->getEngine(), file);
+                    old->ensureNumberOfAudioTracks (2);
+                    auto* first = tracktion::getAudioTracks (*old).getFirst();
+
+                    if (auto* plugin = session->getInsertedPlugin())
+                        first->pluginList.insertPlugin (plugin->state.createCopy(), 0);
+
+                    return carthage::project::write (carthage::project::snapshot (*old, file, carthage::project::Info::createNew()), file);
+                });
+                check (r.wasOk(), "an old project written");
+                const auto opened = onMessageThread ([this] { return session->openProject (carthage::project::fileIn (folder.getChildFile ("Old"))); });
+                check (opened.wasOk(), "and opened: " + opened.getErrorMessage());
+                waitMs (2000);
+                say ("old project open; its plugin: " + onMessageThread ([this] { auto* p = session->getInsertedPlugin(); return p != nullptr ? p->getName() : String ("none"); }));
+            }
+
+            std::unique_ptr<DocumentWindow> window;
+            AudioPluginInstance* first = nullptr;
+            onMessageThreadVoid ([&]
+            {
+                if (auto* ext = dynamic_cast<tracktion::ExternalPlugin*> (session->getInsertedPlugin()))
+                    first = ext->getAudioPluginInstance();
+
+                if (first != nullptr)
+                    {
+                        window = std::make_unique<DocumentWindow> ("bench", Colours::black, 0);
+                        window->setContentOwned (first->createEditorAndMakeActive(), true);
+                        window->setVisible (true);
+                    }
+            });
+            check (first != nullptr, "the plugin has an instance to open");
+
+            for (int i = 0; i < 6; ++i)
+            {
+                waitMs (500);
+                const auto state = onMessageThread ([&]
+                {
+                    auto* ext = dynamic_cast<tracktion::ExternalPlugin*> (session->getInsertedPlugin());
+                    auto* now = ext != nullptr ? ext->getAudioPluginInstance() : nullptr;
+                    return String (now == first ? "same instance" : now == nullptr ? "no instance" : "a NEW instance")
+                         + ", editor " + (window != nullptr && window->getContentComponent() != nullptr ? "open" : "gone")
+                         + ", channel processing " + (session->getTrack().isProcessing (false) ? "on" : "off")
+                         + ", plugin processing " + (ext != nullptr && ext->isProcessingEnabled() ? "on" : "off");
+                });
+                say ("  " + String ((i + 1) * 0.5, 1) + " s: " + state);
+                check (state.startsWith ("same instance"), "the plugin is not reloaded under its window");
+            }
+
+            onMessageThreadVoid ([&] { window.reset(); });
             say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
             return checksFailed == 0 ? 0 : 1;
         }

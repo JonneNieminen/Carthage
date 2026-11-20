@@ -1,5 +1,7 @@
 #include "MixerView.h"
 
+#include "PluginBrowser.h"
+
 #include <engine/Editing.h>
 #include <engine/SampleEdits.h>
 
@@ -43,7 +45,7 @@ namespace carthage::ui
 
     //==============================================================================================
     /** One channel's strip, or master's (track null). */
-    class MixerView::Strip final : public Component, public SettableTooltipClient
+    class MixerView::Strip final : public Component, public SettableTooltipClient, public DragAndDropTarget
     {
     public:
         Strip (MixerView& v, tracktion::AudioTrack* t, int indexIn) : view (v), track (t), index (indexIn)
@@ -64,6 +66,7 @@ namespace carthage::ui
             }
 
             fader.setSliderStyle (Slider::LinearVertical);
+            fader.getProperties().set ("fader", true);   // the larger cap (owner)
             fader.setTextBoxStyle (Slider::NoTextBox, true, 0, 0);
             fader.setRange (minDb, maxDb, 0.1);
             fader.setSkewFactorFromMidPoint (-12.0);
@@ -78,7 +81,8 @@ namespace carthage::ui
             };
             addAndMakeVisible (fader);
 
-            pan.setSliderStyle (Slider::LinearHorizontal);   // a marker on a line: centre is the default
+            pan.setSliderStyle (Slider::RotaryHorizontalVerticalDrag);   // a half ring (owner), filled from the centre
+            pan.getProperties().set ("bipolar", true);
             pan.setTextBoxStyle (Slider::NoTextBox, true, 0, 0);
             pan.setRange (-1.0, 1.0, 0.01);
             pan.setDefault (0.0);
@@ -158,15 +162,15 @@ namespace carthage::ui
         {
             auto& edit = view.session.getEdit();
             const auto r = getLocalBounds().toFloat();
-            const auto chosen = track != nullptr && view.selected == track->itemID;
+            const auto chosen = track != nullptr ? view.selected == track->itemID : view.masterSelected;
 
             g.setColour (track == nullptr ? theme::card : theme::bg2);
             g.fillRoundedRectangle (r, theme::radiusSm);
 
-            if (chosen)
+            if (chosen || dropHover)
             {
-                g.setColour (theme::accent);   // the selected channel: live
-                g.drawRoundedRectangle (r.reduced (0.75f), theme::radiusSm, 1.5f);
+                g.setColour (theme::accent);   // the selected channel, or where a plugin would land: live
+                g.drawRoundedRectangle (r.reduced (0.75f), theme::radiusSm, dropHover ? 2.5f : 1.5f);
             }
 
             // Colour, name, where it goes.
@@ -211,7 +215,7 @@ namespace carthage::ui
                 outputArea = r.removeFromTop (14);
 
             r.removeFromTop (theme::space1);
-            pan.setBounds (r.removeFromTop (16));
+            pan.setBounds (r.removeFromTop (24).withSizeKeepingCentre (36, 24));
             r.removeFromTop (theme::space1);
 
             if (track != nullptr)
@@ -231,7 +235,10 @@ namespace carthage::ui
         void mouseDown (const MouseEvent& e) override
         {
             if (track == nullptr)
+            {
+                view.selectMaster();   // master has a Line too (owner)
                 return;
+            }
 
             view.select (track);
 
@@ -283,8 +290,41 @@ namespace carthage::ui
         void mouseMove (const MouseEvent&) override   { repaint(); }
         void mouseExit (const MouseEvent&) override   { repaint(); }
 
+        // A plugin from the browser, or an insert from a Line, dropped on the strip: to the end of
+        // this channel's Line (owner: drag plugins onto strips).
+        bool isInterestedInDragSource (const SourceDetails& d) override
+        {
+            const auto text = d.description.toString();
+            return text.startsWith (PluginBrowser::dragPrefix) || text.startsWith (MixerView::insertDragPrefix);
+        }
+
+        void itemDragEnter (const SourceDetails&) override   { dropHover = true; repaint(); }
+        void itemDragExit (const SourceDetails&) override    { dropHover = false; repaint(); }
+
+        void itemDropped (const SourceDetails& d) override
+        {
+            dropHover = false;
+            const auto text = d.description.toString();
+
+            if (text.startsWith (PluginBrowser::dragPrefix))
+            {
+                if (const auto* e = view.session.getPluginLibrary().findEntry (text.fromFirstOccurrenceOf (PluginBrowser::dragPrefix, false, false)))
+                    view.addPlugin (track, -1, e->description);
+            }
+            else if (auto* plugin = view.draggedInsert (d.description))
+            {
+                auto& edit = view.session.getEdit();
+                editing::begin (edit, "Move " + plugin->getName());
+                editing::moveInsert (*plugin, editing::pluginListOf (edit, track), -1);
+                track != nullptr ? view.select (track) : view.selectMaster();
+            }
+
+            repaint();
+        }
+
     private:
         MixerView& view;
+        bool dropHover = false;
         tracktion::AudioTrack* track;
         int index;
         tracktion::VolumeAndPanPlugin::Ptr volume;
@@ -347,7 +387,235 @@ namespace carthage::ui
     };
 
     //==============================================================================================
-    MixerView::MixerView (engine::Session& s) : session (s)
+    /** The selected channel's Line (5b, W51): every plugin on it in order and one empty slot
+        after them, so it grows as plugins are added. A click on a plugin opens its window; its
+        dot bypasses it; its knob mixes wet and dry; drag to reorder, or onto another channel's
+        strip. Double-click the empty slot to choose a plugin; drop one from the browser anywhere. */
+    class MixerView::InsertLine final : public Component, public DragAndDropTarget
+    {
+    public:
+        explicit InsertLine (MixerView& v) : view (v) {}
+
+        void setChannel (tracktion::AudioTrack* channel)   { track = channel; refresh(); }
+
+        void refresh()
+        {
+            mixes.clear();
+            auto& edit = view.session.getEdit();
+            const auto inserts = editing::insertsOf (editing::pluginListOf (edit, track));
+
+            for (auto* p : inserts)
+            {
+                auto* knob = mixes.add (std::make_unique<ValueSlider> (1.0));
+                knob->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
+                knob->setTextBoxStyle (Slider::NoTextBox, true, 0, 0);
+                knob->setRange (0.0, 1.0, 0.01);
+                knob->setValue (editing::mixOf (*p), dontSendNotification);
+                knob->setVisible (editing::hasMix (*p));
+                knob->setTooltip ("Wet and dry: how much of " + p->getName() + " you hear. Double-click: all wet.");
+                tracktion::Plugin::Ptr held (p);
+                knob->onDragStart = [&edit, held] { editing::begin (edit, held->getName() + " mix"); };
+                knob->onValueChange = [k = knob, held] { editing::setMix (*held, static_cast<float> (k->getValue())); };
+                addAndMakeVisible (knob);
+            }
+
+            plugins.clear();
+            for (auto* p : inserts)
+                plugins.add (p);
+
+            resized();
+            repaint();
+        }
+
+        void paint (Graphics& g) override
+        {
+            for (int i = 0; i <= plugins.size(); ++i)
+            {
+                const auto r = rowBounds (i).toFloat();
+                const auto empty = i == plugins.size();
+                g.setColour (empty ? theme::well : theme::card);
+                g.fillRoundedRectangle (r, theme::radiusSm);
+
+                if (empty)
+                {
+                    g.setColour (dropSlot == i ? theme::accent : theme::line);
+                    g.drawRoundedRectangle (r.reduced (0.5f), theme::radiusSm, dropSlot == i ? 1.5f : theme::stroke);
+                    g.setColour (theme::muted);
+                    g.setFont (theme::uiFont (theme::textSm));
+                    g.drawText ("Double-click to add a plugin", r.reduced (theme::space2, 0), Justification::centredLeft, true);
+                    continue;
+                }
+
+                auto* p = plugins[i].get();
+                const auto bypassed = editing::isBypassed (*p);
+                const auto dot = dotBounds (i).toFloat();
+                g.setColour (bypassed ? theme::faint : theme::ok);
+                bypassed ? g.drawEllipse (dot.reduced (1.0f), 1.5f) : g.fillEllipse (dot);
+
+                g.setColour (bypassed ? theme::muted : theme::text);
+                g.setFont (theme::uiFont (theme::textSm, ! bypassed));
+                g.drawText (p->getName(), nameBounds (i), Justification::centredLeft, true);
+
+                if (dropSlot == i)
+                {
+                    g.setColour (theme::accent);   // where a dragged plugin goes: before this one
+                    g.fillRect (r.withHeight (2.0f).translated (0.0f, -3.0f));
+                }
+            }
+        }
+
+        void resized() override
+        {
+            for (int i = 0; i < mixes.size(); ++i)
+                mixes[i]->setBounds (rowBounds (i).removeFromRight (rowHeight).reduced (3));
+        }
+
+        void mouseDown (const MouseEvent& e) override
+        {
+            const auto i = rowAt (e.getPosition());
+            dragging = -1;
+
+            if (i < 0 || i >= plugins.size())
+                return;
+
+            auto& plugin = *plugins[i];
+            auto& edit = view.session.getEdit();
+
+            if (e.mods.isPopupMenu())
+            {
+                showMenu (plugin);
+                return;
+            }
+
+            if (dotBounds (i).expanded (4).contains (e.getPosition()))
+            {
+                editing::begin (edit, editing::isBypassed (plugin) ? "Turn on " + plugin.getName() : "Bypass " + plugin.getName());
+                editing::setBypassed (plugin, ! editing::isBypassed (plugin));
+                repaint();
+                return;
+            }
+
+            dragging = i;   // a drag moves it; a click without one opens it
+        }
+
+        void mouseDrag (const MouseEvent& e) override
+        {
+            if (dragging < 0 || e.getDistanceFromDragStart() < 5)
+                return;
+
+            const auto id = plugins[dragging]->itemID.toString();
+            dragging = -1;
+
+            if (auto* container = DragAndDropContainer::findParentDragContainerFor (this))
+                container->startDragging (String (MixerView::insertDragPrefix) + id, this);
+        }
+
+        void mouseUp (const MouseEvent& e) override
+        {
+            if (dragging >= 0 && e.getDistanceFromDragStart() < 5)
+                view.windows.open (*plugins[dragging]);
+
+            dragging = -1;
+        }
+
+        void mouseDoubleClick (const MouseEvent& e) override
+        {
+            if (rowAt (e.getPosition()) != plugins.size())
+                return;
+
+            auto* channel = track;
+            auto& v = view;
+            auto chooser = std::make_unique<PluginChooser> (view.session.getPluginLibrary(), [&v, channel] (const PluginDescription& d) { v.addPlugin (channel, -1, d); });
+            CallOutBox::launchAsynchronously (std::move (chooser), localAreaToGlobal (rowBounds (plugins.size())), nullptr);
+        }
+
+        bool isInterestedInDragSource (const SourceDetails& d) override
+        {
+            const auto text = d.description.toString();
+            return text.startsWith (PluginBrowser::dragPrefix) || text.startsWith (MixerView::insertDragPrefix);
+        }
+
+        void itemDragMove (const SourceDetails& d) override
+        {
+            dropSlot = std::clamp (slotAt (d.localPosition.y), 0, plugins.size());
+            repaint();
+        }
+
+        void itemDragExit (const SourceDetails&) override   { dropSlot = -1; repaint(); }
+
+        void itemDropped (const SourceDetails& d) override
+        {
+            const auto slot = std::clamp (slotAt (d.localPosition.y), 0, plugins.size());
+            dropSlot = -1;
+            const auto text = d.description.toString();
+            auto& edit = view.session.getEdit();
+
+            if (text.startsWith (PluginBrowser::dragPrefix))
+            {
+                if (const auto* e = view.session.getPluginLibrary().findEntry (text.fromFirstOccurrenceOf (PluginBrowser::dragPrefix, false, false)))
+                    view.addPlugin (track, slot, e->description);
+            }
+            else if (auto* plugin = view.draggedInsert (d.description))
+            {
+                editing::begin (edit, "Move " + plugin->getName());
+                editing::moveInsert (*plugin, editing::pluginListOf (edit, track), slot);
+            }
+
+            refresh();
+        }
+
+    private:
+        MixerView& view;
+        tracktion::AudioTrack* track = nullptr;   // null: master
+        juce::ReferenceCountedArray<tracktion::Plugin> plugins;
+        OwnedArray<ValueSlider> mixes;
+        int dragging = -1, dropSlot = -1;
+        static constexpr int rowHeight = 28, rowGap = 4;
+
+        Rectangle<int> rowBounds (int i) const   { return { 0, i * (rowHeight + rowGap), getWidth(), rowHeight }; }
+        Rectangle<int> dotBounds (int i) const   { return rowBounds (i).removeFromLeft (rowHeight).withSizeKeepingCentre (10, 10); }
+        Rectangle<int> nameBounds (int i) const  { return rowBounds (i).withTrimmedLeft (rowHeight).withTrimmedRight (rowHeight + theme::space1); }
+
+        int rowAt (Point<int> p) const
+        {
+            for (int i = 0; i <= plugins.size(); ++i)
+                if (rowBounds (i).contains (p))
+                    return i;
+
+            return -1;
+        }
+
+        int slotAt (int y) const   { return (y + rowHeight / 2) / (rowHeight + rowGap); }
+
+        void showMenu (tracktion::Plugin& plugin)
+        {
+            auto& edit = view.session.getEdit();
+            tracktion::Plugin::Ptr held (&plugin);
+            auto* windowsPtr = &view.windows;
+
+            PopupMenu m;
+            m.addItem ("Open", [windowsPtr, held] { windowsPtr->open (*held); });
+            m.addItem (editing::isBypassed (plugin) ? "Turn on" : "Bypass", [this, &edit, held]
+            {
+                editing::begin (edit, (editing::isBypassed (*held) ? "Turn on " : "Bypass ") + held->getName());
+                editing::setBypassed (*held, ! editing::isBypassed (*held));
+                repaint();
+            });
+            m.addSeparator();
+            m.addItem ("Delete", [this, &edit, held, windowsPtr]
+            {
+                windowsPtr->close (*held);
+                editing::begin (edit, "Delete " + held->getName());
+                editing::removeInsert (*held);
+                refresh();
+            });
+            m.showMenuAsync (PopupMenu::Options().withTargetComponent (this).withMousePosition());
+        }
+
+    };
+
+    //==============================================================================================
+    MixerView::MixerView (engine::Session& s, PluginWindows& w) : session (s), windows (w)
     {
         setOpaque (true);
         viewport.setViewedComponent (&stripHolder, false);
@@ -373,11 +641,9 @@ namespace carthage::ui
         styleLabel (columnName, theme::textLg, theme::text, true);
         for (auto* l : { &columnInto, &columnFrom, &columnPlugins })
             styleLabel (*l, theme::textSm, theme::text, true);
-        for (auto* l : { &columnFromList, &columnPluginList })
-        {
-            styleLabel (*l, theme::textSm, theme::muted);
-            l->setJustificationType (Justification::topLeft);
-        }
+        styleLabel (columnFromList, theme::textSm, theme::muted);
+        columnFromList.setJustificationType (Justification::topLeft);
+        line = std::make_unique<InsertLine> (*this);
 
         columnInto.setText ("Plays into", dontSendNotification);
         columnFrom.setText ("Sound from", dontSendNotification);
@@ -395,7 +661,7 @@ namespace carthage::ui
             chooseOutput (*channel, id == 1 ? nullptr : all[id - 2]);
         };
 
-        for (auto* c : std::initializer_list<Component*> { &columnName, &columnInto, &output, &columnFrom, &columnFromList, &columnPlugins, &columnPluginList })
+        for (auto* c : std::initializer_list<Component*> { &columnName, &columnInto, &output, &columnFrom, &columnFromList, &columnPlugins, line.get() })
             addAndMakeVisible (c);
 
         projectChanged();
@@ -409,6 +675,8 @@ namespace carthage::ui
 
     void MixerView::projectClosing()
     {
+        windows.closeAll();   // the old project's plugins go with it
+
         if (editState.isValid())
             editState.removeListener (this);
 
@@ -422,11 +690,15 @@ namespace carthage::ui
         editState = session.getEdit().state;
         editState.addListener (this);
         selected = {};
+        masterSelected = false;
         rebuild();
     }
 
     void MixerView::valueTreePropertyChanged (ValueTree& tree, const Identifier& id)
     {
+        if (id == tracktion::IDs::enabled)   // a plugin bypassed or turned on (an undo, too)
+            line->repaint();
+
         // Names, colours, routes and mutes repaint; a track becoming a channel rebuilds.
         if (id == tracktion::IDs::name || id == colourProp || id == Identifier ("carthageRole") || id == tracktion::IDs::dst
             || id == tracktion::IDs::mute || id == Identifier ("carthageMuted") || id == Identifier ("carthageSoloed"))
@@ -449,6 +721,7 @@ namespace carthage::ui
     void MixerView::rebuild()
     {
         rebuildPending = false;
+        windows.closeMissing();   // a plugin deleted or undone away takes its window with it
         strips.clear();
         stripHolder.removeAllChildren();
 
@@ -465,7 +738,7 @@ namespace carthage::ui
             stripHolder.addAndMakeVisible (strip);
         }
 
-        if (selectedChannel() == nullptr)
+        if (selectedChannel() == nullptr && ! masterSelected)
             if (const auto all = editing::channels (session.getEdit()); ! all.isEmpty())
                 selected = all.getFirst()->itemID;
 
@@ -483,8 +756,54 @@ namespace carthage::ui
         return nullptr;
     }
 
+    void MixerView::selectMaster()
+    {
+        selected = {};
+        masterSelected = true;
+
+        for (auto* s : strips)
+            s->repaint();
+
+        refreshColumn();
+    }
+
+    void MixerView::addPlugin (tracktion::AudioTrack* channel, int slot, const PluginDescription& description)
+    {
+        auto& edit = session.getEdit();
+        editing::begin (edit, "Add " + description.name);
+        const auto r = session.insertPlugin (editing::pluginListOf (edit, channel), slot, description);
+
+        if (onStatus)
+            onStatus (r.failed() ? description.name + " could not be loaded: " + r.getErrorMessage()
+                                 : description.name + " is on " + (channel != nullptr ? channel->getName() : String ("master")));
+
+        channel != nullptr ? select (channel) : selectMaster();
+    }
+
+    void MixerView::addPluginToSelected (const PluginDescription& description)
+    {
+        auto* channel = selectedChannel();
+
+        if (channel == nullptr && ! masterSelected)
+            channel = editing::channels (session.getEdit()).getFirst();
+
+        addPlugin (channel, -1, description);
+    }
+
+    tracktion::Plugin* MixerView::draggedInsert (const var& description) const
+    {
+        const auto id = tracktion::EditItemID::fromVar (description.toString().fromFirstOccurrenceOf (insertDragPrefix, false, false));
+
+        for (auto* p : tracktion::getAllPlugins (session.getEdit(), false))
+            if (p->itemID == id)
+                return p;
+
+        return nullptr;
+    }
+
     void MixerView::select (tracktion::AudioTrack* channel)
     {
+        masterSelected = false;
         selected = channel != nullptr ? channel->itemID : tracktion::EditItemID();
 
         for (auto* s : strips)
@@ -497,12 +816,25 @@ namespace carthage::ui
     {
         auto* channel = selectedChannel();
         auto& edit = session.getEdit();
+        const auto any = channel != nullptr || masterSelected;
 
-        for (auto* c : std::initializer_list<Component*> { &columnName, &columnInto, &output, &columnFrom, &columnFromList, &columnPlugins, &columnPluginList })
-            c->setVisible (channel != nullptr);
+        for (auto* c : std::initializer_list<Component*> { &columnName, &columnInto, &output, &columnFrom, &columnFromList, &columnPlugins, line.get() })
+            c->setVisible (any);
+
+        if (! any)
+            return;
+
+        line->setChannel (channel);   // null: master's Line
 
         if (channel == nullptr)
+        {
+            columnName.setText ("Master", dontSendNotification);
+
+            for (auto* c : std::initializer_list<Component*> { &columnInto, &output, &columnFrom, &columnFromList })
+                c->setVisible (false);
+
             return;
+        }
 
         columnName.setText (channel->getName(), dontSendNotification);
 
@@ -538,11 +870,6 @@ namespace carthage::ui
         columnFromList.setText (from.isEmpty() ? String ("Nothing yet. Right-click a clip on the lanes and choose Route to.")
                                                : from.joinIntoString ("\n"), dontSendNotification);
 
-        StringArray plugins;
-        for (auto* p : editing::insertsOf (*channel))
-            plugins.add (p->getName());
-
-        columnPluginList.setText (plugins.isEmpty() ? String ("None on this channel") : plugins.joinIntoString ("\n"), dontSendNotification);
     }
 
     void MixerView::chooseOutput (tracktion::AudioTrack& channel, tracktion::AudioTrack* destination)
@@ -687,9 +1014,10 @@ namespace carthage::ui
         output.setBounds (column.removeFromTop (28));
         column.removeFromTop (theme::space4);
         columnFrom.setBounds (column.removeFromTop (18));
-        columnFromList.setBounds (column.removeFromTop (std::min (160, column.getHeight() / 2)));
+        columnFromList.setBounds (column.removeFromTop (std::min (96, column.getHeight() / 3)));
         column.removeFromTop (theme::space3);
         columnPlugins.setBounds (column.removeFromTop (18));
-        columnPluginList.setBounds (column);
+        column.removeFromTop (theme::space1);
+        line->setBounds (column);
     }
 }

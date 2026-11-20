@@ -11,6 +11,10 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Insert Lines: every channel and master take as many plugins as you like, in order. Double-click
+  the empty slot to choose one, or drag a plugin from the browser onto a strip or a slot; drag slots
+  to reorder them or onto another channel; each has a bypass dot and a wet/dry knob; a click opens
+  its window. Pan is a half-ring knob; the fader has a larger cap.
 - The mixer: F9, or the new mixer button, shows it in place of the lanes; it can move to its own
   window (Cmd+Option+X). Master on the left, 50 channels, each with fader, pan, mute, solo and a
   peak and RMS meter; add, rename, colour, move and delete channels; send a channel into another
