@@ -188,6 +188,7 @@ namespace carthage::ui
         juce::TextButton samplesTab { "Samples" }, pluginsTab { "Plugins" };
         int panelWidth = PluginBrowser::preferredWidth;
         juce::Rectangle<int> panelArea;
+        juce::Rectangle<int> centreArea;   // where the lanes, the mixer or Settings show
         PanelEdge panelEdge;
 
 

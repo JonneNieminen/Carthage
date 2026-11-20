@@ -5,7 +5,7 @@
 //   carthage-snapshot OUTPUT_FOLDER [--device NAME] [--output-device NAME]
 //                     [--plugin-format VST3 --plugin FILE_OR_ID] [--record-seconds 3] [--scan]
 //
-// Writes main.png, samples*.png (with --samples FOLDER), start*.png (start.png with --project FILE), tabs.png, settings.png, settings-updates.png, settings-shortcuts.png, update*.png (the update banner with sample text), plugin.png
+// Writes main.png, samples*.png (with --samples FOLDER), start*.png (start.png with --project FILE), tabs.png, settings.png, settings-updates.png, settings-shortcuts.png, mixer.png, mixer-in.png, update*.png (the update banner with sample text), plugin.png
 // (with --plugin) and take.png (after recording).
 
 #include <app/Commands.h>
@@ -279,6 +279,12 @@ namespace
             });
             Thread::sleep (400);
             capture (outDir.getChildFile ("mixer.png"));
+
+            // The Drum bus selected: its cables come in from Kick and Snare (W52).
+            onMessageThreadVoid ([this] { content->getMixer().select (carthage::editing::channels (session->getEdit())[4]); });
+            Thread::sleep (200);
+            capture (outDir.getChildFile ("mixer-in.png"));
+            onMessageThreadVoid ([this] { content->getMixer().select (carthage::editing::channels (session->getEdit())[2]); });
 
             // CARTHAGE_SNAPSHOT_PLUGIN=<VST3 file>: a real plugin onto Kick's Line through the
             // mixer, its window opened as a click on the slot opens it; it must still hold its

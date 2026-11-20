@@ -11,6 +11,20 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Settings is now a view like the mixer: it takes the place of the lanes (or a window of its own),
+  with its pages listed on the left (Audio, Recording, Projects, Timeline, Mixer, Browser, Display,
+  Shortcuts, Updates). The search looks through every page and shows how many settings match on
+  each. Escape or Cmd+W closes it.
+- Cmd+W closes the mixer or Settings when they are shown in place of the lanes, before it closes
+  the project.
+- Cmd-click a mixer channel's M to mute every other channel, or its S to solo it alone, as on the
+  lanes; again undoes it.
+- The routing under the mixer's strips is clearer: where the selected channel goes on the upper
+  line, what plays into it on the lower one (in the colour of the channel it comes from). Main
+  outputs, sends (with their level) and sidechains each look different, and hovering a cable says
+  in words what it does.
+- Rename a mixer channel from its right-click menu or by double-clicking its name in the column on
+  the right; a colour dot beside that name changes the channel's colour.
 - In the mixer the wheel adjusts only the selected channel's fader and knobs; over other strips it,
   and a trackpad swipe, scroll the mixer sideways. Cmd+scroll or a pinch makes the strips wider or
   narrower, as on the lanes.

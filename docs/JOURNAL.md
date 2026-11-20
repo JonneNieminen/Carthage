@@ -296,3 +296,22 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   "No input" decoded as input 1 stereo; main output off still read "Master"; no cable to master;
   Cmd+scroll over a fader moved it; the chooser did not say AU or VST3. Not fixed yet: the first
   click back in the main window after a plugin window had focus is ignored (macOS window focus).
+
+### 2026-11-20 (owner's requests: mixer Cmd-click, cables, Settings view, W52)
+
+- Cmd-click on a strip's M/S as on the lanes (`editing::muteOtherChannels`, `soloChannelAlone`,
+  tested in MixerTests). Rename from the strip menu or the column title (double-click); a colour
+  dot beside the column title opens the colour menu.
+- Cable band (58 px) shows the selected channel both ways: out on the upper line in the accent,
+  in on the lower line in the sender's colour; main heavy, send with its level, sidechain dashed;
+  hover lifts a cable and its tooltip says what it does. `carthage-snapshot` now writes
+  `mixer-in.png` (the Drum bus selected) beside `mixer.png`.
+- Settings is a view in place of the lanes (or its own window, 920x660): pages on the left,
+  search across pages with counts, Escape clears the search then closes; the page shown is kept
+  in the settings (`settingsPage`). Cmd+W in the main window closes Settings, then the mixer,
+  before the project.
+- Checked in the app by computer use: Cmd-click M/S (on and back), cable tooltip, Cmd+W from the
+  mixer and from Settings, page list clicks and arrow keys, Cmd+, opens Settings. Not confirmed:
+  the toolbar's Settings button; full-screen clicks stopped reaching the toolbar after the window
+  moved (the mixer button failed the same way), so it is untested, not known broken.
+

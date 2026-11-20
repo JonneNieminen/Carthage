@@ -207,6 +207,32 @@ public:
             editing::setOutput (*chs[9], nullptr);
         }
 
+        beginTest ("Cmd-click on a channel's M mutes the others, on S solos it alone; again undoes it");
+        {
+            const auto chs = editing::channels (*edit);
+            editing::setChannelSoloed (*chs[5], true);
+
+            editing::muteOtherChannels (*chs[2]);
+            expect (! editing::isChannelMuted (*chs[2]), "the clicked channel plays");
+            for (auto* ch : chs)
+                if (ch != chs[2])
+                    expect (editing::isChannelMuted (*ch), "every other channel is muted");
+
+            editing::muteOtherChannels (*chs[2]);
+            for (auto* ch : chs)
+                expect (! editing::isChannelMuted (*ch), "again: every channel plays");
+
+            editing::soloChannelAlone (*chs[2]);
+            for (auto* ch : chs)
+                expect (editing::isChannelSoloed (*ch) == (ch == chs[2]), "only the clicked channel is soloed");
+
+            editing::soloChannelAlone (*chs[2]);
+            for (auto* ch : chs)
+                expect (! editing::isChannelSoloed (*ch), "again: no channel is soloed");
+            for (auto* ch : chs)
+                expect (! ch->isMuted (false), "and every channel plays");
+        }
+
         beginTest ("Every channel and master have a peak and an RMS meter; none counts as an insert");
         {
             auto* ch = editing::channels (*edit)[5];

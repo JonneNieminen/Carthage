@@ -839,6 +839,30 @@ namespace carthage::editing
         applyMutes (t.edit);
     }
 
+    void muteOtherChannels (AudioTrack& t)
+    {
+        const auto all = channels (t.edit);
+        const auto alreadyAlone = ! flag (t, channelMutedProp)
+                               && std::all_of (all.begin(), all.end(), [&t] (AudioTrack* c) { return c == &t || flag (*c, channelMutedProp); });
+
+        for (auto* c : all)
+            c->state.setProperty (channelMutedProp, alreadyAlone ? false : c != &t, nullptr);
+
+        applyMutes (t.edit);
+    }
+
+    void soloChannelAlone (AudioTrack& t)
+    {
+        const auto all = channels (t.edit);
+        const auto alreadyAlone = flag (t, channelSoloedProp)
+                               && std::none_of (all.begin(), all.end(), [&t] (AudioTrack* c) { return c != &t && flag (*c, channelSoloedProp); });
+
+        for (auto* c : all)
+            c->state.setProperty (channelSoloedProp, alreadyAlone ? false : c == &t, nullptr);
+
+        applyMutes (t.edit);
+    }
+
     ChannelInput inputOf (const AudioTrack& t)
     {
         if (! t.state.hasProperty (inputProp))

@@ -104,8 +104,9 @@ The wordmark is lowercase `carthage` in Futura Medium, tracked at −0.02 em. Fu
 - **Motion** answers an action and is short: 120 ms for state changes, 220 ms for panels, both on
   `--ease`. Nothing moves on its own during playback except the playhead and the meters. Respect
   the system's reduced-motion setting. What moves (W45): a switch's thumb slides, the chosen tool
-  cross-fades, the sample editor rises 16 px into place as it fades in and fades out on close, and
-  Settings slides in from the right. Anything set from the model rather than by a hand jumps.
+  cross-fades, and the sample editor rises 16 px into place as it fades in and fades out on close. Settings,
+  like the mixer, takes the place of the lanes without motion (W52). Anything set from the model
+  rather than by a hand jumps.
 
 ## The mark
 

@@ -9,11 +9,17 @@ namespace carthage::ui
 {
     /** Settings: audio (brief, feature 8, phase 1 part) and updates (feature 12): interface, sample rate, buffer size,
         recording bit depth, the round trip as the driver reports it and as a loopback measures it,
-        and the engine's load and dropouts. Slides in from the right; it never covers the transport. */
+        and the engine's load and dropouts, and every other preference.
+
+        A view like the mixer (owner, 2026-11-20): it takes the place of the lanes, or a window of
+        its own. Pages on the left (Audio, Recording, Projects, Timeline, Mixer, Browser, Display,
+        Shortcuts, Updates), the search above them looking through every page, the chosen page
+        on the right. It never covers the transport. */
     class SettingsPanel final : public juce::Component
     {
     public:
         SettingsPanel (engine::Session&, juce::ApplicationCommandManager&, juce::Array<juce::CommandID> shortcutCommands);
+        ~SettingsPanel() override;
 
         /** Re-reads the device after it changed. */
         void refresh();
@@ -52,22 +58,37 @@ namespace carthage::ui
         std::function<void()> onCheckForUpdates;
         void setBetaUpdates (bool on, bool available, const juce::String& note);
 
-        /** Scrolls the body so the Updates section is in view. */
-        void showUpdatesSection()    { viewport.setViewPosition (0, updatesHeading.getY() - 8); }
+        /** The pages, in the order the list shows them. */
+        enum class Page { audio, recording, projects, timeline, mixer, browser, display, shortcuts, updates };
+        static constexpr int pageCount = 9;
+        void showPage (Page);
+
+        /** Shows the Updates page. */
+        void showUpdatesSection()    { showPage (Page::updates); }
 
         /** Puts `text` in the Settings search (the snapshot tool shows a search this way). */
         void setSearch (const juce::String& text)   { find.setText (text, true); }
 
-        /** Scrolls the body so the keyboard shortcuts are in view. */
-        void showShortcutsSection()  { viewport.setViewPosition (0, shortcutsHeading.getY() - 8); }
+        /** Shows the keyboard shortcuts page. */
+        void showShortcutsSection()  { showPage (Page::shortcuts); }
 
         void paint (juce::Graphics&) override;
         void resized() override;
 
-        static constexpr int preferredWidth = 340;
+        static constexpr int sidebarWidth = 212;
 
     private:
         engine::Session& session;
+
+        class PageList;
+        std::unique_ptr<PageList> pageList;
+        Page page = Page::audio;
+        bool layingOut = false;
+        std::array<int, pageCount> matches {};   // per page, while searching
+        juce::Label pageTitle, pageIntro;
+        std::array<std::unique_ptr<juce::Label>, pageCount> pageHeadings;   // over each page's results while searching
+        static juce::String nameOf (Page);
+        static juce::String introOf (Page);
 
         juce::TextEditor find;   // Settings search (W41): filters the body
         juce::Label noMatch;

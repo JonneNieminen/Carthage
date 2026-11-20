@@ -67,9 +67,14 @@ namespace carthage::ui
         void toggleRoute (tracktion::AudioTrack* to, bool only);
         void showRouteMenu (tracktion::AudioTrack& to, juce::Component& from);
         void routesChanged();
+        void repaintCables();
 
         /** Strip width, as the lanes zoom in time: Cmd+wheel or pinch over the strips (W51). */
         void zoomBy (float factor);
+
+        /** Renaming and colouring a channel: from its strip, its menu and the column's title. */
+        void showRename (tracktion::AudioTrack&, juce::Rectangle<int> screenArea);
+        juce::PopupMenu colourMenu (tracktion::AudioTrack&);
 
         /** The plugin dragged from a Line, by its drag description. */
         tracktion::Plugin* draggedInsert (const juce::var& description) const;
@@ -90,6 +95,8 @@ namespace carthage::ui
         bool rebuildPending = false;
 
         // The selected channel's column.
+        class Swatch;
+        std::unique_ptr<Swatch> swatch;   // the selected channel's colour; a click chooses another
         juce::Label columnName, columnInto, columnFrom, columnFromList, columnPlugins, columnInput;
         juce::ComboBox input, masterOutput;
         Switch hear { "Hear the input" }, recordHere { "Takes record here" };

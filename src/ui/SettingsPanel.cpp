@@ -1,5 +1,9 @@
 #include "SettingsPanel.h"
 
+#include <app/Commands.h>
+
+#include <numeric>
+
 namespace carthage::ui
 {
     using namespace juce;
@@ -14,11 +18,155 @@ namespace carthage::ui
 
         String msText (double ms)  { return String (ms, 1) + " ms"; }
 
-        constexpr int rowHeight = 28, labelWidth = 116;
+        constexpr int rowHeight = 28, labelWidth = 168, contentWidth = 600, pageRow = 32;
+    }
+
+    //==============================================================================================
+    /** The pages down the left. A click or the arrow keys choose one; while searching, each page
+        shows how many settings on it match, and pages with none fade. */
+    class SettingsPanel::PageList final : public Component
+    {
+    public:
+        explicit PageList (SettingsPanel& p) : panel (p)
+        {
+            setWantsKeyboardFocus (true);
+            setMouseClickGrabsKeyboardFocus (true);
+        }
+
+        void paint (Graphics& g) override
+        {
+            const auto searching = panel.find.getText().trim().isNotEmpty();
+
+            for (int i = 0; i < pageCount; ++i)
+            {
+                const auto r = rowBounds (i);
+                const auto chosen = ! searching && static_cast<int> (panel.page) == i;
+                const auto count = panel.matches[static_cast<size_t> (i)];
+                const auto faded = searching && count == 0;
+
+                if (chosen || (i == hover && ! faded))
+                {
+                    g.setColour (chosen ? theme::card : theme::hover.withAlpha (0.5f));
+                    g.fillRoundedRectangle (r.toFloat(), theme::radiusSm);
+                }
+
+                if (chosen)
+                {
+                    g.setColour (theme::accent);   // the page in view: live
+                    g.fillRoundedRectangle (r.toFloat().reduced (4.0f, 8.0f).removeFromLeft (3.0f), 1.5f);
+                }
+
+                auto text = r.reduced (theme::space3, 0);
+                g.setFont (theme::uiFont (theme::textMd, chosen));
+                g.setColour (faded ? theme::faint : chosen ? theme::text : theme::muted);
+
+                if (searching && count > 0)
+                {
+                    g.setFont (theme::denseFont (theme::textXs));
+                    g.setColour (theme::accentText);
+                    g.drawText (String (count), text.removeFromRight (28), Justification::centredRight, false);
+                    g.setFont (theme::uiFont (theme::textMd, false));
+                    g.setColour (theme::text);
+                }
+
+                g.drawText (nameOf (static_cast<Page> (i)), text, Justification::centredLeft, true);
+            }
+
+            if (hasKeyboardFocus (false) && ! searching)
+            {
+                g.setColour (theme::ring);
+                g.drawRoundedRectangle (rowBounds (static_cast<int> (panel.page)).toFloat().reduced (0.5f), theme::radiusSm, theme::stroke);
+            }
+        }
+
+        void mouseMove (const MouseEvent& e) override   { setHover (rowAt (e.y)); }
+        void mouseExit (const MouseEvent&) override     { setHover (-1); }
+
+        void mouseDown (const MouseEvent& e) override
+        {
+            if (const auto i = rowAt (e.y); i >= 0)
+                panel.showPage (static_cast<Page> (i));
+        }
+
+        bool keyPressed (const KeyPress& key) override
+        {
+            const auto step = key == KeyPress::upKey ? -1 : key == KeyPress::downKey ? 1 : 0;
+
+            if (step == 0)
+                return false;
+
+            panel.showPage (static_cast<Page> (std::clamp (static_cast<int> (panel.page) + step, 0, pageCount - 1)));
+            return true;
+        }
+
+        void focusGained (FocusChangeType) override   { repaint(); }
+        void focusLost (FocusChangeType) override     { repaint(); }
+
+        String getTooltip() { return {}; }
+
+        int idealHeight() const   { return pageCount * pageRow; }
+
+    private:
+        SettingsPanel& panel;
+        int hover = -1;
+
+        Rectangle<int> rowBounds (int i) const   { return { 0, i * pageRow, getWidth(), pageRow - 2 }; }
+        int rowAt (int y) const                  { const auto i = y / pageRow; return y >= 0 && i < pageCount ? i : -1; }
+        void setHover (int i)                    { if (i != hover) { hover = i; repaint(); } }
+    };
+
+    String SettingsPanel::nameOf (Page p)
+    {
+        switch (p)
+        {
+            case Page::audio:     return "Audio";
+            case Page::recording: return "Recording";
+            case Page::projects:  return "Projects";
+            case Page::timeline:  return "Timeline";
+            case Page::mixer:     return "Mixer";
+            case Page::browser:   return "Browser";
+            case Page::display:   return "Display";
+            case Page::shortcuts: return "Shortcuts";
+            case Page::updates:   return "Updates";
+        }
+
+        return {};
+    }
+
+    String SettingsPanel::introOf (Page p)
+    {
+        switch (p)
+        {
+            case Page::audio:     return "Your interface, how quickly what you play comes back, and how hard the computer is working.";
+            case Page::recording: return "How new takes are saved, and the metronome you play along to.";
+            case Page::projects:  return "What Carthage opens with, what tempo changes do to clips, and where samples are kept.";
+            case Page::timeline:  return "How the lanes look and what the mouse does on them.";
+            case Page::mixer:     return "How channels reach master.";
+            case Page::browser:   return "The samples and plugins panel beside the lanes.";
+            case Page::display:   return "How large everything is, and the window layouts you can recall.";
+            case Page::shortcuts: return "Every command and the keys that run it. Click a key to change it.";
+            case Page::updates:   return "Which version this is, and which new versions you get.";
+        }
+
+        return {};
+    }
+
+    void SettingsPanel::showPage (Page p)
+    {
+        if (find.getText().isNotEmpty())
+            find.clear();   // choosing a page leaves the search
+
+        page = p;
+        session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("settingsPage", static_cast<int> (p));
+        viewport.setViewPosition (0, 0);
+        resized();
+        pageList->repaint();
     }
 
     SettingsPanel::SettingsPanel (engine::Session& s, ApplicationCommandManager& commands, Array<CommandID> shortcutCommands)
-        : session (s), shortcuts (commands, std::move (shortcutCommands))
+        : session (s),
+          page (static_cast<Page> (jlimit (0, pageCount - 1, s.getEngine().getPropertyStorage().getPropertiesFile().getIntValue ("settingsPage", 0)))),
+          shortcuts (commands, std::move (shortcutCommands))
     {
         styleLabel (title, theme::textLg, theme::text, true);
         title.setText ("Settings", dontSendNotification);
@@ -26,9 +174,38 @@ namespace carthage::ui
         find.setTextToShowWhenEmpty (String::fromUTF8 ("Find a setting\xe2\x80\xa6"), theme::faint);
         find.setFont (theme::uiFont (theme::textMd));
         find.setIndents (theme::space2, 6);
-        find.onTextChange = [this] { viewport.setViewPosition (0, 0); resized(); };
-        find.onEscapeKey = [this] { find.clear(); resized(); };
+        find.onTextChange = [this] { viewport.setViewPosition (0, 0); resized(); pageList->repaint(); };
+        find.onEscapeKey = [this]
+        {
+            if (find.getText().isEmpty())
+            {
+                if (onClose) onClose();   // Escape again: Settings closes
+                return;
+            }
+
+            find.clear();
+            resized();
+            pageList->repaint();
+        };
+        find.setTooltip ("Looks through every page. Escape clears it.");
         addAndMakeVisible (find);
+
+        pageList = std::make_unique<PageList> (*this);
+        addAndMakeVisible (*pageList);
+        for (int i = 0; i < pageCount; ++i)
+        {
+            auto& heading = pageHeadings[static_cast<size_t> (i)];
+            heading = std::make_unique<Label>();
+            styleLabel (*heading, theme::textLg, theme::text, true);
+            heading->setText (nameOf (static_cast<Page> (i)), dontSendNotification);
+            body.addChildComponent (*heading);
+        }
+
+        styleLabel (pageTitle, theme::textXl, theme::text, true);
+        styleLabel (pageIntro, theme::textMd, theme::muted);
+        pageIntro.setJustificationType (Justification::topLeft);
+        addAndMakeVisible (pageTitle);
+        addAndMakeVisible (pageIntro);
         styleLabel (noMatch, theme::textMd, theme::muted);
         noMatch.setJustificationType (Justification::topLeft);
         body.addChildComponent (noMatch);
@@ -67,7 +244,7 @@ namespace carthage::ui
                           "Everything else goes quiet while the probe plays.", dontSendNotification);
         loopHint.setJustificationType (Justification::topLeft);
 
-        closeButton.setTooltip ("Close settings");
+        closeButton.setTooltip ("Close Settings and go back to the lanes (" + String (app::commands::commandName) + "+W or Escape)");
         closeButton.onClick = [this] { if (onClose) onClose(); };
 
         // The title stays put; everything below it scrolls when the window is short.
@@ -549,9 +726,12 @@ namespace carthage::ui
 
     void SettingsPanel::paint (Graphics& g)
     {
-        g.fillAll (theme::bg2);
+        // The pages on the panel's surface, the page itself on the lanes' background.
+        g.fillAll (theme::bg);
+        g.setColour (theme::bg2);
+        g.fillRect (0, 0, sidebarWidth, getHeight());
         g.setColour (theme::line);
-        g.fillRect (0, 0, 1, getHeight());
+        g.fillRect (sidebarWidth, 0, 1, getHeight());
     }
 
     void SettingsPanel::setBetaUpdates (bool on, bool available, const String& note)
@@ -575,23 +755,39 @@ namespace carthage::ui
 
     void SettingsPanel::resized()
     {
-        auto outer = getLocalBounds().reduced (theme::space4, 0).withTrimmedLeft (1);
-        outer.removeFromTop (theme::space4);
-        auto top = outer.removeFromTop (rowHeight);
-        closeButton.setBounds (top.removeFromRight (rowHeight));
-        popButton.setBounds (top.removeFromRight (rowHeight));
-        title.setBounds (top);
-        outer.removeFromTop (theme::space1);
+        // The shortcut list reports a new height from inside this layout; the layout in hand
+        // already places it at that height.
+        if (layingOut)
+            return;
 
-        find.setBounds (outer.removeFromTop (rowHeight));
-        outer.removeFromTop (theme::space2);
+        const ScopedValueSetter<bool> laying (layingOut, true);
 
-        // The body is as tall as its rows; the viewport scrolls it when the window is shorter.
-        viewport.setBounds (outer.withX (1).withRight (getWidth()));
-        const auto bodyWidth = viewport.getWidth() - theme::space4 - viewport.getScrollBarThickness();
-        auto r = Rectangle<int> (theme::space4 - 1, 0, bodyWidth - theme::space4 + 1, 10000);
-        const auto startY = r.getY();
+        // The pages on the left: the title, the search, the list.
+        auto side = getLocalBounds().removeFromLeft (sidebarWidth).reduced (theme::space3, theme::space4);
+        title.setBounds (side.removeFromTop (rowHeight).withTrimmedLeft (theme::space1));
+        side.removeFromTop (theme::space2);
+        find.setBounds (side.removeFromTop (rowHeight));
+        side.removeFromTop (theme::space3);
+        pageList->setBounds (side.removeFromTop (pageList->idealHeight()));
+
+        // The page: its name and what it is for, with the window buttons; below, its settings.
+        auto main = getLocalBounds().withTrimmedLeft (sidebarWidth + 1);
+        auto head = main.removeFromTop (theme::space4 + rowHeight + theme::space1 + 22 + theme::space3).reduced (theme::space8, 0).withTrimmedTop (theme::space4);
+        auto buttons = head.removeFromTop (rowHeight);
+        closeButton.setBounds (buttons.removeFromRight (closeButton.isVisible() ? rowHeight : 0));
+        popButton.setBounds (buttons.removeFromRight (rowHeight));
+        pageTitle.setBounds (buttons.withWidth (std::min (buttons.getWidth(), contentWidth)));
+        head.removeFromTop (theme::space1);
+        pageIntro.setBounds (head.removeFromTop (22).withWidth (std::min (head.getWidth(), contentWidth)));
+
         const auto query = find.getText().trim();
+        const auto searching = query.isNotEmpty();
+        main.removeFromTop (1);
+
+        viewport.setBounds (main);
+        const auto bodyWidth = viewport.getWidth() - viewport.getScrollBarThickness();
+        auto r = Rectangle<int> (theme::space8, 0, std::min (bodyWidth - 2 * theme::space8, contentWidth), 10000);
+        const auto startY = r.getY();
 
         // Each line knows its words (label, button text, tooltip), so the search can keep it or
         // hide it (W41). A heading that matches keeps its whole section.
@@ -604,6 +800,7 @@ namespace carthage::ui
 
         struct Section
         {
+            Page on;
             Label* heading = nullptr;
             std::vector<Line> lines;
         };
@@ -618,7 +815,7 @@ namespace carthage::ui
             return words;
         };
 
-        const auto matches = [&] (const Line& line)
+        const auto lineMatches = [&] (const Line& line)
         {
             if (query.isEmpty())
                 return true;
@@ -649,15 +846,15 @@ namespace carthage::ui
         };
 
         std::vector<Section> sections;
-        sections.push_back ({ &interfaceHeading, { row (inputDeviceLabel, inputDevice), row (outputDeviceLabel, outputDevice),
+        sections.push_back ({ Page::audio, &interfaceHeading, { row (inputDeviceLabel, inputDevice), row (outputDeviceLabel, outputDevice),
                                                    row (rateLabel, rate), row (bufferLabel, buffer),
                                                    Line { { &testButton, &testHint }, rowHeight + 20 + theme::space1, [this] (Rectangle<int> b)
                                                           {
                                                               testButton.setBounds (b.removeFromTop (rowHeight).removeFromLeft (150));
                                                               testHint.setBounds (b.removeFromTop (20));
                                                           } } } });
-        sections.push_back ({ &recordingHeading, { row (formatLabel, format) } });
-        sections.push_back ({ &latencyHeading, { row (reportedLabel, reportedValue), row (measuredLabel, measuredValue),
+        sections.push_back ({ Page::recording, &recordingHeading, { row (formatLabel, format) } });
+        sections.push_back ({ Page::audio, &latencyHeading, { row (reportedLabel, reportedValue), row (measuredLabel, measuredValue),
                                                  Line { { &loopHint, &loopOutLabel, &loopOut, &loopInLabel, &loopIn, &measureButton },
                                                         48 + 2 * (rowHeight + theme::space1) + rowHeight + theme::space2,
                                                         [this] (Rectangle<int> b)
@@ -673,7 +870,7 @@ namespace carthage::ui
                                                             measureButton.setBounds (b.removeFromTop (rowHeight).removeFromLeft (96));
                                                         } },
                                                  whole (useMeasured, rowHeight) } });
-        sections.push_back ({ &loadHeading, { row (cpuLabel, cpuValue), row (threadLabel, threadValue),
+        sections.push_back ({ Page::audio, &loadHeading, { row (cpuLabel, cpuValue), row (threadLabel, threadValue),
                                               Line { { &dropoutsLabel, &dropoutsValue, &resetDropouts }, rowHeight, [this] (Rectangle<int> line)
                                                      {
                                                          dropoutsLabel.setBounds (line.removeFromLeft (labelWidth));
@@ -681,21 +878,21 @@ namespace carthage::ui
                                                          dropoutsValue.setBounds (line);
                                                      } },
                                               whole (showLoad, rowHeight) } });
-        sections.push_back ({ &projectsHeading, { row (atLaunchLabel, atLaunch), row (tempoFollowLabel, tempoFollow),
+        sections.push_back ({ Page::projects, &projectsHeading, { row (atLaunchLabel, atLaunch), row (tempoFollowLabel, tempoFollow),
                                                   Line { { &copySamples, &copySamplesHint }, rowHeight + 50, [this] (Rectangle<int> b)
                                                          {
                                                              copySamples.setBounds (b.removeFromTop (rowHeight));
                                                              copySamplesHint.setBounds (b);
                                                          } } } });
-        sections.push_back ({ &windowsHeading, { row (slotsLabel, slots), row (uiScaleLabel, uiScale) } });
-        sections.push_back ({ &browserHeading, { row (panelWidthLabel, panelWidth), row (textSizeLabel, textSize),
+        sections.push_back ({ Page::display, &windowsHeading, { row (slotsLabel, slots), row (uiScaleLabel, uiScale) } });
+        sections.push_back ({ Page::browser, &browserHeading, { row (panelWidthLabel, panelWidth), row (textSizeLabel, textSize),
                                                  whole (playWhileHeld, rowHeight), whole (fitLoops, rowHeight), whole (checkPlugins, rowHeight) } });
-        sections.push_back ({ &metronomeHeading, { row (clickSoundLabel, clickSound), row (clickLevelLabel, clickLevel),
+        sections.push_back ({ Page::recording, &metronomeHeading, { row (clickSoundLabel, clickSound), row (clickLevelLabel, clickLevel),
                                                    whole (clickAccent, rowHeight), whole (clickWhileRecording, rowHeight) } });
-        sections.push_back ({ &timelineHeading, { row (beatShadingLabel, beatShading), whole (clickPlaces, rowHeight), whole (rightClickDeletes, rowHeight) } });
-        sections.push_back ({ &mixerHeading, { whole (preMaster, rowHeight) } });
+        sections.push_back ({ Page::timeline, &timelineHeading, { row (beatShadingLabel, beatShading), whole (clickPlaces, rowHeight), whole (rightClickDeletes, rowHeight) } });
+        sections.push_back ({ Page::mixer, &mixerHeading, { whole (preMaster, rowHeight) } });
         const auto hintHeight = updatesHint.getText().isEmpty() ? 0 : 36;
-        sections.push_back ({ &updatesHeading, { Line { { &versionLabel, &versionValue, &checkNow }, rowHeight + theme::space1, [this] (Rectangle<int> line)
+        sections.push_back ({ Page::updates, &updatesHeading, { Line { { &versionLabel, &versionValue, &checkNow }, rowHeight + theme::space1, [this] (Rectangle<int> line)
                                                         {
                                                             line = line.withHeight (rowHeight);
                                                             versionLabel.setBounds (line.removeFromLeft (labelWidth));
@@ -704,63 +901,118 @@ namespace carthage::ui
                                                         } },
                                                  whole (betaUpdates, rowHeight), whole (updatesHint, hintHeight) } });
 
+        // The chosen page, or while searching every page that has a match, each under its name.
+        matches.fill (0);
         bool anyShown = false;
 
-        for (auto& section : sections)
+        const auto sectionsOn = [&] (Page p)
         {
-            const auto headingMatches = query.isNotEmpty() && section.heading->getText().containsIgnoreCase (query);
-            std::vector<const Line*> shown;
+            std::vector<Section*> out;
+            for (auto& section : sections)
+                if (section.on == p)
+                    out.push_back (&section);
+            return out;
+        };
 
-            for (const auto& line : section.lines)
+        for (int pi = 0; pi < pageCount; ++pi)
+        {
+            const auto p = static_cast<Page> (pi);
+            const auto pageShown = searching || p == page;
+            const auto pageMatches = searching && nameOf (p).containsIgnoreCase (query);
+            auto onPage = sectionsOn (p);
+            bool pageHeaded = false;
+
+            const auto headPage = [&]
             {
-                const auto keep = headingMatches || matches (line);
+                // While searching, each page's results sit under its name.
+                if (! searching || pageHeaded)
+                    return;
 
-                for (auto* c : line.parts)
-                    c->setVisible (keep);
+                pageHeaded = true;
+                r.removeFromTop (anyShown ? theme::space8 : theme::space2);
+                auto& label = *pageHeadings[static_cast<size_t> (pi)];
+                label.setVisible (true);
+                label.setBounds (r.removeFromTop (24));
+            };
 
-                if (keep)
-                    shown.push_back (&line);
+            pageHeadings[static_cast<size_t> (pi)]->setVisible (false);
+
+            for (auto* section : onPage)
+            {
+                const auto headingMatches = searching && (pageMatches || section->heading->getText().containsIgnoreCase (query));
+                std::vector<const Line*> shown;
+
+                for (const auto& line : section->lines)
+                {
+                    const auto keep = pageShown && (headingMatches || lineMatches (line));
+
+                    for (auto* c : line.parts)
+                        c->setVisible (keep);
+
+                    if (keep)
+                        shown.push_back (&line);
+                }
+
+                matches[static_cast<size_t> (pi)] += static_cast<int> (shown.size());
+
+                // A page with one group needs no heading for it: the page's name says it.
+                const auto headed = ! shown.empty() && (searching || onPage.size() > 1);
+                section->heading->setVisible (headed);
+
+                if (shown.empty())
+                    continue;
+
+                headPage();
+                anyShown = true;
+                r.removeFromTop (headed ? theme::space6 : theme::space2);
+
+                if (headed)
+                {
+                    section->heading->setBounds (r.removeFromTop (20));
+                    r.removeFromTop (theme::space1);
+                }
+
+                for (const auto* line : shown)
+                    line->place (r.removeFromTop (line->height));
             }
 
-            section.heading->setVisible (! shown.empty());
+            if (p == Page::shortcuts)
+            {
+                // The shortcuts take the same search into their own list.
+                const auto shortcutsShown = pageShown && (! searching || pageMatches || shortcuts.showMatching (query)
+                                                          || shortcutsHeading.getText().containsIgnoreCase (query));
 
-            if (shown.empty())
-                continue;
+                if (! searching)
+                    shortcuts.showMatching ({});
 
-            anyShown = true;
-            r.removeFromTop (theme::space4);
-            section.heading->setBounds (r.removeFromTop (20));
-            r.removeFromTop (theme::space1);
+                shortcutsHeading.setVisible (shortcutsShown && searching);
+                shortcuts.setVisible (shortcutsShown);
 
-            for (const auto* line : shown)
-                line->place (r.removeFromTop (line->height));
+                if (shortcutsShown)
+                {
+                    matches[static_cast<size_t> (pi)] += 1;
+                    headPage();
+                    anyShown = true;
+                    r.removeFromTop (theme::space2);
+                    shortcuts.setBounds (r.withHeight (shortcuts.getIdealHeight()));   // it reports a new height if it needs one
+                    r.removeFromTop (shortcuts.getIdealHeight());
+                }
+            }
         }
 
-        // The shortcuts take the same search into their own list.
-        const auto shortcutsShown = shortcuts.showMatching (query) || shortcutsHeading.getText().containsIgnoreCase (query);
-        shortcutsHeading.setVisible (shortcutsShown);
-        shortcuts.setVisible (shortcutsShown);
+        const auto total = std::accumulate (matches.begin(), matches.end(), 0);
+        pageTitle.setText (searching ? String::fromUTF8 ("Results for \xe2\x80\x9c") + query + String::fromUTF8 ("\xe2\x80\x9d") : nameOf (page), dontSendNotification);
+        pageIntro.setText (searching ? (total == 0 ? String ("Nothing matches. Try another word, or clear the search with Escape.")
+                                                   : String ("Matching settings from every page. Choose a page on the left to leave the search."))
+                                     : introOf (page),
+                           dontSendNotification);
 
-        if (shortcutsShown)
-        {
-            anyShown = true;
-            r.removeFromTop (theme::space4);
-            shortcutsHeading.setBounds (r.removeFromTop (20));
-            r.removeFromTop (theme::space1);
-            shortcuts.setBounds (r.withHeight (shortcuts.getIdealHeight()));   // it reports a new height if it needs one
-            r.removeFromTop (shortcuts.getIdealHeight());
-        }
-
-        noMatch.setVisible (! anyShown);
-        noMatch.setText ("No setting matches \"" + query + "\". Try another word, or clear the search with Escape.", dontSendNotification);
-        noMatch.setBounds (Rectangle<int> (theme::space4 - 1, theme::space4, bodyWidth - theme::space4, 60));
-
-        // While searching, the body is as tall as what it shows. Otherwise at least tall enough to
-        // scroll the shortcuts to the top: a shortcut search that leaves few rows would shrink
-        // the body, and the viewport would slide the search box down.
-        body.setSize (bodyWidth, query.isNotEmpty() ? std::max (r.getY() - startY + theme::space4, 80)
-                                                    : std::max (r.getY() - startY + theme::space4, shortcutsHeading.getY() - 8 + viewport.getHeight()));
+        noMatch.setVisible (false);
+        body.setSize (bodyWidth, std::max (r.getY() - startY + theme::space8, 80));
+        juce::ignoreUnused (anyShown);
     }
+
+    SettingsPanel::~SettingsPanel() = default;
 
     void SettingsPanel::setInWindow (bool inWindow)
     {

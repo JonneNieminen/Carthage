@@ -1018,6 +1018,12 @@ namespace carthage::ui
             case cmd::toggleMixer:
                 if (isDetached (View::mixer))
                     setDetached (View::mixer, true);   // in its own window: bring it forward
+                else if (settingsOpen && ! isDetached (View::settings))
+                {
+                    settingsOpen = false;   // Settings and the mixer share the place of the lanes
+                    settingsButton.setLit (theme::accent, false);
+                    mixerShown = true;
+                }
                 else
                     mixerShown = ! mixerShown;
 
@@ -1487,6 +1493,23 @@ namespace carthage::ui
             return true;
         }
 
+        // In the main window, Settings or the mixer in place of the lanes close first, back to
+        // the lanes (owner): Cmd/Ctrl+W closes the view in front before the project.
+        if (front == getTopLevelComponent())
+        {
+            if (settingsOpen && ! isDetached (View::settings))
+            {
+                toggleSettings();
+                return true;
+            }
+
+            if (mixerShown && ! isDetached (View::mixer))
+            {
+                commands.invokeDirectly (cmd::toggleMixer, false);
+                return true;
+            }
+        }
+
         return false;
     }
 
@@ -1513,33 +1536,25 @@ namespace carthage::ui
             updateFigures();   // fill the load figures now, not on the next tick
         }
 
-        layoutSettings (true);
-        layoutUpdateBanner();
+        settingsButton.setLit (theme::accent, settingsOpen);
+        resized();
         commands.commandStatusChanged();
     }
 
-    void MainComponent::layoutSettings (bool animate)
+    void MainComponent::layoutSettings (bool)
     {
-        const auto shown = getLocalBounds().removeFromRight (SettingsPanel::preferredWidth).withTrimmedTop (ProjectTabs::height + 56);
-        const auto hidden = shown.withX (getWidth());
+        // Settings is a view (owner): it takes the place of the lanes, as the mixer does, or a
+        // window of its own.
+        if (isDetached (View::settings))
+            return;
 
-        settings.setVisible (true);
-        settings.toFront (false);
+        settings.setVisible (settingsOpen);
 
-        // Motion answers the action and is short (design/README.md); no animation while playing.
-        if (animate && ! session.isPlaying() && ! motion::reduced())
+        if (settingsOpen)
         {
-            settings.setBounds (settingsOpen ? hidden : shown);
-            Desktop::getInstance().getAnimator().animateComponent (&settings, settingsOpen ? shown : hidden, 1.0f,
-                                                                   theme::slow, false, 0.0, 0.0);
+            settings.setBounds (centreArea);
+            settings.toFront (false);
         }
-        else
-        {
-            settings.setBounds (settingsOpen ? shown : hidden);
-        }
-
-        if (! settingsOpen && ! animate)
-            settings.setVisible (false);
     }
 
     void MainComponent::setStatus (const String& text, Colour colour)
@@ -1822,8 +1837,12 @@ namespace carthage::ui
             sampleEditorEdge.toFront (false);
         }
 
-        // The mixer in place of the lanes (W48), when shown and not in its own window.
-        const auto mixerHere = mixerShown && ! isDetached (View::mixer);
+        // The mixer in place of the lanes (W48), when shown and not in its own window; Settings
+        // over both while it is open here.
+        centreArea = r;
+        settingsButton.setLit (theme::accent, settingsOpen);
+        const auto settingsHere = settingsOpen && ! isDetached (View::settings);
+        const auto mixerHere = mixerShown && ! isDetached (View::mixer) && ! settingsHere;
 
         if (! isDetached (View::mixer))
             mixer.setVisible (mixerHere);
@@ -1831,9 +1850,15 @@ namespace carthage::ui
         popMixer.setVisible (mixerHere);
 
         if (timelineHere)
-            timeline.setVisible (! mixerHere);
+            timeline.setVisible (! mixerHere && ! settingsHere);
 
-        if (mixerHere)
+        if (settingsHere)
+        {
+            popTimeline.setVisible (false);
+            timelineAway.setVisible (false);
+            timelineBack.setVisible (false);
+        }
+        else if (mixerHere)
         {
             mixer.setBounds (r);
             popMixer.setBounds (r.getRight() - 30, r.getY() + 4, 24, 24);
@@ -1870,7 +1895,7 @@ namespace carthage::ui
     {
         // Floats over the bottom right of the lane, above the status line and left of the settings
         // when they are open; it never moves the rest of the window.
-        const auto right = settingsOpen ? getWidth() - SettingsPanel::preferredWidth : getWidth();
+        const auto right = getWidth();
         const auto w = UpdateBanner::preferredWidth;
         const auto h = updateBanner.getPreferredHeight (w);
         updateBanner.setBounds (right - w - theme::space2, getHeight() - 28 - h, w, h);
@@ -1947,7 +1972,7 @@ namespace carthage::ui
             const auto size = v == View::timeline ? Rectangle<int> (0, 0, 1100, 520)
                             : v == View::mixer    ? Rectangle<int> (0, 0, 1200, 480)
                             : v == View::signal   ? Rectangle<int> (0, 0, 900, 160)
-                            : v == View::settings ? Rectangle<int> (0, 0, SettingsPanel::preferredWidth, 720)
+                            : v == View::settings ? Rectangle<int> (0, 0, 920, 660)
                                                   : Rectangle<int> (0, 0, 320, 720);
             const auto* top = getTopLevelComponent();
             const auto near = top != nullptr ? size.withPosition (top->getRight() - size.getWidth() / 2, top->getY() + 40) : size;

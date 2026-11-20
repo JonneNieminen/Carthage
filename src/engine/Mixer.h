@@ -160,6 +160,11 @@ namespace carthage::editing
     void setChannelMuted (tracktion::AudioTrack&, bool);
     void setChannelSoloed (tracktion::AudioTrack&, bool);
 
+    /** Cmd-click on a strip's M or S, as on the lanes: every other channel muted and this one
+        playing (again: every channel plays), or this channel soloed alone (again: no solo). */
+    void muteOtherChannels (tracktion::AudioTrack&);
+    void soloChannelAlone (tracktion::AudioTrack&);
+
     /** A channel's input (W51): the interface input it takes, mono or a stereo pair, or none;
         and whether it is heard (monitored). Kept with the channel, inside the caller's undo step
         (every edit is undoable); the session puts it into effect (Session::applyInputRouting),

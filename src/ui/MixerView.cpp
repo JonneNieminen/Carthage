@@ -2,8 +2,11 @@
 
 #include "PluginBrowser.h"
 
+#include <app/Commands.h>
 #include <engine/Editing.h>
 #include <engine/SampleEdits.h>
+
+#include <map>
 
 namespace carthage::ui
 {
@@ -11,7 +14,7 @@ namespace carthage::ui
 
     namespace
     {
-        constexpr int stripWidth = 64, masterWidth = 80, stripGap = 2, columnWidth = 248, cableBand = 18;
+        constexpr int stripWidth = 64, masterWidth = 80, stripGap = 2, columnWidth = 248, cableBand = 58;
         constexpr float minDb = -60.0f, maxDb = 6.0f;
         constexpr int sendsOnlyId = 100000;   // the "Plays into" menu's "Only its sends"
 
@@ -111,6 +114,8 @@ namespace carthage::ui
             {
                 if (auto* from = view.selectedChannel(); from != nullptr && track != nullptr)
                     editing::setSendLevel (*from, *track, static_cast<float> (sendLevel.getValue()));
+
+                view.repaintCables();   // the send's tag shows its level
             };
             addChildComponent (sendLevel);
 
@@ -397,10 +402,11 @@ namespace carthage::ui
                 return;
             }
 
+            // As on the lanes: Cmd-click mutes every other channel, or solos this one alone.
             if (muteArea.contains (e.getPosition()))
-                editing::setChannelMuted (*track, ! editing::isChannelMuted (*track));
+                e.mods.isCommandDown() ? editing::muteOtherChannels (*track) : editing::setChannelMuted (*track, ! editing::isChannelMuted (*track));
             else if (soloArea.contains (e.getPosition()))
-                editing::setChannelSoloed (*track, ! editing::isChannelSoloed (*track));
+                e.mods.isCommandDown() ? editing::soloChannelAlone (*track) : editing::setChannelSoloed (*track, ! editing::isChannelSoloed (*track));
             else if (outputArea.contains (e.getPosition()))
                 view.showOutputMenu (*track, *this);
             else if (inputArea.contains (e.getPosition()))
@@ -412,34 +418,38 @@ namespace carthage::ui
             else if (meterArea.contains (e.getPosition()))
                 clipped = false;   // a click on the meter clears its clip light
 
-            repaint();
+            view.repaint();   // a Cmd-click on M or S changes every strip
         }
 
         void mouseDoubleClick (const MouseEvent& e) override
         {
-            if (! channelStrip() || ! nameArea.contains (e.getPosition()))
-                return;
+            if (channelStrip() && nameArea.contains (e.getPosition()))
+                view.showRename (*track, localAreaToGlobal (nameArea));
+        }
 
-            auto* editor = new TextEditor();   // owned by the CallOutBox below
-            editor->setText (track->getName(), false);
-            editor->setSize (160, 26);
-            editor->setFont (theme::uiFont());
-            editor->selectAll();
-            auto* safeTrack = track;
-            auto& edit = view.session.getEdit();
-            editor->onReturnKey = [editor, safeTrack, &edit]
+        Rectangle<int> nameBounds() const   { return nameArea; }
+
+        /** What the part under the pointer does (the M and S buttons take Cmd as the lanes do). */
+        String getTooltip() override
+        {
+            const auto pos = getMouseXYRelative();
+            const auto cmd = String (app::commands::commandName);
+
+            if (channelStrip())
             {
-                if (const auto name = editor->getText().trim(); name.isNotEmpty() && name != safeTrack->getName())
-                {
-                    editing::begin (edit, "Rename channel");
-                    safeTrack->setName (name);
-                }
+                if (muteArea.contains (pos))
+                    return (editing::isChannelMuted (*track) ? "Unmute this channel" : "Mute this channel") + String (". ") + cmd + "-click: mute every other channel; again: every channel plays";
+                if (soloArea.contains (pos))
+                    return (editing::isChannelSoloed (*track) ? "Stop soloing this channel" : "Solo this channel") + String (". ") + cmd + "-click: this channel alone; again: no solo";
+                if (nameArea.contains (pos))
+                    return "Double-click to rename. Right-click for its colour, to route, move or delete it.";
+                if (inputArea.contains (pos))
+                    return "The interface input it takes. Click to choose.";
+                if (outputArea.contains (pos))
+                    return "Where its sound goes. Click to choose.";
+            }
 
-                if (auto* box = editor->findParentComponentOfClass<CallOutBox>())
-                    box->dismiss();
-            };
-            CallOutBox::launchAsynchronously (std::unique_ptr<Component> (editor), localAreaToGlobal (nameArea), nullptr);
-            editor->grabKeyboardFocus();
+            return SettableTooltipClient::getTooltip();
         }
 
         void mouseMove (const MouseEvent&) override   { repaint(); }
@@ -546,88 +556,318 @@ namespace carthage::ui
     };
 
     //==============================================================================================
-    /** The strips side by side, and under them the selected channel's cables (W51): a line from
-        it to every channel its sound reaches, solid for outputs and sends, dashed for sidechains. */
-    class MixerView::StripHolder final : public Component
+    /** The selected channel's colour beside its name in the column; a click offers the others. */
+    class MixerView::Swatch final : public Component, public SettableTooltipClient
+    {
+    public:
+        explicit Swatch (MixerView& v) : view (v)
+        {
+            setTooltip ("This channel's colour. Click to choose another.");
+            setMouseCursor (MouseCursor::PointingHandCursor);
+        }
+
+        void show (tracktion::AudioTrack* channel, Colour c)   { track = channel; colour = c; setVisible (channel != nullptr); repaint(); }
+
+        void paint (Graphics& g) override
+        {
+            const auto r = getLocalBounds().toFloat().withSizeKeepingCentre (14.0f, 14.0f);
+            g.setColour (colour);
+            g.fillEllipse (r);
+            g.setColour (isMouseOver() ? theme::text : theme::lineStrong);
+            g.drawEllipse (r.expanded (2.0f), theme::stroke);
+        }
+
+        void mouseEnter (const MouseEvent&) override   { repaint(); }
+        void mouseExit (const MouseEvent&) override    { repaint(); }
+
+        void mouseDown (const MouseEvent&) override
+        {
+            if (track != nullptr)
+                view.colourMenu (*track).showMenuAsync (PopupMenu::Options().withTargetComponent (this));
+        }
+
+    private:
+        MixerView& view;
+        tracktion::AudioTrack* track = nullptr;
+        Colour colour;
+    };
+
+    //==============================================================================================
+    /** The strips side by side, and under them the selected channel's cables (W51, refined at the
+        owner's request): a band with two lines. The upper one carries what leaves the selected
+        channel (accent: it is the selection), the lower one what comes into it (in the colour of
+        the channel it comes from). A main output is a heavy line, a send a lighter one with its
+        level, a sidechain a dashed one; each ends in an arrow into the strip it reaches, with a
+        small tag saying what it is. Hovering a cable lifts it and says in words what it does. */
+    class MixerView::StripHolder final : public Component, public TooltipClient
     {
     public:
         explicit StripHolder (MixerView& v) : view (v) {}
 
         void paint (Graphics& g) override
         {
-            auto* from = view.selectedChannel();
-            const Strip* source = nullptr;
-            struct Drop { float x; Route kind; };
-            std::vector<Drop> drops;
+            const auto cables = layout();
+            const auto band = bandArea();
 
-            for (auto* s : view.strips)
+            if (cables.empty())
             {
-                if (s->getTrack() == nullptr || s->getParentComponent() != this)
-                    continue;
-
-                if (s->getTrack() == from)
-                    source = s;
-                else if (from != nullptr)
-                    if (const auto kind = view.routeTo (s->getTrack()); kind != Route::none)
-                        drops.push_back ({ static_cast<float> (s->getBounds().getCentreX()), kind });
-            }
-
-            const auto toMaster = from != nullptr && view.routeTo (nullptr) == Route::output;
-
-            if (source == nullptr || (drops.empty() && ! toMaster))
+                // Nothing to show: say how to see something, at the visible left edge.
+                g.setColour (theme::faint);
+                g.setFont (theme::uiFont (theme::textXs));
+                const auto* from = view.selectedChannel();
+                g.drawText (from == nullptr ? "Select a channel to see where its sound goes and what plays into it"
+                                            : from->getName() + " plays nowhere and nothing plays into it",
+                            band.withX (roundToInt (visibleLeft()) + theme::space2).withWidth (520), Justification::centredLeft, true);
                 return;
-
-            const auto y = static_cast<float> (getHeight()) - static_cast<float> (cableBand) * 0.5f;
-            const auto top = static_cast<float> (getHeight() - cableBand);
-            const auto sx = static_cast<float> (source->getBounds().getCentreX());
-            auto left = sx, right = sx;
-
-            for (const auto& d : drops)
-            {
-                left = std::min (left, d.x);
-                right = std::max (right, d.x);
             }
 
-            if (toMaster)
-                left = 0.0f;   // master is pinned to the left: the cable runs off that way
+            const auto hot = hovered (cables);
 
-            g.setColour (theme::accent.withAlpha (0.8f));
-            g.drawLine (left, y, right, y, 1.5f);
-
-            if (toMaster)
-            {
-                Path head;   // an arrow out to the left, towards master
-                head.addTriangle (0.0f, y, 7.0f, y - 4.0f, 7.0f, y + 4.0f);
-                g.fillPath (head);
-            }
-            g.fillEllipse (Rectangle<float> (7.0f, 7.0f).withCentre ({ sx, y }));   // where it comes from
-            g.drawLine (sx, top, sx, y, 1.5f);
-
-            for (const auto& d : drops)
-            {
-                Path stub;
-                stub.startNewSubPath (d.x, y);
-                stub.lineTo (d.x, top + 1.0f);
-
-                if (d.kind == Route::sidechain)
-                {
-                    const float dashes[] = { 3.0f, 3.0f };
-                    PathStrokeType (1.5f).createDashedStroke (stub, stub, dashes, 2);
-                    g.fillPath (stub);
-                }
-                else
-                {
-                    g.strokePath (stub, PathStrokeType (1.5f));
-                }
-
-                Path head;   // an arrow up into the destination strip
-                head.addTriangle (d.x - 4.0f, top + 5.0f, d.x + 4.0f, top + 5.0f, d.x, top);
-                g.fillPath (head);
-            }
+            // Unhovered first, so the hovered cable is drawn on top.
+            for (int pass = 0; pass < 2; ++pass)
+                for (size_t i = 0; i < cables.size(); ++i)
+                    if ((static_cast<int> (i) == hot) == (pass == 1))
+                        drawCable (g, cables[i], hot < 0 ? Emphasis::normal : static_cast<int> (i) == hot ? Emphasis::lifted : Emphasis::dimmed);
         }
+
+        String getTooltip() override
+        {
+            const auto cables = layout();
+            const auto hot = hovered (cables);
+            return hot >= 0 ? cables[static_cast<size_t> (hot)].words : String();
+        }
+
+        void mouseMove (const MouseEvent&) override   { repaint (bandArea()); }
+        void mouseExit (const MouseEvent&) override   { repaint (bandArea()); }
+
+        // The master arrow and the hint sit at the visible left edge: they follow the scroll.
+        void moved() override   { repaint (bandArea()); }
 
     private:
         MixerView& view;
+
+        enum class Emphasis { normal, lifted, dimmed };
+
+        struct Cable
+        {
+            bool outgoing = true;        // leaves the selected channel (upper line) or comes into it (lower)
+            Route kind = Route::output;
+            float fromX = 0.0f, toX = 0.0f;
+            bool toMaster = false;       // runs off to the left, towards master
+            Colour colour;
+            String tag, words;
+        };
+
+        Rectangle<int> bandArea() const   { return getLocalBounds().removeFromBottom (cableBand); }
+        float outY() const                { return static_cast<float> (getHeight() - cableBand) + 10.0f; }
+        float inY() const                 { return static_cast<float> (getHeight() - cableBand) + 36.0f; }
+
+        float visibleLeft() const
+        {
+            return getParentComponent() != nullptr ? static_cast<float> (-getX()) : 0.0f;
+        }
+
+        static String db (float gainDb)
+        {
+            return gainDb <= minDb + 0.05f ? String::fromUTF8 ("\xe2\x88\x92\xe2\x88\x9e dB")
+                                           : String (gainDb, 1).replace ("-", String::fromUTF8 ("\xe2\x88\x92")) + " dB";
+        }
+
+        std::vector<Cable> layout() const
+        {
+            std::vector<Cable> out;
+            auto* from = view.selectedChannel();
+            auto& edit = view.session.getEdit();
+
+            if (from == nullptr || from == editing::preMaster (edit))
+                return out;   // master and the Pre-Master: everything plays into them; the strips say so
+
+            const Strip* source = nullptr;
+            std::map<tracktion::AudioTrack*, const Strip*> stripOf;
+
+            for (auto* s : view.strips)
+                if (s->getTrack() != nullptr && s->getParentComponent() == this)
+                {
+                    stripOf[s->getTrack()] = s;
+                    if (s->getTrack() == from)
+                        source = s;
+                }
+
+            if (source == nullptr)
+                return out;
+
+            const auto centreOf = [] (const Strip& s) { return static_cast<float> (s.getBounds().getCentreX()); };
+            const auto sx = centreOf (*source);
+            const auto name = from->getName();
+            const auto viaPre = editing::usesPreMaster (edit) ? String (" (through the Pre-Master)") : String();
+
+            // Where the selected channel's sound goes.
+            if (editing::playsToOutput (*from))
+            {
+                if (auto* into = editing::outputOf (*from); into == nullptr)
+                    out.push_back ({ true, Route::output, sx - 6.0f, 0.0f, true, theme::accent, "Master",
+                                     name + " plays into master" + viaPre + ". This is its main output." });
+                else if (const auto found = stripOf.find (into); found != stripOf.end())
+                    out.push_back ({ true, Route::output, sx - 6.0f, centreOf (*found->second), false, theme::accent, "Main",
+                                     name + " plays into " + into->getName() + " instead of master. This is its main output." });
+            }
+
+            for (const auto& send : editing::sendsOf (*from))
+                if (const auto found = stripOf.find (send.to); found != stripOf.end())
+                    out.push_back ({ true, Route::send, sx - 6.0f, centreOf (*found->second), false, theme::accent, db (send.gainDb),
+                                     name + " also sends a copy of its sound to " + send.to->getName() + " at " + db (send.gainDb)
+                                         + ", after its own fader." + (editing::playsToOutput (*from) ? String() : String (" Its main output is off, so this is all you hear of it."))});
+
+            for (const auto& [track, strip] : stripOf)
+                if (track != from)
+                    for (auto* p : editing::insertsOf (*track))
+                        if (editing::sidechainSourceOf (*p) == from)
+                            out.push_back ({ true, Route::sidechain, sx - 6.0f, centreOf (*strip), false, theme::accent, "SC",
+                                             name + " drives the sidechain of " + p->getName() + " on " + track->getName()
+                                                 + ". It is heard there as a key signal, not mixed in." });
+
+            // What comes into it, each in its own channel's colour.
+            const auto all = editing::channels (edit);
+
+            for (const auto& [track, strip] : stripOf)
+            {
+                if (track == from)
+                    continue;
+
+                const auto colour = colourOf (*track, all.indexOf (track));
+                const auto x = centreOf (*strip);
+
+                if (editing::playsToOutput (*track) && editing::outputOf (*track) == from)
+                    out.push_back ({ false, Route::output, x, sx + 6.0f, false, colour, "Main",
+                                     track->getName() + " plays into " + name + ". This is " + track->getName() + "'s main output." });
+
+                for (const auto& send : editing::sendsOf (*track))
+                    if (send.to == from)
+                        out.push_back ({ false, Route::send, x, sx + 6.0f, false, colour, db (send.gainDb),
+                                         track->getName() + " sends a copy of its sound into " + name + " at " + db (send.gainDb) + "." });
+            }
+
+            for (auto* p : editing::insertsOf (*from))
+                if (auto* key = editing::sidechainSourceOf (*p))
+                    if (const auto found = stripOf.find (key); found != stripOf.end())
+                        out.push_back ({ false, Route::sidechain, centreOf (*found->second), sx + 6.0f, false, colourOf (*key, all.indexOf (key)), "SC",
+                                         key->getName() + " drives the sidechain of " + p->getName() + " on " + name + "." });
+
+            return out;
+        }
+
+        /** The cable path: down from where it leaves, along its line, up into where it arrives. */
+        Path pathOf (const Cable& c) const
+        {
+            const auto top = static_cast<float> (getHeight() - cableBand);
+            const auto y = c.outgoing ? outY() : inY();
+            const auto toX = c.toMaster ? visibleLeft() + 2.0f : c.toX;
+            const auto r = 5.0f;   // rounded bends, as a cable lies
+            const auto dir = toX < c.fromX ? -1.0f : 1.0f;
+
+            Path p;
+            p.startNewSubPath (c.fromX, top);
+            p.lineTo (c.fromX, y - r);
+            p.quadraticTo (c.fromX, y, c.fromX + dir * r, y);
+
+            if (c.toMaster)
+            {
+                p.lineTo (toX, y);
+                return p;
+            }
+
+            p.lineTo (toX - dir * r, y);
+            p.quadraticTo (toX, y, toX, y - r);
+            p.lineTo (toX, top + 6.0f);
+            return p;
+        }
+
+        float widthOf (const Cable& c) const   { return c.kind == Route::output ? 3.0f : 2.0f; }
+
+        void drawCable (Graphics& g, const Cable& c, Emphasis e) const
+        {
+            const auto colour = e == Emphasis::dimmed ? c.colour.withAlpha (0.3f) : c.colour;
+            const auto width = widthOf (c) + (e == Emphasis::lifted ? 1.5f : 0.0f);
+            const auto top = static_cast<float> (getHeight() - cableBand);
+            const auto y = c.outgoing ? outY() : inY();
+            auto path = pathOf (c);
+            g.setColour (colour);
+
+            if (c.kind == Route::sidechain)
+            {
+                Path dashed;
+                const float dashes[] = { 4.0f, 3.0f };
+                PathStrokeType (width, PathStrokeType::curved, PathStrokeType::rounded).createDashedStroke (dashed, path, dashes, 2);
+                g.fillPath (dashed);
+            }
+            else
+            {
+                g.strokePath (path, PathStrokeType (width, PathStrokeType::curved, PathStrokeType::rounded));
+            }
+
+            // Where it leaves: a dot at the foot of the strip.
+            g.fillEllipse (Rectangle<float> (7.0f, 7.0f).withCentre ({ c.fromX, top + 2.0f }));
+
+            Path head;
+            const auto tagX = c.toMaster ? visibleLeft() + 26.0f : c.toX;
+
+            if (c.toMaster)
+                head.addTriangle (visibleLeft() + 1.0f, y, visibleLeft() + 9.0f, y - 5.0f, visibleLeft() + 9.0f, y + 5.0f);   // out to the left, to master
+            else
+                head.addTriangle (c.toX - 5.0f, top + 8.0f, c.toX + 5.0f, top + 8.0f, c.toX, top + 1.0f);   // up into the strip
+
+            g.fillPath (head);
+
+            // The tag on the line where it arrives (outgoing) or where it starts (incoming).
+            const auto at = c.outgoing ? tagX : c.fromX;
+            g.setFont (theme::denseFont (theme::textXs, e == Emphasis::lifted));
+            const auto w = std::min (static_cast<float> (GlyphArrangement::getStringWidthInt (g.getCurrentFont(), c.tag)) + 10.0f, 58.0f);
+            // Under its line, centred where the cable meets the strip, clear of the arrow.
+            const auto chip = Rectangle<float> (w, 14.0f).withCentre ({ c.toMaster ? at + w * 0.5f - 12.0f : at, y + 12.0f });
+            g.setColour (theme::bg2);
+            g.fillRoundedRectangle (chip, theme::radiusXs);
+            g.setColour (colour);
+            g.drawRoundedRectangle (chip.reduced (0.5f), theme::radiusXs, theme::stroke);
+            g.setColour (e == Emphasis::dimmed ? theme::faint : theme::text);
+            g.drawFittedText (c.tag, chip.toNearestInt(), Justification::centred, 1, 0.8f);
+        }
+
+        /** The cable under the pointer: the nearest one within a few pixels; on a shared stretch,
+            the one that ends nearest the pointer. */
+        int hovered (const std::vector<Cable>& cables) const
+        {
+            if (! isMouseOver (true))
+                return -1;
+
+            const auto m = getMouseXYRelative().toFloat();
+
+            if (! bandArea().toFloat().expanded (0.0f, 2.0f).contains (m))
+                return -1;
+
+            int best = -1;
+            float bestScore = 1.0e9f;
+
+            for (size_t i = 0; i < cables.size(); ++i)
+            {
+                Point<float> nearest;
+                [[maybe_unused]] const auto along = pathOf (cables[i]).getNearestPoint (m, nearest);
+                const auto d = m.getDistanceFrom (nearest);
+
+                if (d > 6.0f)
+                    continue;
+
+                const auto end = cables[i].outgoing ? (cables[i].toMaster ? visibleLeft() : cables[i].toX) : cables[i].fromX;
+                const auto score = d * 10.0f + std::abs (end - m.x) * 0.01f;
+
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = static_cast<int> (i);
+                }
+            }
+
+            return best;
+        }
     };
 
     //==============================================================================================
@@ -913,6 +1153,20 @@ namespace carthage::ui
         addAndMakeVisible (addButton);
 
         styleLabel (columnName, theme::textLg, theme::text, true);
+        columnName.onTextChange = [this]
+        {
+            // The column's title renames the channel in place (double-click, as on the strip).
+            if (auto* channel = selectedChannel(); channel != nullptr && channel != editing::preMaster (session.getEdit()))
+                if (const auto name = columnName.getText().trim(); name.isNotEmpty() && name != channel->getName())
+                {
+                    editing::begin (session.getEdit(), "Rename channel");
+                    channel->setName (name);
+                }
+
+            refreshColumn();
+        };
+        swatch = std::make_unique<Swatch> (*this);
+        addChildComponent (*swatch);
         for (auto* l : { &columnInto, &columnFrom, &columnPlugins })
             styleLabel (*l, theme::textSm, theme::text, true);
         styleLabel (columnFromList, theme::textSm, theme::muted);
@@ -1172,6 +1426,12 @@ namespace carthage::ui
         session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("mixerZoom", static_cast<double> (zoom));
     }
 
+    void MixerView::repaintCables()
+    {
+        if (stripHolder != nullptr)
+            stripHolder->repaint();
+    }
+
     void MixerView::routesChanged()
     {
         for (auto* s : strips)
@@ -1397,6 +1657,11 @@ namespace carthage::ui
             return;
 
         line->setChannel (channel);   // null: master's Line
+        const auto renamable = channel != nullptr && channel != editing::preMaster (edit);
+        columnName.setEditable (false, renamable, false);
+        columnName.setTooltip (renamable ? "Double-click to rename this channel" : String());
+        swatch->show (renamable ? channel : nullptr,
+                      renamable ? colourOf (*channel, editing::channels (edit).indexOf (channel)) : Colour());
 
         if (channel == nullptr)
         {
@@ -1525,6 +1790,39 @@ namespace carthage::ui
         const auto isInput = &channel == &session.getTrack();
 
         PopupMenu m;
+        m.addItem (String::fromUTF8 ("Rename\xe2\x80\xa6"), [this, held]
+        {
+            for (auto* s : strips)
+                if (s->getTrack() == held)
+                    showRename (*held, s->localAreaToGlobal (s->nameBounds()));
+        });
+        m.addSubMenu ("Colour", colourMenu (channel));
+        m.addItem ("Move left", index > 0, false, [&edit, held, index] { editing::begin (edit, "Move channel"); editing::moveChannel (*held, index - 1); });
+        m.addItem ("Move right", index < editing::channels (edit).size() - 1, false, [&edit, held, index] { editing::begin (edit, "Move channel"); editing::moveChannel (*held, index + 1); });
+        m.addSeparator();
+        m.addItem ("Add a channel after it", [this, &edit, held]
+        {
+            editing::begin (edit, "Add channel");
+            if (auto* added = editing::addChannel (edit, held))
+                select (added);
+        });
+        m.addItem (isInput ? "Delete channel (the input plays here)" : "Delete channel", ! isInput, false, [this, &edit, held]
+        {
+            const auto name = held->getName();
+            editing::begin (edit, "Delete channel");
+            selected = {};
+            editing::deleteChannel (*held);
+
+            if (onStatus)
+                onStatus ("Deleted " + name + "; what played into it plays to master. Undo brings it back.");
+        });
+        m.showMenuAsync (PopupMenu::Options().withTargetComponent (this).withMousePosition());
+    }
+
+    PopupMenu MixerView::colourMenu (tracktion::AudioTrack& channel)
+    {
+        auto& edit = session.getEdit();
+        auto* held = &channel;
         PopupMenu colours;
         const std::pair<const char*, const Colour*> named[] = { { "Sky", &theme::laneSky }, { "Tide", &theme::laneTide }, { "Kelp", &theme::laneKelp },
                                                                 { "Sand", &theme::laneSand }, { "Coral", &theme::laneCoral }, { "Murex", &theme::laneMurex },
@@ -1550,27 +1848,32 @@ namespace carthage::ui
             colours.addItem (item);
         }
 
-        m.addSubMenu ("Colour", colours);
-        m.addItem ("Move left", index > 0, false, [&edit, held, index] { editing::begin (edit, "Move channel"); editing::moveChannel (*held, index - 1); });
-        m.addItem ("Move right", index < editing::channels (edit).size() - 1, false, [&edit, held, index] { editing::begin (edit, "Move channel"); editing::moveChannel (*held, index + 1); });
-        m.addSeparator();
-        m.addItem ("Add a channel after it", [this, &edit, held]
-        {
-            editing::begin (edit, "Add channel");
-            if (auto* added = editing::addChannel (edit, held))
-                select (added);
-        });
-        m.addItem (isInput ? "Delete channel (the input plays here)" : "Delete channel", ! isInput, false, [this, &edit, held]
-        {
-            const auto name = held->getName();
-            editing::begin (edit, "Delete channel");
-            selected = {};
-            editing::deleteChannel (*held);
+        return colours;
+    }
 
-            if (onStatus)
-                onStatus ("Deleted " + name + "; what played into it plays to master. Undo brings it back.");
-        });
-        m.showMenuAsync (PopupMenu::Options().withTargetComponent (this).withMousePosition());
+    void MixerView::showRename (tracktion::AudioTrack& channel, Rectangle<int> screenArea)
+    {
+        auto* editor = new TextEditor();   // owned by the CallOutBox below
+        editor->setText (channel.getName(), false);
+        editor->setSize (180, 26);
+        editor->setFont (theme::uiFont());
+        editor->selectAll();
+        auto* held = &channel;
+        auto& edit = session.getEdit();
+        editor->onReturnKey = [editor, held, &edit]
+        {
+            if (const auto name = editor->getText().trim(); name.isNotEmpty() && name != held->getName())
+            {
+                editing::begin (edit, "Rename channel");
+                held->setName (name);
+            }
+
+            if (auto* box = editor->findParentComponentOfClass<CallOutBox>())
+                box->dismiss();
+        };
+        editor->onEscapeKey = [editor] { if (auto* box = editor->findParentComponentOfClass<CallOutBox>()) box->dismiss(); };
+        CallOutBox::launchAsynchronously (std::unique_ptr<Component> (editor), screenArea, nullptr);
+        editor->grabKeyboardFocus();
     }
 
     void MixerView::timerCallback()
@@ -1620,7 +1923,11 @@ namespace carthage::ui
         for (int i = pinned; i < strips.size(); ++i)
             strips[i]->setBounds ((i - pinned) * (width + stripGap), 0, width, height - cableBand);
 
-        columnName.setBounds (column.removeFromTop (28));
+        {
+            auto title = column.removeFromTop (28);
+            swatch->setBounds (title.removeFromLeft (swatch->isVisible() ? 22 : 0));
+            columnName.setBounds (title);
+        }
         column.removeFromTop (theme::space2);
 
         if (masterSelected)
