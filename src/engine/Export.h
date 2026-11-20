@@ -36,6 +36,9 @@ namespace carthage::exporting
         end; nothing if the edit has no clips. */
     std::optional<Range> rangeOf (tracktion::Edit&);
 
+    /** How long before the range the render starts; that much is cut off again (see parametersFor). */
+    inline constexpr double leadInSeconds = 0.01;
+
     /** How long a whole-project export may ring on after the last clip ends, at most. */
     inline constexpr double tailSeconds = 10.0;
 

@@ -346,3 +346,14 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Snapshot `export.png` (the window). Not tried on screen: the Mac was locked. Next: the owner
   tries Cmd+R; then a whole-project null and delay compensation (5b).
 
+### 2026-11-20 (plugin delay compensation, W56)
+
+- DelayCompensationTests: Tracktion's LatencyPlugin (tests only) on channel, send destination, bus,
+  Pre-Master, master; exports null against the mix without it, from 0 s and 0.5 s; playback nulls
+  against the export (whole mix 480 samples late, as expected; the first 2 ms after Play are
+  playback's de-click fade and are skipped).
+- Found: Tracktion's render fades in 32 samples when anything reports latency (export now renders
+  a 10 ms lead-in as float and writes the format without it); Tracktion's wet/dry is not latency
+  compensated (latent plugins: no knob, fully wet, delay shown on the Line).
+- Next: low-latency monitoring mode with 5d (ask the owner what it bypasses); a whole-project null.
+

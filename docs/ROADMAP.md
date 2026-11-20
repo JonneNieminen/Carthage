@@ -681,7 +681,9 @@ Deliver:
 - [ ] Insert Lines: unlimited growing list; reorder by drag, bypass, wet/dry, open UI, drag between channels
       (built 2026-11-20 with master's and the Pre-Master's Lines, W51; owner's checks pending)
 - [ ] Input/output picker per channel; "Guitar in → this channel, armed, monitoring" action; keyboard-driven selection
-- [ ] Plugin delay compensation across the whole graph; low-latency monitoring mode
+- [ ] Plugin delay compensation across the whole graph; low-latency monitoring mode (compensation
+      verified 2026-11-20 on channels, sends, buses, the Pre-Master and master, in export and
+      playback, W56; the low-latency mode waits for arming in 5d, where what it bypasses is decided)
 - [ ] **Proposed here, owner to confirm (O5):** metronome, count-in, loop recording with takes, punch in/out
 - [ ] **Owner's addition (F19, W30):** plugin presets in one format for one plugin or a whole Insert Line, in a folder the user chooses; opening .vstpreset and .aupreset, and other DAWs' presets as far as their formats allow
 - [ ] **Owner's list (F22, W38):** plugins in their own processes except the live input chain,
@@ -702,7 +704,11 @@ Exit checks:
       the -200 dB floor, 0 samples offset; every format reads back at its rate, depth and length; the
       whole-project range is checked, not yet nulled; the app's window untried on screen)
 - [ ] A clip, an instrument and a live input each routed to an arbitrary channel, then re-routed, while playing
-- [ ] Delay compensation verified by a null test with a plugin that reports latency
+- [x] Delay compensation verified by a null test with a plugin that reports latency (2026-11-20,
+      DelayCompensationTests: Tracktion's latency test plugin, 10 ms, on a channel, a send's
+      destination, a bus, the Pre-Master and master; every export nulls against the mix without it
+      to -153 dB or below, offset 0, from time zero and mid-sound; playback nulls against the export,
+      the whole mix 480 samples later, as compensation should make it)
 - [ ] A feedback route is refused or handled safely
 - [ ] A realistic session with real third-party plugins on many channels plays without dropouts; load reported
 - [ ] An idle mixer with 50 empty channels costs close to nothing; load reported

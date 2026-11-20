@@ -1016,11 +1016,13 @@ namespace carthage::editing
     bool isBypassed (const Plugin& p)    { return ! p.isEnabled(); }
     void setBypassed (Plugin& p, bool b) { p.setEnabled (! b); }
 
-    bool hasMix (const Plugin& p)        { return dynamic_cast<const ExternalPlugin*> (&p) != nullptr; }
+    double latencyOf (const Plugin& p)   { return const_cast<Plugin&> (p).getLatencySeconds(); }
+
+    bool hasMix (const Plugin& p)        { return dynamic_cast<const ExternalPlugin*> (&p) != nullptr && latencyOf (p) <= 0.0; }
 
     float mixOf (const Plugin& p)
     {
-        if (const auto* ext = dynamic_cast<const ExternalPlugin*> (&p))
+        if (const auto* ext = dynamic_cast<const ExternalPlugin*> (&p); ext != nullptr && hasMix (p))
             return std::clamp (ext->wetValue.get(), 0.0f, 1.0f);
 
         return 1.0f;
@@ -1028,7 +1030,7 @@ namespace carthage::editing
 
     void setMix (Plugin& p, float mix)
     {
-        if (auto* ext = dynamic_cast<ExternalPlugin*> (&p))
+        if (auto* ext = dynamic_cast<ExternalPlugin*> (&p); ext != nullptr && hasMix (p))
         {
             mix = std::clamp (mix, 0.0f, 1.0f);
             ext->wetValue = mix;          // the plugin's sound
@@ -1166,6 +1168,15 @@ namespace carthage::editing
     void syncMix (Edit& edit, const AudioTrack* inputChannel)
     {
         applyMutes (edit);
+
+        // A plugin that delays its sound plays fully wet: Tracktion would mix its dry sound in
+        // early (W56). Outside undo, as a correction of what the graph can do, not an edit.
+        for (auto* p : getAllPlugins (edit, false))
+            if (auto* ext = dynamic_cast<ExternalPlugin*> (p); ext != nullptr && latencyOf (*ext) > 0.0 && ext->dryValue.get() > 0.00004f)
+            {
+                ext->dryValue.setValue (0.0f, nullptr);
+                ext->wetValue.setValue (1.0f, nullptr);
+            }
 
         // Only what could sound stays in the graph: carriers with clips; channels with something
         // playing into them, plugins of their own, or the live input (W49).

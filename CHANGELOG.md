@@ -95,6 +95,10 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   its name. Settings > Browser can fit a dropped loop to the project's tempo.
 
 ### Changed
+- A plugin that delays its sound to look ahead (a lookahead limiter, some amp sims) shows by how
+  much on its Line, and plays fully wet: its own mix control is the one to use, because the
+  mixer's wet/dry would bring its dry sound in early. Everything else is delayed to match, so the
+  mix stays in time.
 - A mixer fader moves only when you drag its cap or scroll over the selected channel; a click
   anywhere else on a strip just selects it.
 - The Settings button is a gear, and its tooltip says Settings.
@@ -122,6 +126,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   for fine steps.
 - Stretching a clip (the S tool, or Option/Alt on an edge) keeps its pitch.
 
+
+### Fixed
+- An export no longer loses the first moment of its first sound when a plugin in the mix looks ahead.
 
 ## 0.1.2-beta.4 - 2026-11-18
 

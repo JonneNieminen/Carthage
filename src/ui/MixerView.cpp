@@ -919,10 +919,27 @@ namespace carthage::ui
         after them, so it grows as plugins are added. A click on a plugin opens its window; its
         dot bypasses it; its knob mixes wet and dry; drag to reorder, or onto another channel's
         strip. Double-click the empty slot to choose a plugin; drop one from the browser anywhere. */
-    class MixerView::InsertLine final : public Component, public DragAndDropTarget
+    class MixerView::InsertLine final : public Component, public DragAndDropTarget, public TooltipClient
     {
     public:
         explicit InsertLine (MixerView& v) : view (v) {}
+
+        /** A plugin that delays its sound says by how much, and why it has no wet/dry knob (W56). */
+        String getTooltip() override
+        {
+            const auto i = rowAt (getMouseXYRelative());
+
+            if (i < 0 || i >= plugins.size())
+                return {};
+
+            const auto ms = editing::latencyOf (*plugins[i]) * 1000.0;
+
+            if (ms <= 0.0)
+                return {};
+
+            return plugins[i]->getName() + " delays its sound by " + String (ms, 1) + " ms (it looks ahead). Carthage delays everything else "
+                   "by the same, so the mix stays in time. Its wet and dry are mixed inside the plugin: use its own mix control.";
+        }
 
         void setChannel (tracktion::AudioTrack* channel)   { track = channel; refresh(); }
 
@@ -980,9 +997,21 @@ namespace carthage::ui
                 g.setColour (bypassed ? theme::faint : theme::ok);
                 bypassed ? g.drawEllipse (dot.reduced (1.0f), 1.5f) : g.fillEllipse (dot);
 
+                auto name = nameBounds (i);
+
+                if (const auto ms = editing::latencyOf (*p) * 1000.0; ms > 0.0 && ! editing::hasMix (*p))
+                {
+                    // In the knob's place: how late it is, in the time face.
+                    g.setColour (theme::muted);
+                    g.setFont (theme::timeFont (theme::textXs));
+                    g.drawText (String (ms, ms < 10.0 ? 1 : 0) + " ms", rowBounds (i).removeFromRight (rowHeight + 14).reduced (2, 0),
+                                Justification::centredRight, false);
+                    name = name.withTrimmedRight (16);
+                }
+
                 g.setColour (bypassed ? theme::muted : theme::text);
                 g.setFont (theme::uiFont (theme::textSm, ! bypassed));
-                g.drawText (p->getName(), nameBounds (i), Justification::centredLeft, true);
+                g.drawText (p->getName(), name, Justification::centredLeft, true);
 
                 if (dropSlot == i)
                 {

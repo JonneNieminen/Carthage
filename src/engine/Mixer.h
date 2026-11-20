@@ -218,7 +218,12 @@ namespace carthage::editing
     bool isBypassed (const tracktion::Plugin&);
     void setBypassed (tracktion::Plugin&, bool);
 
-    /** Wet/dry, 0 (dry) to 1 (wet, the default), for plugins that offer it. */
+    /** Wet/dry, 0 (dry) to 1 (wet, the default), for plugins that offer it: hosted plugins that
+        report no latency. Tracktion mixes a plugin's dry sound in undelayed, so with a plugin that
+        delays its sound (a lookahead) part-dry would comb-filter: such a plugin stays fully wet
+        (syncMix puts it back if it starts reporting latency later), and its own mix control is
+        the one to use (W56). */
+    double latencyOf (const tracktion::Plugin&);
     bool hasMix (const tracktion::Plugin&);
     float mixOf (const tracktion::Plugin&);
     void setMix (tracktion::Plugin&, float);
