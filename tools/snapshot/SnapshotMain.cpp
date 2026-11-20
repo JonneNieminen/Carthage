@@ -5,13 +5,14 @@
 //   carthage-snapshot OUTPUT_FOLDER [--device NAME] [--output-device NAME]
 //                     [--plugin-format VST3 --plugin FILE_OR_ID] [--record-seconds 3] [--scan]
 //
-// Writes main.png, samples*.png (with --samples FOLDER), start*.png (start.png with --project FILE), tabs.png, settings.png, settings-updates.png, settings-shortcuts.png, mixer.png, mixer-in.png, mixer-buses.png, update*.png (the update banner with sample text), plugin.png
+// Writes main.png, samples*.png (with --samples FOLDER), start*.png (start.png with --project FILE), tabs.png, settings.png, settings-updates.png, settings-shortcuts.png, mixer.png, mixer-in.png, mixer-buses.png, export.png, update*.png (the update banner with sample text), plugin.png
 // (with --plugin) and take.png (after recording).
 
 #include <app/Commands.h>
 #include <engine/Session.h>
 #include <engine/PluginScan.h>
 #include <engine/SampleEdits.h>
+#include <ui/ExportWindow.h>
 #include <ui/MainComponent.h>
 #include <ui/theme/LookAndFeel.h>
 
@@ -279,6 +280,24 @@ namespace
             });
             Thread::sleep (400);
             capture (outDir.getChildFile ("mixer.png"));
+
+            // Cmd+R: the export window for this project (W43), drawn on its own.
+            onMessageThreadVoid ([this] { commands.invokeDirectly (app::commands::exportMix, false); });
+            Thread::sleep (400);
+            onMessageThreadVoid ([&]
+            {
+                for (int i = 0; i < TopLevelWindow::getNumTopLevelWindows(); ++i)
+                    if (auto* w = dynamic_cast<carthage::ui::ExportWindow*> (TopLevelWindow::getTopLevelWindow (i)))
+                        if (auto* c = w->getContentComponent())
+                        {
+                            const auto image = c->createComponentSnapshot (c->getLocalBounds(), true, 2.0f);
+                            const auto file = outDir.getChildFile ("export.png");
+                            file.deleteFile();
+                            FileOutputStream out (file);
+                            PNGImageFormat().writeImageToStream (image, out);
+                            w->setVisible (false);
+                        }
+            });
 
             // The Drum bus selected: its cables come in from Kick and Snare (W52).
             onMessageThreadVoid ([this] { content->getMixer().select (carthage::editing::channels (session->getEdit())[4]); });

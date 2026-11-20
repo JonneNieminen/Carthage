@@ -1,5 +1,7 @@
 #include "SettingsPanel.h"
 
+#include "ExportWindow.h"
+
 #include <app/Commands.h>
 
 #include <numeric>
@@ -138,7 +140,7 @@ namespace carthage::ui
         switch (p)
         {
             case Page::audio:     return "Your interface, how quickly what you play comes back, and how hard the computer is working.";
-            case Page::recording: return "How new takes are saved, and the metronome you play along to.";
+            case Page::recording: return "How new takes are saved, what an export (" + String (app::commands::commandName) + "+R) is made as, and the metronome.";
             case Page::projects:  return "What Carthage opens with, what tempo changes do to clips, and where samples are kept.";
             case Page::timeline:  return "How the lanes look and what the mouse does on them.";
             case Page::mixer:     return "How channels reach master, and which channels are buses.";
@@ -318,6 +320,20 @@ namespace carthage::ui
         preMaster.setTooltip ("A channel between every channel and master, beside master in the mixer, for the processing the whole mix shares. "
                               "Off, everything goes straight to master; its plugins stay, unused.");
         preMaster.onClick = [this] { session.setUsePreMaster (preMaster.getToggleState()); };
+
+        // Export (brief, feature 8): the format and rate Cmd+R uses; its window shows the same.
+        styleLabel (exportHeading, theme::textSm, theme::muted, true);
+        exportHeading.setText ("Export", dontSendNotification);
+        for (auto [l, text] : { std::pair { &exportFormatLabel, "Format" }, { &exportRateLabel, "Sample rate" } })
+        {
+            styleLabel (*l, theme::textMd, theme::muted);
+            l->setText (text, dontSendNotification);
+        }
+        exportFormat.onChange = [this] { session.getEngine().getPropertyStorage().getPropertiesFile().setValue (ExportWindow::formatKey, exportFormat.getSelectedId() - 1); };
+        exportRate.onChange = [this] { session.getEngine().getPropertyStorage().getPropertiesFile().setValue (ExportWindow::rateKey, exportRate.getSelectedId() == 1 ? 0 : exportRate.getSelectedId()); };
+
+        for (auto* c : std::initializer_list<Component*> { &exportHeading, &exportFormatLabel, &exportFormat, &exportRateLabel, &exportRate })
+            body.addAndMakeVisible (c);
 
         // Bus channels (owner): off by default; every Nth channel wider and marked "Bus".
         busChannels.setToggleState (props.getBoolValue ("busChannels", false), dontSendNotification);
@@ -582,6 +598,13 @@ namespace carthage::ui
 
     void SettingsPanel::refresh()
     {
+        {
+            auto& props = session.getEngine().getPropertyStorage().getPropertiesFile();
+            auto* device = session.getDeviceManager().getCurrentAudioDevice();
+            ExportWindow::fillFormats (exportFormat, props);
+            ExportWindow::fillRates (exportRate, props, device != nullptr ? device->getCurrentSampleRate() : 48000.0);
+        }
+
         atLaunch.setSelectedId (1 + static_cast<int> (session.getAtLaunch()), dontSendNotification);
         clickSound.setSelectedId (1 + static_cast<int> (session.getMetronomeSound()), dontSendNotification);
         clickLevel.setValue (session.getEdit().getClickTrackVolume() * 100.0, dontSendNotification);
@@ -882,6 +905,7 @@ namespace carthage::ui
                                                               testHint.setBounds (b.removeFromTop (20));
                                                           } } } });
         sections.push_back ({ Page::recording, &recordingHeading, { row (formatLabel, format) } });
+        sections.push_back ({ Page::recording, &exportHeading, { row (exportFormatLabel, exportFormat), row (exportRateLabel, exportRate) } });
         sections.push_back ({ Page::audio, &latencyHeading, { row (reportedLabel, reportedValue), row (measuredLabel, measuredValue),
                                                  Line { { &loopHint, &loopOutLabel, &loopOut, &loopInLabel, &loopIn, &measureButton },
                                                         48 + 2 * (rowHeight + theme::space1) + rowHeight + theme::space2,

@@ -187,6 +187,8 @@ namespace carthage::project
 
     juce::File samplesIn (const juce::File& folder)   { return folder.getChildFile ("Samples"); }
 
+    juce::File exportsIn (const juce::File& folder)   { return folder.getChildFile ("Exports"); }
+
     juce::File versionsIn (const juce::File& folder)  { return folder.getChildFile ("Versions"); }
 
     juce::Array<juce::File> versionsOf (const juce::File& projectFile)
@@ -313,7 +315,10 @@ namespace carthage::project
         if (auto r = copyFolder (recordingsIn (fromFolder), recordingsIn (toFolder)); r.failed())
             return r;
 
-        return copyFolder (samplesIn (fromFolder), samplesIn (toFolder));
+        if (auto r = copyFolder (samplesIn (fromFolder), samplesIn (toFolder)); r.failed())
+            return r;
+
+        return copyFolder (exportsIn (fromFolder), exportsIn (toFolder));
     }
 
     //==============================================================================================

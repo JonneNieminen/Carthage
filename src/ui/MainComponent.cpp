@@ -1,4 +1,5 @@
 #include "MainComponent.h"
+#include "ExportWindow.h"
 
 #include <engine/Trace.h>
 
@@ -489,7 +490,14 @@ namespace carthage::ui
         // Projects: the view is saved with the project; a new project replaces the edit.
         session.getViewState = [this] { return timeline.getViewState(); };
         session.takePicture = [this] { return pictureOfWindows(); };
-        session.onProjectClosing = [this] { closePluginWindow(); mixer.projectClosing(); };
+        session.onProjectClosing = [this]
+        {
+            closePluginWindow();
+            mixer.projectClosing();
+
+            if (exportWindow != nullptr && exportWindow->isExporting())
+                exportWindow.reset();   // an export holds its project: it stops when that project goes back
+        };
         session.onProjectChanged = [this]
         {
             showStartScreen (false);   // a project came forward: that is what the start screen was for
@@ -500,6 +508,10 @@ namespace carthage::ui
             refreshMasterVolume();
             tempoBefore.reset();   // a change in progress belonged to the other project
             refreshNotes();
+
+            if (exportWindow != nullptr && exportWindow->isVisible())
+                exportWindow->show();   // what the front project would export
+
             ++tempoChanges;
             refreshTempo();
             updateTransportButtons();
@@ -527,6 +539,7 @@ namespace carthage::ui
 
     MainComponent::~MainComponent()
     {
+        exportWindow.reset();  // an export in progress is cancelled, before the edit goes
         viewWindows.clear();   // the views they show are members here: their windows go first
 
         commands.getKeyMappings()->removeChangeListener (this);
@@ -1042,6 +1055,15 @@ namespace carthage::ui
             case cmd::uiActualSize:     setUiScale (1.0); return true;
             case cmd::addLaneBelow:     timeline.addLaneBelowCurrent(); return true;
             case cmd::moveLaneUp:       timeline.moveCurrentLane (-1); return true;
+            case cmd::exportMix:
+                if (exportWindow == nullptr)
+                {
+                    exportWindow = std::make_unique<ExportWindow> (session, commands);
+                    exportWindow->centreAroundComponent (this, exportWindow->getWidth(), exportWindow->getHeight());
+                }
+
+                exportWindow->show();
+                return true;
             case cmd::previousLane:     timeline.selectNeighbourLane (-1); return true;
             case cmd::nextLane:         timeline.selectNeighbourLane (1); return true;
             case cmd::moveLaneDown:     timeline.moveCurrentLane (1); return true;
@@ -1487,6 +1509,12 @@ namespace carthage::ui
         if (notesWindow != nullptr && static_cast<Component*> (notesWindow.get()) == front)
         {
             notesWindow->setVisible (false);
+            return true;
+        }
+
+        if (exportWindow != nullptr && static_cast<Component*> (exportWindow.get()) == front)
+        {
+            exportWindow->closeButtonPressed();
             return true;
         }
 

@@ -48,6 +48,9 @@ namespace carthage::project
     /** The folder samples are collected into (W30, "Collect samples into project"). */
     juce::File samplesIn (const juce::File& folder);
 
+    /** Where exports go unless the user chooses another place (Cmd+R, W43). */
+    juce::File exportsIn (const juce::File& folder);
+
     /** Where `source` goes in `samplesFolder`: its own name, numbered if that name is taken by a
         different file on disk or by another target in `taken`. The same file already collected
         (same name and size) keeps its name. */
@@ -102,7 +105,9 @@ namespace carthage::project
 
     std::optional<Miniature> miniatureOf (const juce::File& projectFile);
 
-    /** Copies `from`'s Recordings and Samples folders into `to` (Save as). Any thread. */
+    /** Copies `from`'s Recordings, Samples and Exports folders into `to` (Save as): an untitled
+        project's folder goes to the bin after its first save, and nothing made in it may go with
+        it. Any thread. */
     juce::Result copyMedia (const juce::File& fromFolder, const juce::File& toFolder);
 
     /** Saves and copies off the message thread, one job at a time, and reports back on the

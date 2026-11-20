@@ -117,9 +117,12 @@ public:
             const auto copyFile = project::fileIn (copyFolder);
 
             const auto snap = project::snapshot (e, copyFile, opened.info, songFolder);
+            project::exportsIn (songFolder).createDirectory();
+            project::exportsIn (songFolder).getChildFile ("Song.wav").replaceWithText ("mix");
             expect (project::copyMedia (songFolder, copyFolder).wasOk());
             expect (project::write (snap, copyFile).wasOk());
             expect (project::recordingsIn (copyFolder).getChildFile ("Take 1.wav").existsAsFile(), "the take was copied");
+            expect (project::exportsIn (copyFolder).getChildFile ("Song.wav").existsAsFile(), "exports go with the project");
 
             auto copy = project::open (engine, copyFile, copyFile);
             expect (copy.edit != nullptr, copy.error);

@@ -11,6 +11,12 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Export the mix with Cmd+R (or File > Export): the loop region if there is one, otherwise the
+  whole project from its first sound to its last, letting reverbs and delays ring out. WAV 16-bit,
+  24-bit or 32-bit float, or FLAC 16 or 24-bit, at the interface's rate or another; set in the
+  window or under Settings > Recording. Files go to the project's Exports folder unless you choose
+  another place; the export runs in the background with a progress bar and Cancel, then Show in
+  Finder. The metronome is never in an export.
 - Left and Right move between mixer channels; Up and Down make the lane above or below the
   current one current (both shown in Keyboard shortcuts for the lanes; rebindable).
 - Add several mixer channels at once: right-click a channel (Add channels after it) or the Add

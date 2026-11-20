@@ -688,14 +688,19 @@ Deliver:
       grouped automatically by crash history (on by default; your own grouping when off); presets
       under each plugin in the browser and from folders onto channels; the master volume becomes the
       master fader's twin
-- [ ] **Export (owner, 2026-11-19; moved here from phase 7):** Cmd+R opens Export: the loop region if
+- [x] **Export (owner, 2026-11-19; moved here from phase 7):** Cmd+R opens Export: the loop region if
       there is one, or the whole project from its first sound to its last; WAV 16/24/32-float and
       FLAC, with the quality settings from feature 8; it renders the mix through the mixer and master
+      (built 2026-11-20, W55: `engine/Export`, `ui/ExportWindow`, settings under Recording; FLAC
+      16/24-bit; files go to the project's `Exports/` unless chosen; owner's check in the app pending)
 - [ ] **Owner's ideas (F20):** CPU use per plugin; running chosen plugins in their own process; a tuner on the main view; recording the processed sound beside the dry one; take comping; freeze; stems export; MIDI learn
 
 Exit checks:
 - [ ] An exported file (Cmd+R) nulls against the same range played back in the app; the loop region
-      and the whole project are both exported
+      and the whole project are both exported (headless part passed 2026-11-20: ExportTests plays the
+      loop region through the engine's playback graph on a hosted device and the export matches it to
+      the -200 dB floor, 0 samples offset; every format reads back at its rate, depth and length; the
+      whole-project range is checked, not yet nulled; the app's window untried on screen)
 - [ ] A clip, an instrument and a live input each routed to an arbitrary channel, then re-routed, while playing
 - [ ] Delay compensation verified by a null test with a plugin that reports latency
 - [ ] A feedback route is refused or handled safely

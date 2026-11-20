@@ -44,6 +44,7 @@ namespace carthage::app
                     m.addCommandItem (&commands, commands::saveProjectAs);
                     m.addCommandItem (&commands, commands::saveAsTemplate);
                     m.addSeparator();
+                    m.addCommandItem (&commands, commands::exportMix);
                     m.addCommandItem (&commands, commands::collectSamples);
                     m.addCommandItem (&commands, commands::projectNotes);
                     m.addCommandItem (&commands, commands::restoreVersion);

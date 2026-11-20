@@ -335,3 +335,14 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - CI run for a683709 ended "failure" only because GitHub had no macOS arm64 runner (jobs
   cancelled: "not acquired by Runner"); every job that ran passed. The next push re-runs all.
 
+### 2026-11-20 (export, Cmd+R, W55)
+
+- `engine/Export` (rangeOf, parametersFor, render, start/Job), `ui/ExportWindow` (Cmd+R, File >
+  Export, Cmd+W closes it), Settings > Recording > Export, `project::exportsIn` copied by Save as.
+- ExportTests: range (empty, whole project, loop region), every format at 44.1/96 kHz read back,
+  and the exit check's null: loop region played through a hosted device vs the export, -200 dB,
+  offset 0. Found: Tracktion's `renderToFile (desc, params)` needs a non-empty track set and a UI
+  behaviour that runs the task (headless engines do nothing), so `exporting::render` runs the task.
+- Snapshot `export.png` (the window). Not tried on screen: the Mac was locked. Next: the owner
+  tries Cmd+R; then a whole-project null and delay compensation (5b).
+

@@ -7,6 +7,7 @@ add_library(carthage_engine STATIC
     PluginScan.cpp PluginScan.h
     RealtimeCheck.h
     Editing.cpp Editing.h
+    Export.cpp Export.h
     Mixer.cpp Mixer.h
     SampleEdits.cpp SampleEdits.h
     FormantPlugin.cpp FormantPlugin.h

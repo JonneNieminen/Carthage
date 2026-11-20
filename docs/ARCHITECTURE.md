@@ -137,7 +137,8 @@ The mapping onto Tracktion that F5 asked to be written down once proven:
   it. Undo and Redo are commands in the command table.
 - **Project file** (`engine/Project.h`). A project is a folder: `<Name>.carthage` (the edit's XML,
   with a `CARTHAGE` child holding `formatVersion`, the project's `id` and a `VIEW` child that the
-  timeline fills with zoom, scroll and grid), `Recordings/` and, in 4b, `Samples/`. Saving copies the
+  timeline fills with zoom, scroll and grid), `Recordings/`, in 4b, `Samples/`, and from phase 5,
+  `Exports/` (Cmd+R's default place; Save as copies it too, W55). Saving copies the
   edit on the message thread (`project::snapshot`) and a single writer thread (`project::Writer`)
   writes a temporary file beside the old one and renames it over, so a crash mid-save never leaves a
   half-written project. Clip paths are rewritten on the copy: inside the project folder relative to

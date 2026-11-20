@@ -144,6 +144,7 @@ namespace carthage::ui
         void offerRecommendation (const engine::SettingsTest::Recommendation&, bool atFirstLaunch);
 
         // Project notes (W38): a window of their own that follows the project in front.
+        std::unique_ptr<class ExportWindow> exportWindow;   // Cmd+R (W43)
         class NotesWindow;
         std::unique_ptr<NotesWindow> notesWindow;
         void toggleNotes();
