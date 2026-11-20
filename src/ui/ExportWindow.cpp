@@ -13,6 +13,12 @@ namespace carthage::ui
     {
         constexpr int rowHeight = 28, labelWidth = 84, width = 460;
 
+       #if JUCE_MAC
+        constexpr const char* fileManager = "Finder";
+       #else
+        constexpr const char* fileManager = "Explorer";
+       #endif
+
         String clock (double seconds)
         {
             const auto minutes = static_cast<int> (seconds / 60.0);
@@ -106,7 +112,7 @@ namespace carthage::ui
             exportButton.setTooltip ("Render the mix to the file (" + String (app::commands::commandName) + "+R opens this window)");
             exportButton.onClick = [this] { begin(); };
             cancel.onClick = [this] { if (job != nullptr) job->cancel(); };
-            reveal.setTooltip ("Show the exported file in " + String (JUCE_MAC ? "Finder" : "Explorer"));
+            reveal.setTooltip ("Show the exported file in " + String (fileManager));
             reveal.onClick = [this] { if (lastExport.existsAsFile()) lastExport.revealToUser(); };
 
             for (auto* c : std::initializer_list<Component*> { &title, &whatLabel, &whatValue, &formatLabel, &format, &rateLabel, &rate,
@@ -221,7 +227,7 @@ namespace carthage::ui
         Label title, whatLabel, whatValue, formatLabel, rateLabel, whereLabel, whereValue, status;
         ComboBox format, rate;
         TextButton change { String::fromUTF8 ("Change\xe2\x80\xa6") }, exportButton { "Export" }, cancel { "Cancel" },
-                   reveal { JUCE_MAC ? "Show in Finder" : "Show in Explorer" };
+                   reveal { "Show in " + String (fileManager) };
         Rectangle<int> bar;
         std::optional<exporting::Range> range;
         File destination, lastExport;

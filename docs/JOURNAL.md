@@ -356,4 +356,6 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   a 10 ms lead-in as float and writes the format without it); Tracktion's wet/dry is not latency
   compensated (latent plugins: no knob, fully wet, delay shown on the Line).
 - Next: low-latency monitoring mode with 5d (ask the owner what it bypasses); a whole-project null.
+- CI on Windows failed for a04d9fd: `JUCE_MAC` used as a value in ExportWindow (only defined on
+  macOS). Fixed with an `#if`-chosen constant. Rule: platform macros only in `#if`.
 
