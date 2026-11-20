@@ -161,8 +161,9 @@ namespace carthage::editing
     void setChannelSoloed (tracktion::AudioTrack&, bool);
 
     /** A channel's input (W51): the interface input it takes, mono or a stereo pair, or none;
-        and whether it is heard (monitored). Kept with the channel, outside undo; the session puts
-        it into effect (Session::applyInputRouting). */
+        and whether it is heard (monitored). Kept with the channel, inside the caller's undo step
+        (every edit is undoable); the session puts it into effect (Session::applyInputRouting),
+        and again after an undo. No input also turns hearing it off. */
     struct ChannelInput
     {
         int firstChannel = -1;   // the interface's input, from 0; -1: none

@@ -34,7 +34,7 @@ namespace carthage::ui
         body.addChildComponent (noMatch);
 
         for (auto [label, text] : { std::pair { &interfaceHeading, "Interface" }, { &recordingHeading, "Recording" },
-                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" }, { &timelineHeading, "Timeline" }, { &metronomeHeading, "Metronome" }, { &windowsHeading, "Windows" },
+                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" }, { &timelineHeading, "Timeline" }, { &mixerHeading, "Mixer" }, { &metronomeHeading, "Metronome" }, { &windowsHeading, "Windows" },
                                     { &updatesHeading, "Updates" },
                                     { &shortcutsHeading, "Keyboard shortcuts" } })
         {
@@ -689,10 +689,11 @@ namespace carthage::ui
                                                          } } } });
         sections.push_back ({ &windowsHeading, { row (slotsLabel, slots), row (uiScaleLabel, uiScale) } });
         sections.push_back ({ &browserHeading, { row (panelWidthLabel, panelWidth), row (textSizeLabel, textSize),
-                                                 whole (playWhileHeld, rowHeight), whole (fitLoops, rowHeight), whole (preMaster, rowHeight), whole (checkPlugins, rowHeight) } });
+                                                 whole (playWhileHeld, rowHeight), whole (fitLoops, rowHeight), whole (checkPlugins, rowHeight) } });
         sections.push_back ({ &metronomeHeading, { row (clickSoundLabel, clickSound), row (clickLevelLabel, clickLevel),
                                                    whole (clickAccent, rowHeight), whole (clickWhileRecording, rowHeight) } });
         sections.push_back ({ &timelineHeading, { row (beatShadingLabel, beatShading), whole (clickPlaces, rowHeight), whole (rightClickDeletes, rowHeight) } });
+        sections.push_back ({ &mixerHeading, { whole (preMaster, rowHeight) } });
         const auto hintHeight = updatesHint.getText().isEmpty() ? 0 : 36;
         sections.push_back ({ &updatesHeading, { Line { { &versionLabel, &versionValue, &checkNow }, rowHeight + theme::space1, [this] (Rectangle<int> line)
                                                         {

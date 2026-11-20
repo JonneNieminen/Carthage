@@ -13,6 +13,7 @@ namespace carthage::ui
     {
         constexpr int stripWidth = 64, masterWidth = 80, stripGap = 2, columnWidth = 248, cableBand = 18;
         constexpr float minDb = -60.0f, maxDb = 6.0f;
+        constexpr int sendsOnlyId = 100000;   // the "Plays into" menu's "Only its sends"
 
         const Identifier colourProp ("carthageColour");
 
@@ -74,6 +75,7 @@ namespace carthage::ui
             fader.setDefault (0.0);
             fader.setTooltip ("Volume. Double-click: 0 dB. Scroll to adjust, Shift for fine steps.");
             fader.onDragStart = [this] { editing::begin (view.session.getEdit(), nameForUndo() + " volume"); };
+            fader.onWheelStart = fader.onDragStart;
             fader.onValueChange = [this]
             {
                 if (volume != nullptr && std::abs (volume->getVolumeDb() - static_cast<float> (fader.getValue())) > 0.01f)
@@ -89,6 +91,7 @@ namespace carthage::ui
             pan.setDefault (0.0);
             pan.setTooltip ("Pan. Double-click: centre.");
             pan.onDragStart = [this] { editing::begin (view.session.getEdit(), nameForUndo() + " pan"); };
+            pan.onWheelStart = pan.onDragStart;
             pan.onValueChange = [this]
             {
                 if (volume != nullptr && std::abs (volume->getPan() - static_cast<float> (pan.getValue())) > 0.001f)
@@ -103,6 +106,7 @@ namespace carthage::ui
             sendLevel.setDefault (0.0);
             sendLevel.setTooltip ("How much of the selected channel goes into this one. Double-click: 0 dB.");
             sendLevel.onDragStart = [this] { editing::begin (view.session.getEdit(), "Send level"); };
+            sendLevel.onWheelStart = sendLevel.onDragStart;
             sendLevel.onValueChange = [this]
             {
                 if (auto* from = view.selectedChannel(); from != nullptr && track != nullptr)
@@ -113,7 +117,7 @@ namespace carthage::ui
             // The wheel adjusts only the selected channel's controls; over any other strip it
             // scrolls the mixer (owner, W51).
             for (auto* control : { &fader, &pan, &sendLevel })
-                control->acceptsWheel = [this, control] { return control == &sendLevel ? true : isSelected(); };
+                control->acceptsWheel = [this, control] { return control == &sendLevel || isSelected(); };
 
             readModel();
             setTooltip (track != nullptr ? "Click to select. Right-click to rename, colour, route or delete it." : "Master: everything you hear goes through it");
@@ -241,7 +245,8 @@ namespace carthage::ui
                 auto* into = editing::outputOf (*track);
                 g.setColour (outputArea.contains (getMouseXYRelative()) && isMouseOver() ? theme::text : theme::muted);
                 g.setFont (theme::denseFont (theme::textXs));
-                g.drawFittedText (String::fromUTF8 ("\xe2\x86\x92 ") + (into != nullptr ? shortName (into->getName()) : String ("Master")),
+                g.drawFittedText (String::fromUTF8 ("\xe2\x86\x92 ") + (! editing::playsToOutput (*track) ? String ("sends only")
+                                                                          : into != nullptr ? shortName (into->getName()) : String ("Master")),
                                   outputArea, Justification::centred, 1, 0.8f);
 
                 // Its input: where it comes from, lit while heard (live).
@@ -567,7 +572,9 @@ namespace carthage::ui
                         drops.push_back ({ static_cast<float> (s->getBounds().getCentreX()), kind });
             }
 
-            if (source == nullptr || drops.empty())
+            const auto toMaster = from != nullptr && view.routeTo (nullptr) == Route::output;
+
+            if (source == nullptr || (drops.empty() && ! toMaster))
                 return;
 
             const auto y = static_cast<float> (getHeight()) - static_cast<float> (cableBand) * 0.5f;
@@ -581,8 +588,18 @@ namespace carthage::ui
                 right = std::max (right, d.x);
             }
 
+            if (toMaster)
+                left = 0.0f;   // master is pinned to the left: the cable runs off that way
+
             g.setColour (theme::accent.withAlpha (0.8f));
             g.drawLine (left, y, right, y, 1.5f);
+
+            if (toMaster)
+            {
+                Path head;   // an arrow out to the left, towards master
+                head.addTriangle (0.0f, y, 7.0f, y - 4.0f, 7.0f, y + 4.0f);
+                g.fillPath (head);
+            }
             g.fillEllipse (Rectangle<float> (7.0f, 7.0f).withCentre ({ sx, y }));   // where it comes from
             g.drawLine (sx, top, sx, y, 1.5f);
 
@@ -933,6 +950,10 @@ namespace carthage::ui
                 if (onStatus)
                     onStatus ("Takes now record through " + channel->getName());
             }
+            else if (onStatus)
+            {
+                onStatus ("One channel always takes record: choose another channel to move it there");
+            }
 
             refreshColumn();
         };
@@ -955,7 +976,17 @@ namespace carthage::ui
             if (channel == nullptr || id <= 0)
                 return;
 
+            if (id == sendsOnlyId)
+            {
+                editing::begin (session.getEdit(), "Main output off for " + channel->getName());
+                editing::setPlaysToOutput (*channel, false);
+                routesChanged();
+                return;
+            }
+
             const auto all = editing::channels (session.getEdit());
+            editing::begin (session.getEdit(), "Main output on for " + channel->getName());
+            editing::setPlaysToOutput (*channel, true);
             chooseOutput (*channel, id == 1 ? nullptr : all[id - 2]);
         };
 
@@ -995,6 +1026,9 @@ namespace carthage::ui
 
     void MixerView::valueTreePropertyChanged (ValueTree& tree, const Identifier& id)
     {
+        if (id == Identifier ("carthagePreMasterOn"))   // the Settings switch: the Pre-Master strip comes or goes
+            triggerRebuild();
+
         if (id == tracktion::IDs::enabled)   // a plugin bypassed or turned on (an undo, too)
             line->repaint();
 
@@ -1253,7 +1287,7 @@ namespace carthage::ui
 
     editing::ChannelInput MixerView::inputForId (int id)
     {
-        if (id <= 0) return {};
+        if (id <= 0 || id == idForInput ({})) return {};   // "No input" (found by the computer-use test)
         return { (id - 1) % 1000, id > 1000 };
     }
 
@@ -1406,7 +1440,7 @@ namespace carthage::ui
         hear.setToggleState (editing::isMonitoring (*channel), dontSendNotification);
         const auto records = channel == editing::recordChannel (edit);
         recordHere.setToggleState (records, dontSendNotification);
-        recordHere.setEnabled (! records && ! session.isRecording());   // one channel records: choose another to move it
+        recordHere.setEnabled (! session.isRecording());   // on stays on until another channel takes it
 
         columnName.setText (channel->getName(), dontSendNotification);
 
@@ -1418,8 +1452,10 @@ namespace carthage::ui
             if (all[i] != channel)
                 output.addItem (all[i]->getName(), i + 2);
 
+        output.addSeparator();
+        output.addItem ("Only its sends (main output off)", sendsOnlyId);
         auto* into = editing::outputOf (*channel);
-        output.setSelectedId (into != nullptr ? all.indexOf (into) + 2 : 1, dontSendNotification);
+        output.setSelectedId (! editing::playsToOutput (*channel) ? sendsOnlyId : into != nullptr ? all.indexOf (into) + 2 : 1, dontSendNotification);
 
         // What plays into it: the samples routed here, channels routed here, the live input.
         StringArray from;

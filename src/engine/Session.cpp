@@ -225,12 +225,14 @@ namespace carthage::engine
 
     void Session::setChannelInput (tracktion::AudioTrack& channel, editing::ChannelInput input)
     {
+        editing::begin (channel.edit, input.isSet() ? "Input for " + channel.getName() : "No input for " + channel.getName());
         editing::setInput (channel, input);
         applyInputRouting();
     }
 
     void Session::setChannelMonitoring (tracktion::AudioTrack& channel, bool on)
     {
+        editing::begin (channel.edit, (on ? "Hear the input on " : "Stop hearing the input on ") + channel.getName());
         editing::setMonitoring (channel, on);
         applyInputRouting();
     }
@@ -240,9 +242,25 @@ namespace carthage::engine
         if (projects.empty() || isRecording())
             return;
 
+        editing::begin (*front().edit, "Record through " + channel.getName());
         editing::setRecordChannel (*front().edit, channel);
         front().track = &channel;
         applyInputRouting();
+    }
+
+    juce::String Session::inputSignature (tracktion::Edit& edit)
+    {
+        // What the input routing depends on: every channel's input and hearing, and the record channel.
+        juce::String sig;
+
+        for (auto* ch : editing::channels (edit))
+            if (const auto in = editing::inputOf (*ch); in.isSet() || editing::isMonitoring (*ch))
+                sig << ch->itemID.toString() << ':' << in.firstChannel << (in.stereo ? 's' : 'm') << (editing::isMonitoring (*ch) ? 'h' : '-') << ';';
+
+        if (auto* rec = editing::recordChannel (edit))
+            sig << "rec " << rec->itemID.toString();
+
+        return sig;
     }
 
     tracktion::WaveInputDevice* Session::findWaveInput() const
@@ -670,6 +688,18 @@ namespace carthage::engine
     {
         // Clips moved, trimmed or undone take their envelopes with them (4e).
         editing::syncEnvelopes (*edit);
+
+        // An undo can bring back another record channel or other inputs: follow them (W51).
+        if (! session.projects.empty() && &session.front() == this)
+            if (const auto sig = inputSignature (*edit); sig != lastInputSignature)
+            {
+                lastInputSignature = sig;
+
+                if (auto* rec = editing::recordChannel (*edit); rec != nullptr && ! session.isRecording())
+                    track = rec;
+
+                session.applyInputRouting();
+            }
 
         // Lane mute and solo onto the carriers; only what could sound in the graph (W49).
         editing::syncMix (*edit, track);

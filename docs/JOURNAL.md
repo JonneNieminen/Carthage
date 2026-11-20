@@ -283,3 +283,16 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Wheel and zoom: ValueSlider::acceptsWheel gates the mixer's controls to the selected strip,
   passing the wheel to the parent (the viewport scrolls); Cmd+wheel and pinch zoom strip widths
   (0.75 to 2.5, kept in the settings).
+
+### 2026-11-20 (the owner's mixer list, tested by computer use)
+
+- A side session (mixer-checks) drove the app: plugin windows now stay open (the owner's bug is
+  gone); drag and drop, sends, Cmd-click, loop refusal, sidechain, wheel scrolling and playback
+  work. Found and fixed here: plugin windows inherited Carthage's 77.5 % interface scale (native
+  editors clipped/cramped; windows now report getDesktopScaleFactor 1, as JUCE's plugin host does);
+  the Pre-Master switch did not rebuild the mixer (and sat under Browser); inputs and the record
+  channel were outside undo (now named steps; the session re-applies routing after an undo when
+  `inputSignature` changes); one wheel tick per undo step (ValueSlider::onWheelStart); the column's
+  "No input" decoded as input 1 stereo; main output off still read "Master"; no cable to master;
+  Cmd+scroll over a fader moved it; the chooser did not say AU or VST3. Not fixed yet: the first
+  click back in the main window after a plugin window had focus is ignored (macOS window focus).

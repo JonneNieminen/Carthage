@@ -851,18 +851,19 @@ namespace carthage::editing
     {
         if (input.isSet())
         {
-            t.state.setProperty (inputProp, input.stereo ? (input.firstChannel & ~1) : input.firstChannel, nullptr);
-            t.state.setProperty (inputStereoProp, input.stereo, nullptr);
+            t.state.setProperty (inputProp, input.stereo ? (input.firstChannel & ~1) : input.firstChannel, undoOf (t.edit));
+            t.state.setProperty (inputStereoProp, input.stereo, undoOf (t.edit));
         }
         else
         {
-            t.state.removeProperty (inputProp, nullptr);
-            t.state.removeProperty (inputStereoProp, nullptr);
+            t.state.removeProperty (inputProp, undoOf (t.edit));
+            t.state.removeProperty (inputStereoProp, undoOf (t.edit));
+            t.state.setProperty (monitorProp, false, undoOf (t.edit));   // nothing left to hear
         }
     }
 
     bool isMonitoring (const AudioTrack& t)        { return flag (t, monitorProp); }
-    void setMonitoring (AudioTrack& t, bool on)    { t.state.setProperty (monitorProp, on, nullptr); }
+    void setMonitoring (AudioTrack& t, bool on)    { t.state.setProperty (monitorProp, on, undoOf (t.edit)); }
 
     AudioTrack* recordChannel (const Edit& edit)
     {
@@ -878,7 +879,7 @@ namespace carthage::editing
 
     void setRecordChannel (Edit& edit, AudioTrack& channel)
     {
-        lanesStateForWriting (edit).setProperty (recordChannelProp, channel.itemID.toString(), nullptr);
+        lanesStateForWriting (edit).setProperty (recordChannelProp, channel.itemID.toString(), undoOf (edit));
     }
 
     LevelMeterPlugin* peakMeterOf (AudioTrack& t)   { return meterIn (t.pluginList, "peak"); }

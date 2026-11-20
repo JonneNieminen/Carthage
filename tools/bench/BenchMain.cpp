@@ -141,6 +141,7 @@ namespace
             else if (args.command == "clip-envelope") result = clipEnvelope();
             else if (args.command == "clip-formant") result = clipFormant();
             else if (args.command == "overlap") result = overlap();
+            else if (args.command == "input-undo") result = inputUndo();
             else if (args.command == "plugin-window") result = pluginWindow();
             else if (args.command == "carrier") result = carrier();
             else if (args.command == "idle-mixer") result = idleMixer();
@@ -414,6 +415,27 @@ namespace
             check (moved (5.25) > 0.05f && moved (5.75) < 0.001f, "the envelope moves with the clip");
             say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
             return checksFailed == 0 ? 0 : 1;
+        }
+
+        /** Which input calls write into the undo history (computer-use test: unnamed "Change" steps). */
+        int inputUndo()
+        {
+            const auto probe = [this] (const String& what, std::function<void()> f)
+            {
+                const auto before = onMessageThread ([this] { auto& um = session->getEdit().getUndoManager(); um.clearUndoHistory(); return um.canUndo(); });
+                onMessageThreadVoid ([&] { f(); });
+                waitMs (300);
+                const auto after = onMessageThread ([this] { auto& um = session->getEdit().getUndoManager(); return um.canUndo() ? "UNDO STEP '" + um.getUndoDescription() + "'" : String ("no undo step"); });
+                say (what + ": " + after + (before ? " (history was not empty)" : ""));
+            };
+
+            auto* ch = onMessageThread ([this] { return carthage::editing::channels (session->getEdit())[3]; });
+            probe ("setChannelInput", [this, ch] { session->setChannelInput (*ch, { 0, false }); });
+            probe ("setChannelMonitoring on", [this, ch] { session->setChannelMonitoring (*ch, true); });
+            probe ("setRecordChannel", [this, ch] { session->setRecordChannel (*ch); });
+            probe ("setChannelInput none", [this, ch] { session->setChannelInput (*ch, {}); });
+            probe ("syncMix", [this] { carthage::editing::syncMix (session->getEdit(), &session->getTrack()); });
+            return 0;
         }
 
         /** A plugin's window stays open (owner, 2026-11-20: "it flashes and disappears"): inserts

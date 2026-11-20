@@ -31,6 +31,12 @@ namespace carthage::ui
 
         void closeButtonPressed() override   { if (onClosed) onClosed(); }
 
+        /** At the plugin's own size, whatever Carthage's interface size (W38): Carthage scales its
+            windows by a global factor, which native plugin editors do not follow, so at 125 %
+            they came out clipped or cramped (found by the computer-use test, 2026-11-20). JUCE's
+            own plugin host does the same. */
+        float getDesktopScaleFactor() const override   { return 1.0f; }
+
         tracktion::Plugin::Ptr plugin;
 
     private:
@@ -151,10 +157,11 @@ namespace carthage::ui
 
         g.setColour (theme::text);
         g.setFont (theme::uiFont());
-        g.drawText (d.name, theme::space2, 0, width - 120, height, Justification::centredLeft, true);
+        g.drawText (d.name, theme::space2, 0, width - 160, height, Justification::centredLeft, true);
         g.setColour (theme::muted);
         g.setFont (theme::uiFont (theme::textSm));
-        g.drawText (d.manufacturerName, width - 116, 0, 112, height, Justification::centredRight, true);
+        const auto format = d.pluginFormatName == "AudioUnit" ? String ("AU") : d.pluginFormatName;   // two of one plugin: which is which
+        g.drawText (d.manufacturerName + String::fromUTF8 (" \xc2\xb7 ") + format, width - 156, 0, 152, height, Justification::centredRight, true);
     }
 
     void PluginChooser::resized()

@@ -147,9 +147,14 @@ namespace carthage::ui
             selected channel's controls take it; elsewhere it scrolls, W51). */
         std::function<bool()> acceptsWheel;
 
+        /** Called when the wheel starts moving it after a pause: a wheel gesture is one undo step,
+            as a drag is (onDragStart), not one per tick (computer-use test, 2026-11-20). */
+        std::function<void()> onWheelStart;
+
         void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override
         {
-            if (acceptsWheel != nullptr && ! acceptsWheel())
+            // Cmd+wheel belongs to the parent (the mixer zooms) when the wheel is gated.
+            if (acceptsWheel != nullptr && (! acceptsWheel() || e.mods.isCommandDown()))
             {
                 if (auto* parent = getParentComponent())   // on to the parent: the mixer scrolls
                     parent->mouseWheelMove (e.getEventRelativeTo (parent), wheel);
@@ -157,6 +162,11 @@ namespace carthage::ui
                 return;
             }
 
+            if (const auto now = juce::Time::getMillisecondCounter(); now - lastWheel > 600)
+                if (onWheelStart != nullptr)
+                    onWheelStart();
+
+            lastWheel = juce::Time::getMillisecondCounter();
             auto w = wheel;
 
             if (e.mods.isShiftDown())
@@ -172,6 +182,9 @@ namespace carthage::ui
 
             juce::Slider::mouseWheelMove (e, w);
         }
+
+    private:
+        juce::uint32 lastWheel = 0;
     };
 
     /** The audio-thread load: a thin bar and a figure. Turns warn above 70 %, clip above 90 %. */

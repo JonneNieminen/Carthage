@@ -66,6 +66,12 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   its name. Settings > Browser can fit a dropped loop to the project's tempo.
 
 ### Changed
+- Plugin windows open at the plugin's own size whatever the interface size (they were shrunk with
+  it, clipping or cramping the editor). The plugin list shows AU or VST3 beside each name.
+- Choosing a channel's input, hearing it and the channel that takes record are undo steps; a wheel
+  gesture on a fader or knob is one undo step. "No input" works from the mixer's column and turns
+  hearing off; a channel playing only into its sends says so; Cmd+scroll zooms the strips anywhere.
+- The Pre-Master switch has its own Mixer section in Settings and shows or hides the strip at once.
 - Shift with a mouse wheel scrolls the lanes in time on macOS; the time scrollbar starts at the
   lane names' border; a fade past the waveform's edge no longer draws over the editor's controls.
 - A reversed sample is drawn reversed, in the sample editor and on the lanes; its shape points

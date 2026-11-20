@@ -224,11 +224,13 @@ public:
             expect (! editing::inputOf (*chs[3]).isSet(), "no input until chosen");
             um.clearUndoHistory();   // earlier routing calls here ran outside a named step
 
+            editing::begin (*edit, "Input");
             editing::setInput (*chs[3], { 2, false });
             editing::setMonitoring (*chs[3], true);
             expect (editing::inputOf (*chs[3]) == editing::ChannelInput { 2, false });
             expect (editing::isMonitoring (*chs[3]));
 
+            editing::begin (*edit, "Input");
             editing::setInput (*chs[4], { 3, true });
             expect (editing::inputOf (*chs[4]) == editing::ChannelInput { 2, true }, "a stereo pair starts on its even input");
 
@@ -237,14 +239,21 @@ public:
             expect (! chs[4]->isProcessing (false), "one not hearing it is not (nothing else plays through it)");
 
             expect (editing::recordChannel (*edit) == chs[0], "takes record through the first channel by default");
+            editing::begin (*edit, "Record through");
             editing::setRecordChannel (*edit, *chs[3]);
             expect (editing::recordChannel (*edit) == chs[3]);
-            expect (! um.canUndo(), "inputs, monitoring, the record channel and syncing are not undo steps");
 
+            // Every edit can be undone (computer-use test: inputs and the record channel could not).
+            um.undo();
+            expect (editing::recordChannel (*edit) == chs[0], "undo brings the record channel back");
+            um.undo();
+            expect (! editing::inputOf (*chs[4]).isSet(), "and the next undo takes back the last input chosen");
+            expect (editing::inputOf (*chs[3]).isSet(), "one step at a time");
+
+            editing::begin (*edit, "No input");
             editing::setInput (*chs[3], {});
+            expect (! editing::isMonitoring (*chs[3]), "no input: nothing left to hear");
             editing::setInput (*chs[4], {});
-            editing::setMonitoring (*chs[3], false);
-            editing::setRecordChannel (*edit, *chs[0]);
         }
 
         beginTest ("Sends: several destinations, levels, no loops, main output off (W51)");

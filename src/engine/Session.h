@@ -261,6 +261,10 @@ namespace carthage::engine
 
         /** The channel takes record through (the armed one); getTrack() returns it. */
         void setRecordChannel (tracktion::AudioTrack&);
+
+        /** Every channel's input and hearing and the record channel, as one string: an undo that
+            changes it puts the input routing back into effect. */
+        static juce::String inputSignature (tracktion::Edit&);
         bool isMonitoring() const noexcept          { return monitoring; }
 
         //==========================================================================================
@@ -362,7 +366,8 @@ namespace carthage::engine
 
             Session& session;
             std::unique_ptr<tracktion::Edit> edit;
-            tracktion::AudioTrack* track = nullptr;   // the first lane: the input and its takes
+            tracktion::AudioTrack* track = nullptr;   // the record channel: its input makes the takes
+            juce::String lastInputSignature;          // what the input routing was last set from
             juce::File file, recordings;
             project::Info info;
             bool untitled = true, recovered = false;
