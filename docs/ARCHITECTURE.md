@@ -90,6 +90,30 @@ packaging/           macos/ (sign.sh, make-dmg.sh, read-me), windows/ (Carthage.
   hold-to-switch (F7). Keys are written platform-neutrally (primary modifier = Cmd on macOS, Ctrl on
   Windows) and never hard-coded in UI text.
 
+### Phase 5a: lanes, channels and carriers (W47, W49)
+
+The mapping onto Tracktion that F5 asked to be written down once proven:
+
+- **A channel** is a Tracktion `AudioTrack` marked `carthageRole="channel"`, with its fader and meter
+  (Tracktion's default plugins) and its insert Line. It holds no clips. Its output goes to master or
+  to another channel (`setOutputToTrack`); a route that would loop back is refused (`editing::setOutput`).
+- **A lane** is not a track: it is a `LANE` child of the edit's `CARTHAGELANES` (id, name, colour,
+  height, mute, solo), edited with undo; mute and solo stay outside undo.
+- **A carrier** is a hidden `AudioTrack` (`carthageRole="carrier"`, `carthageLane=<id>`, no plugins)
+  holding one lane's clips that play through one route; it outputs into its channel, or to master.
+  Carriers keep Tracktion's automatic crossfades within a lane, and lane mute and solo mute them.
+  `editing::carrierFor` makes one when a clip first needs it.
+- **Routing is per sample** (`editing::routeSample`): every clip of a sample moves to its lane's
+  carrier for the new route. A new sound plays to master until routed.
+- **Only what could sound is in the graph** (`editing::syncMix`, run by the session after every edit
+  and undo): a carrier with clips; a channel with sound playing into it, plugins of its own or the
+  live input. 50 empty channels cost nothing measurable (`carthage-bench idle-mixer`). The flags are
+  written outside undo (see `setProcessing` in `engine/Mixer.cpp` for Tracktion's quirk).
+- **The live input** plays through channel 1, whose insert Line is the phase 1 input chain; takes go
+  to the recording lane's carrier for channel 1.
+- **Older projects** (before 5a) open with each old lane track turned into the carrier of lane n
+  playing into channel n, so they sound the same (`editing::prepareMix`).
+
 ### Phase 4a: the timeline, its edits and the project file
 
 - **Lanes.** In 4a each lane is a Tracktion `AudioTrack` that holds clips and no plugins; the phase 1

@@ -207,6 +207,7 @@ namespace carthage::ui
             g.fillRect (getWidth() - 1, 0, 1, getHeight());
 
             const auto tracks = timeline.laneTracks();
+            const auto byLane = editing::clipsByLane (timeline.session.getEdit());
 
             for (int i = 0; i < tracks.size(); ++i)
             {
@@ -215,9 +216,9 @@ namespace carthage::ui
                 if (row.getBottom() < 0 || row.getY() > getHeight())
                     continue;
 
-                auto* lane = tracks[i];
+                const auto& lane = tracks.getReference (i);
 
-                if (lane->itemID == timeline.currentLane)
+                if (lane.id() == timeline.currentLane)
                 {
                     g.setColour (theme::hover);   // the current lane: ⌥⌘N adds below it, ⌘↑/↓ move it
                     g.fillRect (row);
@@ -227,26 +228,26 @@ namespace carthage::ui
                 g.fillRect (row.withTop (row.getBottom() - (borderUnderPointer == i ? 2 : 1)));
 
                 const auto parts = partsOf (row);
-                g.setColour (timeline.laneColour (i).withMultipliedAlpha (lane->isMuted (false) ? 0.35f : 1.0f));
+                g.setColour (timeline.laneColour (i).withMultipliedAlpha (lane.isMuted() ? 0.35f : 1.0f));
                 g.fillRoundedRectangle (parts.colourBar.toFloat(), 2.0f);
 
-                if (! (renaming == lane->itemID && nameEditor.isVisible()))
+                if (! (renaming == lane.id() && nameEditor.isVisible()))
                 {
-                    g.setColour (lane->isMuted (false) ? theme::muted : theme::text);
+                    g.setColour (lane.isMuted() ? theme::muted : theme::text);
                     g.setFont (theme::denseFont (theme::textMd, true));
-                    g.drawText (lane->getName(), parts.name, Justification::centredLeft, true);
+                    g.drawText (lane.getName(), parts.name, Justification::centredLeft, true);
                 }
 
-                pill (g, parts.mute, "M", lane->isMuted (false), theme::warn);
-                pill (g, parts.solo, "S", lane->isSolo (false), theme::ok);
+                pill (g, parts.mute, "M", lane.isMuted(), theme::warn);
+                pill (g, parts.solo, "S", lane.isSoloed(), theme::ok);
 
                 if (parts.detail.getHeight() < 14)
                     continue;   // short lanes show the name only
 
                 g.setColour (theme::muted);
                 g.setFont (theme::denseFont (theme::textSm));
-                const auto count = lane->getClips().size();
-                const auto recordsHere = lane == &timeline.session.getTrack();
+                const auto count = byLane[static_cast<size_t> (i)].size();
+                const auto recordsHere = lane == editing::recordingLane (timeline.session.getEdit());
                 auto detail = count == 0 ? String ("Empty") : String (count) + (count == 1 ? " clip" : " clips");
                 if (recordsHere) detail << ", records";
                 g.drawText (detail, parts.detail, Justification::centredLeft, true);
@@ -256,7 +257,7 @@ namespace carthage::ui
         void mouseDown (const MouseEvent& e) override
         {
             resizing = -1;
-            moving = {};
+            moving = 0;
             dropIndex = -1;
 
             if (const auto border = borderAt (e.y); border >= 0 && ! e.mods.isPopupMenu())
@@ -266,35 +267,38 @@ namespace carthage::ui
                 return;
             }
 
-            auto* lane = laneAt (e.y);
+            const auto lane = laneAt (e.y);
 
-            if (lane == nullptr)
+            if (! lane.isValid())
                 return;
 
-            timeline.currentLane = lane->itemID;
+            auto& edit = timeline.session.getEdit();
+            timeline.currentLane = lane.id();
             repaint();
             const auto parts = partsOf (rowBounds (timeline.laneTracks().indexOf (lane)));
 
             if (e.mods.isPopupMenu())
-                showMenu (*lane);
+                showMenu (lane);
             else if (parts.mute.contains (e.getPosition()))
-                e.mods.isCommandDown() ? editing::muteOthers (*lane) : editing::setLaneMuted (*lane, ! lane->isMuted (false));
+                e.mods.isCommandDown() ? editing::muteOthers (edit, lane) : editing::setLaneMuted (edit, lane, ! lane.isMuted());
             else if (parts.solo.contains (e.getPosition()))
-                e.mods.isCommandDown() ? editing::soloAlone (*lane) : editing::setLaneSoloed (*lane, ! lane->isSolo (false));
+                e.mods.isCommandDown() ? editing::soloAlone (edit, lane) : editing::setLaneSoloed (edit, lane, ! lane.isSoloed());
             else
-                moving = lane->itemID;   // a drag moves the lane
+                moving = lane.id();   // a drag moves the lane
+
+            timeline.repaintLanes();   // mute and solo dim the lane's clips
         }
 
         void mouseDrag (const MouseEvent& e) override
         {
             if (resizing >= 0)
             {
-                if (auto* lane = timeline.laneTracks()[resizing])
-                    timeline.setLaneOwnHeight (*lane, heightAtStart + e.getDistanceFromDragStartY());
+                if (const auto lane = timeline.laneTracks()[resizing]; lane.isValid())
+                    timeline.setLaneOwnHeight (lane, heightAtStart + e.getDistanceFromDragStartY());
                 return;
             }
 
-            if (moving == tracktion::EditItemID() || std::abs (e.getDistanceFromDragStartY()) < 4)
+            if (moving == 0 || std::abs (e.getDistanceFromDragStartY()) < 4)
                 return;
 
             // The gap the lane would go into: before the lane under the pointer's upper half,
@@ -314,19 +318,19 @@ namespace carthage::ui
             {
                 const auto tracks = timeline.laneTracks();
 
-                for (auto* t : tracks)
+                for (int from = 0; from < tracks.size(); ++from)
                 {
-                    if (t->itemID == moving)
+                    if (tracks.getReference (from).id() == moving)
                     {
-                        const auto from = tracks.indexOf (t);
-                        editing::moveLane (*t, dropIndex > from ? dropIndex - 1 : dropIndex);   // the gap counts the lane itself
+                        editing::moveLane (timeline.session.getEdit(), tracks.getReference (from),
+                                           dropIndex > from ? dropIndex - 1 : dropIndex);   // the gap counts the lane itself
                         break;
                     }
                 }
             }
 
             resizing = -1;
-            moving = {};
+            moving = 0;
             dropIndex = -1;
             setMouseCursor (MouseCursor::NormalCursor);
             repaint();
@@ -336,17 +340,17 @@ namespace carthage::ui
         {
             if (const auto border = borderAt (e.y); border >= 0)
             {
-                if (auto* lane = timeline.laneTracks()[border])
-                    timeline.setLaneOwnHeight (*lane, std::nullopt);   // back to the default
+                if (const auto lane = timeline.laneTracks()[border]; lane.isValid())
+                    timeline.setLaneOwnHeight (lane, std::nullopt);   // back to the default
                 return;
             }
 
-            if (auto* lane = laneAt (e.y))
+            if (const auto lane = laneAt (e.y); lane.isValid())
             {
                 const auto parts = partsOf (rowBounds (timeline.laneTracks().indexOf (lane)));
 
                 if (! parts.mute.contains (e.getPosition()) && ! parts.solo.contains (e.getPosition()))
-                    startRename (*lane);
+                    startRename (lane);
             }
         }
 
@@ -374,9 +378,9 @@ namespace carthage::ui
         String getTooltip() override
         {
             const auto pos = getMouseXYRelative();
-            auto* lane = laneAt (pos.y);
+            const auto lane = laneAt (pos.y);
 
-            if (lane == nullptr)
+            if (! lane.isValid())
                 return {};
 
             const auto parts = partsOf (rowBounds (timeline.laneTracks().indexOf (lane)));
@@ -384,15 +388,15 @@ namespace carthage::ui
             const auto cmd = String (app::commands::commandName);
 
             if (borderAt (pos.y) >= 0)      return "Drag to make this lane taller or shorter; double-click for the default height";
-            if (parts.mute.contains (pos))  return (lane->isMuted (false) ? "Unmute this lane" : "Mute this lane") + String (". ") + cmd + "-click: mute every other lane; again: every lane plays";
-            if (parts.solo.contains (pos))  return (lane->isSolo (false) ? "Stop soloing this lane" : "Solo this lane") + String (". ") + cmd + "-click: this lane alone; again: no solo";
+            if (parts.mute.contains (pos))  return (lane.isMuted() ? "Unmute this lane" : "Mute this lane") + String (". ") + cmd + "-click: mute every other lane; again: every lane plays";
+            if (parts.solo.contains (pos))  return (lane.isSoloed() ? "Stop soloing this lane" : "Solo this lane") + String (". ") + cmd + "-click: this lane alone; again: no solo";
             return "Click to make it the current lane, drag to move it, double-click to rename; right-click for more";
         }
 
-        void startRename (tracktion::AudioTrack& lane)
+        void startRename (const editing::Lane& lane)
         {
-            renaming = lane.itemID;
-            const auto parts = partsOf (rowBounds (timeline.laneTracks().indexOf (&lane)));
+            renaming = lane.id();
+            const auto parts = partsOf (rowBounds (timeline.laneTracks().indexOf (lane)));
             nameEditor.setBounds (parts.name.expanded (2, 1));
             nameEditor.setText (lane.getName(), false);
             nameEditor.setVisible (true);
@@ -407,12 +411,12 @@ namespace carthage::ui
     private:
         Timeline& timeline;
         TextEditor nameEditor;
-        tracktion::EditItemID renaming;
+        int renaming = 0;   // a lane's id
 
         struct Parts { Rectangle<int> colourBar, name, mute, solo, detail; };
 
         int resizing = -1, heightAtStart = 0, dropIndex = -1, borderUnderPointer = -1;
-        tracktion::EditItemID moving;
+        int moving = 0;   // the dragged lane's id
 
         /** The lane whose bottom border is within 3 px of `y`, or -1. */
         int borderAt (int y) const
@@ -471,20 +475,16 @@ namespace carthage::ui
             g.drawText (letter, r, Justification::centred, false);
         }
 
-        tracktion::AudioTrack* laneAt (int y) const
+        editing::Lane laneAt (int y) const
         {
             const auto tracks = timeline.laneTracks();
             const auto index = timeline.laneIndexAt (y + timeline.scrollY);
-            return y >= 0 && index < tracks.size() ? tracks[index] : nullptr;
+            return y >= 0 && index < tracks.size() ? tracks[index] : editing::Lane();
         }
 
-        tracktion::AudioTrack* renamingLane() const
+        editing::Lane renamingLane() const
         {
-            for (auto* t : timeline.laneTracks())
-                if (t->itemID == renaming)
-                    return t;
-
-            return nullptr;
+            return editing::laneWithID (timeline.session.getEdit(), renaming);
         }
 
         void finishRename (bool keep)
@@ -494,30 +494,32 @@ namespace carthage::ui
 
             nameEditor.setVisible (false);   // first: committing repaints, and focus moves on
 
-            if (auto* lane = renamingLane(); lane != nullptr && keep)
-                editing::renameLane (*lane, nameEditor.getText());
+            if (const auto lane = renamingLane(); lane.isValid() && keep)
+                editing::renameLane (timeline.session.getEdit(), lane, nameEditor.getText());
 
-            renaming = {};
+            renaming = 0;
             repaint();
         }
 
-        void showMenu (tracktion::AudioTrack& lane)
+        void showMenu (const editing::Lane& lane)
         {
-            auto& recordLane = timeline.session.getTrack();
-            const auto deletable = editing::canDeleteLane (lane, recordLane);
-            const tracktion::AudioTrack::Ptr held (&lane);
+            auto& edit = timeline.session.getEdit();
+            const auto recordsHere = lane == editing::recordingLane (edit);
+            const auto deletable = editing::canDeleteLane (edit, lane);
+            const auto& held = lane;   // a handle on its state: each action keeps its own copy
+            auto* editPtr = &edit;
 
             PopupMenu m;
-            m.addItem ("Rename", [this, held] { startRename (*held); });
-            m.addItem (lane.isMuted (false) ? "Unmute" : "Mute", [held] { editing::setLaneMuted (*held, ! held->isMuted (false)); });
-            m.addItem (lane.isSolo (false) ? "Stop soloing" : "Solo", [held] { editing::setLaneSoloed (*held, ! held->isSolo (false)); });
+            m.addItem ("Rename", [this, held] { startRename (held); });
+            m.addItem (lane.isMuted() ? "Unmute" : "Mute", [this, editPtr, held] { editing::setLaneMuted (*editPtr, held, ! held.isMuted()); repaint(); timeline.repaintLanes(); });
+            m.addItem (lane.isSoloed() ? "Stop soloing" : "Solo", [this, editPtr, held] { editing::setLaneSoloed (*editPtr, held, ! held.isSoloed()); repaint(); timeline.repaintLanes(); });
             // Colours: the theme's own, each named and shown in itself.
             PopupMenu colours;
             const std::pair<const char*, const Colour*> named[] = { { "Sky", &theme::laneSky }, { "Tide", &theme::laneTide }, { "Kelp", &theme::laneKelp },
                                                                     { "Sand", &theme::laneSand }, { "Coral", &theme::laneCoral }, { "Murex", &theme::laneMurex },
                                                                     { "Rose", &theme::laneRose }, { "Slate", &theme::laneSlate } };
             const auto current = lane.state[laneColourProp].toString();
-            colours.addItem ("Automatic (by its place)", true, current.isEmpty(), [this, held] { timeline.setLaneColour (*held, std::nullopt); });
+            colours.addItem ("Automatic (by its place)", true, current.isEmpty(), [this, held] { timeline.setLaneColour (held, std::nullopt); });
             colours.addSeparator();
 
             for (const auto& [label, colour] : named)
@@ -525,7 +527,7 @@ namespace carthage::ui
                 PopupMenu::Item item (label);
                 item.colour = *colour;
                 item.isTicked = current == colour->toString();
-                item.action = [this, held, c = *colour] { timeline.setLaneColour (*held, c); };
+                item.action = [this, held, c = *colour] { timeline.setLaneColour (held, c); };
                 colours.addItem (item);
             }
 
@@ -533,13 +535,13 @@ namespace carthage::ui
             m.addSeparator();
             PopupMenu add;
             for (int n : { 1, 2, 4, 8 })
-                add.addItem (n == 1 ? String ("1 lane") : String (n) + " lanes", [this, held, n] { timeline.addLane (held.get(), n); });
+                add.addItem (n == 1 ? String ("1 lane") : String (n) + " lanes", [this, held, n] { timeline.addLane (held, n); });
             m.addSubMenu ("Add lanes below", add);
-            m.addItem (&lane == &recordLane ? "Delete lane (the input records here)" : "Delete lane", deletable, false, [this, held]
+            m.addItem (recordsHere ? "Delete lane (the input records here)" : "Delete lane", deletable, false, [this, editPtr, held]
             {
-                const auto name = held->getName();
+                const auto name = held.getName();
                 timeline.selected.clearQuick();
-                editing::deleteLane (*held);
+                editing::deleteLane (*editPtr, held);
 
                 if (timeline.onStatus)
                     timeline.onStatus ("Deleted " + name + ". Undo brings it back.");
@@ -632,6 +634,7 @@ namespace carthage::ui
             }
 
             const auto tracks = timeline.laneTracks();
+            const auto byLane = editing::clipsByLane (timeline.session.getEdit());
 
             for (int i = 0; i < tracks.size(); ++i)
             {
@@ -644,11 +647,13 @@ namespace carthage::ui
                 g.setColour (theme::line);
                 g.fillRect (clip.getX(), y + h - 1, clip.getWidth(), 1);
 
-                for (auto* c : tracks[i]->getClips())
-                    paintClip (g, *c, i, y, first, last);
+                const auto silenced = tracks.getReference (i).isMuted() || (anySolo (tracks) && ! tracks.getReference (i).isSoloed());
+
+                for (auto* c : byLane[static_cast<size_t> (i)])
+                    paintClip (g, *c, i, y, first, last, silenced);
             }
 
-            if (tracks.size() == 1 && tracks.getFirst()->getClips().isEmpty())
+            if (tracks.size() == 1 && byLane.front().isEmpty())
             {
                 g.setColour (theme::muted);
                 g.setFont (theme::uiFont());
@@ -660,7 +665,13 @@ namespace carthage::ui
         Timeline& timeline;
         Array<AudioThumbnail*> watched;
 
-        void paintClip (Graphics& g, tracktion::Clip& c, int lane, int laneY, double firstBeat, double lastBeat)
+        static bool anySolo (const Array<editing::Lane>& all)
+        {
+            return std::any_of (all.begin(), all.end(), [] (const editing::Lane& l) { return l.isSoloed(); });
+        }
+
+        /** `silenced`: its lane is muted, or another is soloed; it is drawn as a muted clip. */
+        void paintClip (Graphics& g, tracktion::Clip& c, int lane, int laneY, double firstBeat, double lastBeat, bool silenced)
         {
             const auto pos = c.getPosition();
             const auto startBeat = timeline.secondsToBeats (pos.getStart().inSeconds());
@@ -674,7 +685,7 @@ namespace carthage::ui
             const auto x1 = timeline.xAtBeat (endBeat) - static_cast<float> (getX());
             const Rectangle<float> body (x0, static_cast<float> (laneY + 3), std::max (2.0f, x1 - x0), static_cast<float> (timeline.heightOfLane (lane) - 7));
 
-            const bool muted = c.disabled.get();
+            const bool muted = c.disabled.get() || silenced;
             // Solid, so a clip laid over another hides it (its name and waveform would read
             // through a see-through body); the same tint the lane's well would show through it.
             g.setColour (theme::well.interpolatedWith (colour, muted ? 0.06f : 0.16f));
@@ -801,7 +812,7 @@ namespace carthage::ui
             if (lane < 0 || lane >= lanesList.size())
                 return {};
 
-            for (auto* c : lanesList[lane]->getClips())
+            for (auto* c : editing::clipsOn (timeline.session.getEdit(), lanesList[lane]))
             {
                 const auto x0 = timeline.xAtBeat (editing::startBeat (*c)) - static_cast<float> (getX());
                 const auto x1 = timeline.xAtBeat (editing::endBeat (*c)) - static_cast<float> (getX());
@@ -920,7 +931,7 @@ namespace carthage::ui
                         if (auto* source = clipFor (timeline.brush))
                         {
                             begin ("Place clip");
-                            if (auto* placed = editing::placeCopy (*source, *lanesList[anchorLane], std::max (0.0, snapped (anchorBeat, bypass, {}))))
+                            if (auto* placed = editing::placeCopy (*source, lanesList[anchorLane], std::max (0.0, snapped (anchorBeat, bypass, {}))))
                                 timeline.selectOnly ({ placed });
                             used();
                             return;
@@ -990,7 +1001,7 @@ namespace carthage::ui
                     begin (timeline.tool == Tool::draw ? "Draw clip" : "Paint clips");
                     const auto at = std::max (0.0, snapped (anchorBeat, bypass, {}));
 
-                    if (auto* placed = editing::placeCopy (*source, *lanesList[anchorLane], at))
+                    if (auto* placed = editing::placeCopy (*source, lanesList[anchorLane], at))
                     {
                         lastPaintEnd = editing::endBeat (*placed);
                         timeline.selectOnly ({ placed });
@@ -1156,7 +1167,7 @@ namespace carthage::ui
                     // Copies one after another, as far as the pointer has gone.
                     while (source != nullptr && beat >= lastPaintEnd)
                     {
-                        auto* placed = editing::placeCopy (*source, *timeline.laneTracks()[lane], lastPaintEnd);
+                        auto* placed = editing::placeCopy (*source, timeline.laneTracks()[lane], lastPaintEnd);
                         if (placed == nullptr) break;
                         lastPaintEnd = editing::endBeat (*placed);
                         used();
@@ -1197,7 +1208,7 @@ namespace carthage::ui
                 if (y + timeline.heightOfLane (i) < marquee.getY() || y > marquee.getBottom())
                     continue;
 
-                for (auto* c : lanesList[i]->getClips())
+                for (auto* c : editing::clipsOn (timeline.session.getEdit(), lanesList[i]))
                 {
                     const auto x0 = timeline.xAtBeat (editing::startBeat (*c)) - static_cast<float> (getX());
                     const auto x1 = timeline.xAtBeat (editing::endBeat (*c)) - static_cast<float> (getX());
@@ -1347,7 +1358,7 @@ namespace carthage::ui
             auto beat = dropBeat;
 
             for (const auto& f : dropping)
-                if (auto* c = editing::insertFile (*tracks[dropLane], f, beat))
+                if (auto* c = editing::insertFile (edit, tracks[dropLane], f, beat))
                 {
                     // A loop of known tempo can follow the project's: always with Settings > Browser,
                     // or this once with Option held while dropping (4e).
@@ -1555,30 +1566,31 @@ namespace carthage::ui
     }
 
     //==============================================================================================
-    Array<tracktion::AudioTrack*> Timeline::laneTracks() const
+    Array<editing::Lane> Timeline::laneTracks() const
     {
-        return tracktion::getAudioTracks (session.getEdit());
+        return editing::lanes (session.getEdit());
     }
 
     Colour Timeline::laneColour (int laneIndex) const
     {
         // The lane's own choice, else the palette by position.
         if (const auto tracks = laneTracks(); laneIndex >= 0 && laneIndex < tracks.size())
-            if (const auto chosen = tracks[laneIndex]->state[laneColourProp].toString(); chosen.isNotEmpty())
+            if (const auto chosen = tracks.getReference (laneIndex).state[laneColourProp].toString(); chosen.isNotEmpty())
                 return Colour::fromString (chosen);
 
         return *laneColours[static_cast<size_t> (laneIndex) % std::size (laneColours)];
     }
 
-    void Timeline::setLaneColour (tracktion::AudioTrack& lane, std::optional<Colour> colour)
+    void Timeline::setLaneColour (const editing::Lane& lane, std::optional<Colour> colour)
     {
-        auto& um = lane.edit.getUndoManager();
+        auto& um = session.getEdit().getUndoManager();
         um.beginNewTransaction ("Lane colour");
+        auto state = lane.state;
 
         if (colour)
-            lane.state.setProperty (laneColourProp, colour->toString(), &um);
+            state.setProperty (laneColourProp, colour->toString(), &um);
         else
-            lane.state.removeProperty (laneColourProp, &um);
+            state.removeProperty (laneColourProp, &um);
     }
 
     double Timeline::secondsToBeats (double seconds) const
@@ -1639,13 +1651,9 @@ namespace carthage::ui
         return *slot;
     }
 
-    tracktion::AudioTrack* Timeline::findCurrentLane() const
+    editing::Lane Timeline::findCurrentLane() const
     {
-        for (auto* t : laneTracks())
-            if (t->itemID == currentLane)
-                return t;
-
-        return nullptr;
+        return editing::laneWithID (session.getEdit(), currentLane);
     }
 
     std::optional<engine::SampleLibrary::Analysis> Timeline::analysisFor (const File& file)
@@ -1702,22 +1710,22 @@ namespace carthage::ui
 
     void Timeline::moveCurrentLane (int delta)
     {
-        auto* lane = findCurrentLane();
+        const auto lane = findCurrentLane();
 
-        if (lane == nullptr)
+        if (! lane.isValid())
         {
             if (onStatus) onStatus ("Click a lane's name first, then move it");
             return;
         }
 
-        editing::moveLane (*lane, laneTracks().indexOf (lane) + delta);
+        editing::moveLane (session.getEdit(), lane, laneTracks().indexOf (lane) + delta);
     }
 
-    void Timeline::addLane (tracktion::AudioTrack* after, int count)
+    void Timeline::addLane (const editing::Lane& after, int count)
     {
-        auto* lane = editing::addLanes (session.getEdit(), count, after);
+        const auto lane = editing::addLanes (session.getEdit(), count, after);
 
-        if (lane == nullptr)
+        if (! lane.isValid())
             return;
 
         // Bring the new lane into view.
@@ -1732,10 +1740,10 @@ namespace carthage::ui
             resized();
         }
 
-        currentLane = lane->itemID;
+        currentLane = lane.id();
 
         if (onStatus)
-            onStatus (count == 1 ? "Added " + lane->getName() + ". Double-click its name to rename it."
+            onStatus (count == 1 ? "Added " + lane.getName() + ". Double-click its name to rename it."
                                  : "Added " + String (count) + " lanes");
     }
 
@@ -1791,8 +1799,7 @@ namespace carthage::ui
     {
         time::SnapTargets t;
 
-        for (auto* track : laneTracks())
-            for (auto* c : track->getClips())
+        for (auto* c : editing::allClips (session.getEdit()))
                 if (! excluding.contains (c))
                 {
                     t.clipEdges.push_back (editing::startBeat (*c));
@@ -1811,8 +1818,7 @@ namespace carthage::ui
         auto clips = getSelectedClips();
 
         if (clips.isEmpty())   // nothing selected: every clip under the playhead
-            for (auto* t : laneTracks())
-                for (auto* c : t->getClips())
+            for (auto* c : editing::allClips (session.getEdit()))
                     if (editing::startBeat (*c) < playheadBeat() && editing::endBeat (*c) > playheadBeat())
                         clips.add (c);
 
@@ -1947,8 +1953,7 @@ namespace carthage::ui
         // Time: the content runs to the last clip plus some room, or at least what is in view.
         double endBeat = 0.0;
 
-        for (auto* t : laneTracks())
-            for (auto* c : t->getClips())
+        for (auto* c : editing::allClips (session.getEdit()))
                 endBeat = std::max (endBeat, secondsToBeats (c->getPosition().getEnd().inSeconds()));
 
         const auto viewBeats = lanesArea().getWidth() / pixelsPerBeat;
@@ -2025,9 +2030,9 @@ namespace carthage::ui
             tops.reserve (static_cast<size_t> (tracks.size()) + 1);
             tops.push_back (0);
 
-            for (auto* t : tracks)
+            for (const auto& t : tracks)
             {
-                const auto& state = t->state;
+                const auto& state = t.state;
                 const auto h = state.hasProperty (laneHeightProp) ? std::clamp (static_cast<int> (state[laneHeightProp]), minLaneHeight, maxLaneHeight)
                                                                   : laneHeight;
                 tops.push_back (tops.back() + h);
@@ -2072,12 +2077,14 @@ namespace carthage::ui
         return static_cast<int> (std::distance (t.begin(), above)) - 1;
     }
 
-    void Timeline::setLaneOwnHeight (tracktion::AudioTrack& lane, std::optional<int> height)
+    void Timeline::setLaneOwnHeight (const editing::Lane& lane, std::optional<int> height)
     {
+        auto state = lane.state;
+
         if (height)
-            lane.state.setProperty (laneHeightProp, std::clamp (*height, minLaneHeight, maxLaneHeight), nullptr);
+            state.setProperty (laneHeightProp, std::clamp (*height, minLaneHeight, maxLaneHeight), nullptr);
         else
-            lane.state.removeProperty (laneHeightProp, nullptr);
+            state.removeProperty (laneHeightProp, nullptr);
 
         updateScrollBars();
         repaintLanes();
@@ -2089,8 +2096,8 @@ namespace carthage::ui
         // The row's fixed parts (paddings, colour bar, M and S) plus the longest name.
         int widest = 0;
 
-        for (auto* t : laneTracks())
-            widest = std::max (widest, GlyphArrangement::getStringWidthInt (theme::denseFont (theme::textMd, true), t->getName()));
+        for (const auto& t : laneTracks())
+            widest = std::max (widest, GlyphArrangement::getStringWidthInt (theme::denseFont (theme::textMd, true), t.getName()));
 
         return widest + 2 * theme::space3 + 4 + theme::space2 + 2 * 20 + 2 * theme::space1 + 2;
     }
@@ -2119,9 +2126,9 @@ namespace carthage::ui
         laneHeight = newHeight;
         tops.clear();
 
-        for (auto* lane : laneTracks())
-            if (lane->state.hasProperty (laneHeightProp))
-                lane->state.setProperty (laneHeightProp, std::clamp (static_cast<int> (lane->state[laneHeightProp]) + step, minLaneHeight, maxLaneHeight), nullptr);
+        for (const auto& lane : laneTracks())
+            if (auto state = lane.state; state.hasProperty (laneHeightProp))
+                state.setProperty (laneHeightProp, std::clamp (static_cast<int> (state[laneHeightProp]) + step, minLaneHeight, maxLaneHeight), nullptr);
 
         scrollY = std::max (0, static_cast<int> (std::lround (contentY * lanesHeight())) - anchor);
         updateScrollBars();
@@ -2152,7 +2159,7 @@ namespace carthage::ui
         if (recordingFrom)
         {
             const auto x0 = std::max (static_cast<float> (area.getX()), xAtBeat (secondsToBeats (*recordingFrom)));
-            const auto lane = laneTracks().indexOf (&session.getTrack());
+            const auto lane = laneTracks().indexOf (editing::recordingLane (session.getEdit()));
             const auto y = area.getY() + laneTop (lane) - scrollY;
             recording->setBounds (Rectangle<float> (x0, static_cast<float> (y + 3), std::max (2.0f, x - x0), static_cast<float> (heightOfLane (lane) - 7))
                                       .toNearestInt().getIntersection (area));

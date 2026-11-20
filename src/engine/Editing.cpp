@@ -13,6 +13,8 @@ namespace carthage::editing
 
     namespace
     {
+        const juce::Identifier copiedRouteProp ("carthageCopiedRoute");
+
         TempoSequence& tempo (const Clip& c)            { return c.edit.tempoSequence; }
         TimePosition timeAt (const Clip& c, double beat) { return tempo (c).toTime (BeatPosition::fromBeats (std::max (0.0, beat))); }
 
@@ -87,6 +89,8 @@ namespace carthage::editing
         if (clips.isEmpty())
             return out;
 
+        out->from = &clips.getFirst()->edit;
+
         auto first = std::numeric_limits<double>::max();
         out->firstLane = std::numeric_limits<int>::max();
 
@@ -107,6 +111,10 @@ namespace carthage::editing
 
             state.setProperty (IDs::start, c->getPosition().getStart().inSeconds() - first, nullptr);
 
+            // Its route, by the channel's ID: kept when pasted into the same project (W47).
+            if (auto* channel = routeOf (*c))
+                state.setProperty (copiedRouteProp, channel->itemID.toString(), nullptr);
+
             Clipboard::Clips::ClipInfo info;
             info.state = state;
             info.trackOffset = laneOf (*c) - out->firstLane;
@@ -123,42 +131,62 @@ namespace carthage::editing
         if (copied.count() == 0 || all.isEmpty())
             return {};
 
-        // Lanes the edit lacks: the clips go onto its last lanes instead (getSiblingTrack would
-        // find nothing).
-        auto content = copied.clips;
-        auto firstLane = copied.firstLane;
+        // Lanes the edit lacks: the clips go onto its last lanes instead.
         int deepest = 0;
 
-        for (auto& c : content.clips)
+        for (const auto& c : copied.clips.clips)
             deepest = std::max (deepest, c.trackOffset);
 
-        firstLane = std::clamp (firstLane, 0, std::max (0, all.size() - 1 - deepest));
+        const auto firstLane = std::clamp (copied.firstLane, 0, std::max (0, all.size() - 1 - deepest));
+        const auto sameEdit = copied.from == &edit;
 
-        for (auto& c : content.clips)
-            c.trackOffset = std::min (c.trackOffset, all.size() - 1 - firstLane);
+        // Each clip onto the carrier of its lane and route; Tracktion pastes one carrier at a time.
+        std::map<AudioTrack*, Clipboard::Clips> byCarrier;
+
+        for (const auto& c : copied.clips.clips)
+        {
+            const auto lane = all[std::min (firstLane + c.trackOffset, all.size() - 1)];
+            AudioTrack* route = nullptr;
+
+            if (sameEdit)
+                if (const auto id = c.state[copiedRouteProp].toString(); id.isNotEmpty())
+                    for (auto* ch : channels (edit))
+                        if (ch->itemID.toString() == id)
+                            route = ch;
+
+            if (auto* carrier = carrierFor (edit, lane, route))
+            {
+                auto info = c;
+                info.trackOffset = 0;
+                info.state = c.state.createCopy();
+                info.state.removeProperty (copiedRouteProp, nullptr);
+                byCarrier[carrier].clips.push_back (std::move (info));
+            }
+        }
 
         std::set<EditItemID> before;
 
-        for (auto* lane : all)
-            for (auto* c : lane->getClips())
-                before.insert (c->itemID);
+        for (auto* c : allClips (edit))
+            before.insert (c->itemID);
 
-        EditInsertPoint insertPoint (edit);
-        Clipboard::ContentType::EditPastingOptions options (edit, insertPoint);
-        options.startTrack = all[firstLane];
-        options.startTime = edit.tempoSequence.toTime (tracktion::BeatPosition::fromBeats (std::max (0.0, atBeat)));
-        options.silent = true;
-        content.pasteIntoEdit (options);
+        for (auto& [carrier, content] : byCarrier)
+        {
+            EditInsertPoint insertPoint (edit);
+            Clipboard::ContentType::EditPastingOptions options (edit, insertPoint);
+            options.startTrack = carrier;
+            options.startTime = edit.tempoSequence.toTime (tracktion::BeatPosition::fromBeats (std::max (0.0, atBeat)));
+            options.silent = true;
+            content.pasteIntoEdit (options);
+        }
 
         Clips added;
 
-        for (auto* lane : lanes (edit))
-            for (auto* c : lane->getClips())
-                if (! before.contains (c->itemID))
-                {
-                    crossfade (*c);
-                    added.add (c);
-                }
+        for (auto* c : allClips (edit))
+            if (! before.contains (c->itemID))
+            {
+                crossfade (*c);
+                added.add (c);
+            }
 
         return added;
     }
@@ -175,8 +203,6 @@ namespace carthage::editing
 
     double startBeat (const Clip& c)   { return tempo (c).toBeats (c.getPosition().getStart()).inBeats(); }
     double endBeat (const Clip& c)     { return tempo (c).toBeats (c.getPosition().getEnd()).inBeats(); }
-
-    juce::Array<AudioTrack*> lanes (Edit& edit)   { return getAudioTracks (edit); }
 
     namespace
     {
@@ -196,153 +222,6 @@ namespace carthage::editing
         edit.state.getOrCreateChildWithName (notesTag, nullptr).setProperty (notesText, text, nullptr);
     }
 
-    juce::String nextLaneName (Edit& edit)
-    {
-        std::set<int> used;
-
-        for (auto* t : lanes (edit))
-            if (const auto name = t->getName(); name.startsWith ("Lane ") && name.substring (5).containsOnly ("0123456789"))
-                used.insert (name.substring (5).getIntValue());
-
-        int n = 1;
-        while (used.contains (n))
-            ++n;
-
-        return "Lane " + juce::String (n);
-    }
-
-    namespace
-    {
-        AudioTrack* insertLane (Edit& edit, AudioTrack* after)
-        {
-            const auto name = nextLaneName (edit);
-            auto all = lanes (edit);
-            Track* preceding = after != nullptr ? after : all.getLast();
-            auto lane = edit.insertNewAudioTrack (TrackInsertPoint (nullptr, preceding), nullptr);
-
-            if (lane == nullptr)
-                return nullptr;
-
-            lane->setName (name);
-            return lane.get();
-        }
-    }
-
-    AudioTrack* addLanes (Edit& edit, int count, AudioTrack* after)
-    {
-        edit.getUndoManager().beginNewTransaction (count == 1 ? juce::String ("Add lane") : "Add " + juce::String (count) + " lanes");
-        AudioTrack* first = nullptr;
-
-        for (int i = 0; i < count; ++i)
-        {
-            after = insertLane (edit, after);
-
-            if (first == nullptr)
-                first = after;
-        }
-
-        return first;
-    }
-
-    void moveLane (AudioTrack& lane, int newIndex)
-    {
-        auto& edit = lane.edit;
-        auto others = lanes (edit);
-        others.removeFirstMatchingValue (&lane);
-        newIndex = std::clamp (newIndex, 0, others.size());
-
-        if (lanes (edit).indexOf (&lane) == newIndex)
-            return;
-
-        // After the lane before the new place; at the top, after whatever track precedes the
-        // first lane (Tracktion keeps its own tracks, such as markers and tempo, above them).
-        Track* preceding = nullptr;
-
-        if (newIndex > 0)
-        {
-            preceding = others[newIndex - 1];
-        }
-        else if (! others.isEmpty())
-        {
-            const auto all = getAllTracks (edit);
-            const auto first = all.indexOf (others.getFirst());
-            preceding = first > 0 ? all[first - 1] : nullptr;
-        }
-
-        edit.getUndoManager().beginNewTransaction ("Move lane");
-        edit.moveTrack (&lane, TrackInsertPoint (nullptr, preceding));
-    }
-
-    void muteOthers (AudioTrack& lane)
-    {
-        const auto all = lanes (lane.edit);
-        bool alreadyAlone = ! lane.isMuted (false);
-
-        for (auto* t : all)
-            if (t != &lane && ! t->isMuted (false))
-                alreadyAlone = false;
-
-        for (auto* t : all)
-            t->setMute (alreadyAlone ? false : t != &lane);
-    }
-
-    void soloAlone (AudioTrack& lane)
-    {
-        const auto all = lanes (lane.edit);
-        bool alreadyAlone = lane.isSolo (false);
-
-        for (auto* t : all)
-            if (t != &lane && t->isSolo (false))
-                alreadyAlone = false;
-
-        for (auto* t : all)
-            t->setSolo (alreadyAlone ? false : t == &lane);
-    }
-
-    AudioTrack* addLane (Edit& edit, AudioTrack* after)
-    {
-        edit.getUndoManager().beginNewTransaction ("Add lane");
-        return insertLane (edit, after);
-    }
-
-    bool canDeleteLane (AudioTrack& lane, const AudioTrack& recordingLane)
-    {
-        return &lane != &recordingLane && lanes (lane.edit).size() > 1;
-    }
-
-    void deleteLane (AudioTrack& lane)
-    {
-        auto& edit = lane.edit;
-        edit.getUndoManager().beginNewTransaction ("Delete lane");
-        edit.deleteTrack (&lane);
-    }
-
-    void renameLane (AudioTrack& lane, const juce::String& name)
-    {
-        const auto trimmed = name.trim();
-
-        if (trimmed.isEmpty() || trimmed == lane.getName())
-            return;
-
-        lane.edit.getUndoManager().beginNewTransaction ("Rename lane");
-        lane.setName (trimmed);
-    }
-
-    void setLaneMuted (AudioTrack& lane, bool muted)
-    {
-        lane.setMute (muted);
-    }
-
-    void setLaneSoloed (AudioTrack& lane, bool soloed)
-    {
-        lane.setSolo (soloed);
-    }
-
-    int laneOf (const Clip& c)
-    {
-        return lanes (c.edit).indexOf (dynamic_cast<AudioTrack*> (c.getTrack()));
-    }
-
     void move (const Clips& clips, double deltaBeats, int laneDelta)
     {
         if (clips.isEmpty())
@@ -353,21 +232,14 @@ namespace carthage::editing
         for (auto* c : clips) earliest = std::min (earliest, startBeat (*c));
         deltaBeats = std::max (deltaBeats, -earliest);
 
-        auto all = lanes (clips.getFirst()->edit);
+        const auto all = lanes (clips.getFirst()->edit);
 
         for (auto* c : clips)
         {
-            const auto length = c->getPosition().getLength();
             c->setStart (timeAt (*c, startBeat (*c) + deltaBeats), false, true);
-            juce::ignoreUnused (length);
 
-            if (laneDelta != 0)
-            {
-                const auto target = std::clamp (laneOf (*c) + laneDelta, 0, all.size() - 1);
-
-                if (auto* t = all[target]; t != nullptr && t != c->getTrack())
-                    c->moveTo (*t);
-            }
+            if (laneDelta != 0 && ! all.isEmpty())
+                moveToLane (*c, all[std::clamp (laneOf (*c) + laneDelta, 0, all.size() - 1)]);   // its route stays
 
             crossfade (*c);
         }
@@ -454,8 +326,7 @@ namespace carthage::editing
     {
         std::vector<BeatPlace> places;
 
-        for (auto* lane : lanes (edit))
-            for (auto* c : lane->getClips())
+        for (auto* c : allClips (edit))
             {
                 const auto* audio = dynamic_cast<AudioClipBase*> (c);
                 places.push_back ({ c->itemID, startBeat (*c), endBeat (*c), audio != nullptr && audio->getAutoTempo() });
@@ -569,31 +440,31 @@ namespace carthage::editing
         return copies;
     }
 
-    Clip* placeCopy (const Clip& source, AudioTrack& lane, double beat)
+    Clip* placeCopy (const Clip& source, const Lane& lane, double beat)
     {
-        auto copy = duplicateClip (source);
+        auto copy = duplicateClip (source);   // on the source's carrier: the sample's route
 
         if (copy == nullptr)
             return nullptr;
 
-        if (copy->getTrack() != &lane)
-            copy->moveTo (lane);
+        moveToLane (*copy, lane);
 
         copy->setStart (timeAt (source, beat), false, true);
         crossfade (*copy);
         return copy.get();
     }
 
-    Clip* insertFile (AudioTrack& lane, const juce::File& file, double beat)
+    Clip* insertFile (Edit& edit, const Lane& lane, const juce::File& file, double beat)
     {
-        const AudioFile audio (lane.edit.engine, file);
+        const AudioFile audio (edit.engine, file);
         const auto seconds = audio.getLength();
+        auto* carrier = carrierFor (edit, lane, nullptr);   // to master until routed (W47)
 
-        if (! audio.isValid() || seconds <= 0.0)
+        if (! audio.isValid() || seconds <= 0.0 || carrier == nullptr)
             return nullptr;
 
-        const auto start = lane.edit.tempoSequence.toTime (BeatPosition::fromBeats (std::max (0.0, beat)));
-        auto clip = insertWaveClip (lane, file.getFileNameWithoutExtension(), file,
+        const auto start = edit.tempoSequence.toTime (BeatPosition::fromBeats (std::max (0.0, beat)));
+        auto clip = insertWaveClip (*carrier, file.getFileNameWithoutExtension(), file,
                                     { { start, TimeDuration::fromSeconds (seconds) } }, DeleteExistingClips::no);
 
         if (clip == nullptr)

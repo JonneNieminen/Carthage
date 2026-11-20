@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Mixer.h"
+
 #include <tracktion_engine/tracktion_engine.h>
 
 #include <optional>
@@ -65,12 +67,13 @@ namespace carthage::editing
     /** Copies the clips right after the last one, keeping their gaps; returns the copies. */
     Clips duplicate (const Clips&);
 
-    /** A copy of `source` on `lane`, starting at `beat` (the draw and paint tools). */
-    tracktion::Clip* placeCopy (const tracktion::Clip& source, tracktion::AudioTrack& lane, double beat);
+    /** A copy of `source` on `lane`, starting at `beat`, routed as its sample is (the draw and
+        paint tools). */
+    tracktion::Clip* placeCopy (const tracktion::Clip& source, const Lane& lane, double beat);
 
     /** A sound file as a new clip on `lane` starting at `beat`, as long as the file (a dropped
-        sample, W30). Null if the file can not be read. */
-    tracktion::Clip* insertFile (tracktion::AudioTrack& lane, const juce::File&, double beat);
+        sample, W30), playing to master until routed (W47). Null if the file can not be read. */
+    tracktion::Clip* insertFile (tracktion::Edit&, const Lane& lane, const juce::File&, double beat);
 
     void remove (const Clips&);
 
@@ -85,6 +88,7 @@ namespace carthage::editing
     {
         tracktion::Clipboard::Clips clips;
         int firstLane = 0;
+        const tracktion::Edit* from = nullptr;   // pasted into the same edit, a clip keeps its route
 
         int count() const noexcept     { return static_cast<int> (clips.clips.size()); }
     };
@@ -136,42 +140,9 @@ namespace carthage::editing
         so clips find their files while the edit loads. `editFile` is asked each time. */
     tracktion::Edit::FilePathResolver consistentFilePaths (std::function<juce::File()> editFile);
 
-    /** Lanes in order: the edit's audio tracks. */
-    juce::Array<tracktion::AudioTrack*> lanes (tracktion::Edit&);
-    int laneOf (const tracktion::Clip&);
-
     /** The project's notes (W38): plain text kept in the edit itself, so they are saved with the
         project and a change to them counts as an unsaved change. Not an undo step. */
     juce::String notes (tracktion::Edit&);
     void setNotes (tracktion::Edit&, const juce::String&);
 
-    /** "Lane N" with the lowest N no lane already uses. */
-    juce::String nextLaneName (tracktion::Edit&);
-
-    /** Adds a lane below `after` (or at the end), named by nextLaneName; one undo step. */
-    tracktion::AudioTrack* addLane (tracktion::Edit&, tracktion::AudioTrack* after = nullptr);
-
-    /** Adds `count` lanes below `after` (or at the end) as one undo step; returns the first. */
-    tracktion::AudioTrack* addLanes (tracktion::Edit&, int count, tracktion::AudioTrack* after = nullptr);
-
-    /** Moves a lane to `newIndex` among the lanes, clips and all; one undo step. */
-    void moveLane (tracktion::AudioTrack&, int newIndex);
-
-    /** ⌘-click on M: every other lane muted and this one playing; if that is already so, every
-        lane plays again (owner's list). ⌘-click on S: this lane soloed alone; if it already is,
-        no lane is soloed. Not undo steps, as mute and solo are not. */
-    void muteOthers (tracktion::AudioTrack&);
-    void soloAlone (tracktion::AudioTrack&);
-
-    /** Deletes a lane and its clips; one undo step. The caller keeps the recording lane and the
-        last lane (canDeleteLane). */
-    void deleteLane (tracktion::AudioTrack&);
-    bool canDeleteLane (tracktion::AudioTrack&, const tracktion::AudioTrack& recordingLane);
-
-    /** One undo step. An empty or blank name keeps the old one. */
-    void renameLane (tracktion::AudioTrack&, const juce::String&);
-
-    /** Not undo steps: Tracktion keeps mute and solo out of the undo history, as mixers do. */
-    void setLaneMuted (tracktion::AudioTrack&, bool);
-    void setLaneSoloed (tracktion::AudioTrack&, bool);
 }

@@ -40,13 +40,13 @@ public:
         tracktion::Engine engine ("CarthageTests", nullptr, std::make_unique<Headless>());
         engine.getPluginManager().createBuiltInType<engine::FormantPlugin>();   // as the session does
         auto edit = tracktion::createEmptyEdit (engine, folder.getChildFile ("Test.tracktionedit"));
-        edit->ensureNumberOfAudioTracks (2);
+        editing::prepareMix (*edit, true, 2);
         const auto lanes = editing::lanes (*edit);
         auto& um = edit->getUndoManager();
 
-        auto* a = editing::insertFile (*lanes[0], kick, 0.0);
-        auto* b = editing::insertFile (*lanes[1], kick, 8.0);
-        auto* other = editing::insertFile (*lanes[1], snare, 16.0);
+        auto* a = editing::insertFile (*edit, lanes[0], kick, 0.0);
+        auto* b = editing::insertFile (*edit, lanes[1], kick, 8.0);
+        auto* other = editing::insertFile (*edit, lanes[1], snare, 16.0);
 
         beginTest ("Clips of one file are one sample, named after it");
         {
@@ -179,7 +179,7 @@ public:
             expectEquals (editing::sampleName (*b), juce::String ("Kick (2)"));
             expectEquals (editing::clipsOfSample (*a).size(), 1, "the original is alone now");
 
-            auto* copy = editing::placeCopy (*b, *lanes[0], 24.0);
+            auto* copy = editing::placeCopy (*b, lanes[0], 24.0);
             expect (copy != nullptr && editing::clipsOfSample (*b).contains (copy), "a copy keeps the sample");
 
             auto s = editing::soundOf (*b);

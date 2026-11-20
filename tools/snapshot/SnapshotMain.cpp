@@ -312,7 +312,7 @@ namespace
                 // The sample editor on the take (W42).
                 onMessageThreadVoid ([this]
                 {
-                    if (auto* c = tracktion::getAudioTracks (session->getEdit()).getFirst()->getClips().getFirst())
+                    if (auto* c = carthage::editing::allClips (session->getEdit()).getFirst())
                         content->getTimeline().onClipDoubleClicked (*c);
                 });
                 Thread::sleep (600);   // its waveform reads in the background
@@ -321,7 +321,7 @@ namespace
                 // With a shape drawn on it (owner, 4e): rise, a dip with a bend, fall.
                 onMessageThreadVoid ([this]
                 {
-                    if (auto* c = tracktion::getAudioTracks (session->getEdit()).getFirst()->getClips().getFirst())
+                    if (auto* c = carthage::editing::allClips (session->getEdit()).getFirst())
                     {
                         const auto length = c->getPosition().getLength().inSeconds();
                         carthage::editing::begin (session->getEdit(), "Shape");
@@ -338,7 +338,7 @@ namespace
                 // Reversed (owner, 4f): the waveform and the shape drawn mirrored, here and on the lane.
                 onMessageThreadVoid ([this]
                 {
-                    if (auto* c = tracktion::getAudioTracks (session->getEdit()).getFirst()->getClips().getFirst())
+                    if (auto* c = carthage::editing::allClips (session->getEdit()).getFirst())
                     {
                         carthage::editing::begin (session->getEdit(), "Reverse sample");
                         auto sound = carthage::editing::soundOf (*c);

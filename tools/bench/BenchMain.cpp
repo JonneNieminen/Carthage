@@ -141,6 +141,7 @@ namespace
             else if (args.command == "clip-envelope") result = clipEnvelope();
             else if (args.command == "clip-formant") result = clipFormant();
             else if (args.command == "overlap") result = overlap();
+            else if (args.command == "carrier") result = carrier();
             else if (args.command == "idle-mixer") result = idleMixer();
             else say ("unknown command: " + args.command);
 
@@ -183,10 +184,7 @@ namespace
         {
             return onMessageThread ([this]
             {
-                int n = 0;
-                for (auto* t : tracktion::getAudioTracks (session->getEdit()))
-                    n += t->getClips().size();
-                return n;
+                return carthage::editing::allClips (session->getEdit()).size();
             });
         }
 
@@ -291,8 +289,8 @@ namespace
             {
                 const auto file = carthage::project::fileIn (out);
                 auto edit = carthage::project::createEdit (session->getEngine(), file);
-                edit->ensureNumberOfAudioTracks (8);
-                const auto lanes = tracktion::getAudioTracks (*edit);
+                const auto lanes = carthage::editing::lanes (*edit);
+                const auto channels = carthage::editing::channels (*edit);
                 Random random (42);
                 std::array<double, 8> next {};
 
@@ -302,15 +300,14 @@ namespace
                     const auto& take = takes[random.nextInt (takes.size())];
                     const auto length = 1.0 + random.nextInt (3) * 0.5;
                     next[static_cast<size_t> (lane)] += random.nextInt (3) * 0.5;
-                    tracktion::insertWaveClip (*lanes[lane], "Clip " + String (i + 1), take,
+                    // Lane n plays through channel n, so the mixer has something to show.
+                    tracktion::insertWaveClip (*carthage::editing::carrierFor (*edit, lanes[lane], channels[lane]), "Clip " + String (i + 1), take,
                                                { { tracktion::TimePosition::fromSeconds (next[static_cast<size_t> (lane)]), tracktion::TimeDuration::fromSeconds (length) } },
                                                tracktion::DeleteExistingClips::no);
                     next[static_cast<size_t> (lane)] += length;
                 }
 
-                lanes[0]->setName ("Guitar");
-                for (int i = 1; i < lanes.size(); ++i)
-                    lanes[i]->setName ("Lane " + String (i + 1));
+                carthage::editing::renameLane (*edit, lanes[0], "Guitar");
 
                 return carthage::project::write (carthage::project::snapshot (*edit, file, carthage::project::Info::createNew()), file);
             });
@@ -371,9 +368,8 @@ namespace
             onMessageThreadVoid ([&]
             {
                 auto& edit = session->getEdit();
-                auto* lane = carthage::editing::lanes (edit)[1];
-                clip = carthage::editing::insertFile (*lane, tone, 8.0);   // beat 8 at 120 bpm: 4 s
-                mask.setBit (tracktion::getAllTracks (edit).indexOf (lane));
+                clip = carthage::editing::insertFile (edit, carthage::editing::lanes (edit)[1], tone, 8.0);   // beat 8 at 120 bpm: 4 s
+                mask.setBit (tracktion::getAllTracks (edit).indexOf (clip->getTrack()));
             });
 
             const auto render = [&] (const String& name)
@@ -440,8 +436,7 @@ namespace
             onMessageThreadVoid ([&]
             {
                 auto& edit = session->getEdit();
-                track = carthage::editing::lanes (edit)[1];
-                carthage::editing::insertFile (*track, tone, 8.0);   // 4 s at 120 bpm
+                track = dynamic_cast<tracktion::AudioTrack*> (carthage::editing::insertFile (edit, carthage::editing::lanes (edit)[1], tone, 8.0)->getTrack());   // 4 s at 120 bpm
                 mask.setBit (tracktion::getAllTracks (edit).indexOf (track));
             });
 
@@ -461,13 +456,72 @@ namespace
             };
 
             const auto one = render ("one");
-            onMessageThreadVoid ([&] { carthage::editing::insertFile (*track, tone, 8.0); });   // the same tone, the same time, the same track
+            onMessageThreadVoid ([&] { carthage::editing::insertFile (session->getEdit(), carthage::editing::lanes (session->getEdit())[1], tone, 8.0); });   // the same tone, the same time, the same track
             const auto clips = onMessageThread ([&] { return track->getClips().size(); });
             const auto two = render ("two");
             say ("RMS at 4.5 s: one clip " + String (one, 4) + ", two overlapping clips on one track " + String (two, 4)
                  + " (" + String (clips) + " clips on the track)");
             check (clips == 2, "both clips are on the track");
             check (one > 0.05f && std::abs (two / one - 2.0f) < 0.05f, "both play: twice as loud");
+            say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
+            return checksFailed == 0 ? 0 : 1;
+        }
+
+        /** Phase 5a's routing (W47): a lane's clips sit on a hidden carrier track that outputs into
+            its channel's track, where the channel's fader works. A tone through a carrier into a
+            channel at -6.02 dB renders at half the level it has straight to master. */
+        int carrier()
+        {
+            const auto tone = folder.getChildFile ("tone.wav");
+            {
+                WavAudioFormat wav;
+                std::unique_ptr<OutputStream> out = std::make_unique<FileOutputStream> (tone);
+                auto writer = wav.createWriterFor (out, AudioFormatWriterOptions{}.withSampleRate (48000.0).withNumChannels (1).withBitsPerSample (24));
+                AudioBuffer<float> b (1, 48000);
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                    b.setSample (0, i, 0.2f * std::sin (static_cast<float> (i) * 0.05f));
+                writer->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
+            }
+
+            tracktion::AudioTrack* carrierTrack = nullptr;
+            tracktion::AudioTrack* channel = nullptr;
+            onMessageThreadVoid ([&]
+            {
+                auto& edit = session->getEdit();
+                carrierTrack = dynamic_cast<tracktion::AudioTrack*> (carthage::editing::insertFile (edit, carthage::editing::lanes (edit)[1], tone, 8.0)->getTrack());
+                channel = carthage::editing::channels (edit)[2];
+                carthage::editing::syncMix (edit, nullptr);
+            });
+
+            const auto render = [&] (const String& name)
+            {
+                const auto out = folder.getChildFile (name + ".wav");
+                waitMs (300);
+                BigInteger mask;
+                onMessageThreadVoid ([&] { mask.setRange (0, tracktion::getAllTracks (session->getEdit()).size(), true); });
+                tracktion::Renderer::renderToFile (name, out, session->getEdit(), { tracktion::TimePosition(), tracktion::TimePosition::fromSeconds (6.0) },
+                                                   mask, true, true, {}, false);
+                AudioFormatManager formats;
+                carthage::audio::registerReadable (formats);
+                std::unique_ptr<AudioFormatReader> reader (formats.createReaderFor (out));
+                AudioBuffer<float> b (2, 4800);
+                if (reader != nullptr)
+                    reader->read (&b, 0, 4800, static_cast<int64> (4.5 * reader->sampleRate), true, true);
+                return reader != nullptr ? b.getRMSLevel (0, 0, 4800) : -1.0f;
+            };
+
+            const auto direct = render ("direct");
+            onMessageThreadVoid ([&]
+            {
+                carrierTrack->getOutput().setOutputToTrack (channel);
+                channel->getVolumePlugin()->setVolumeDb (-6.0206f);
+                carthage::editing::syncMix (session->getEdit(), nullptr);   // the channel now has something to play
+            });
+            const auto routed = render ("routed");
+            const auto feeds = onMessageThread ([&] { return carrierTrack->getOutput().feedsInto (channel); });
+            say ("RMS at 4.5 s: straight to master " + String (direct, 4) + ", through a channel at -6.02 dB " + String (routed, 4));
+            check (feeds, "the carrier feeds the channel");
+            check (direct > 0.05f && std::abs (routed / direct - 0.5f) < 0.02f, "the channel's fader acts on the carrier's clips");
             say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
             return checksFailed == 0 ? 0 : 1;
         }
@@ -540,9 +594,8 @@ namespace
             onMessageThreadVoid ([&]
             {
                 auto& edit = session->getEdit();
-                auto* lane = carthage::editing::lanes (edit)[1];
-                clip = carthage::editing::insertFile (*lane, tone, 8.0);   // 4 s
-                mask.setBit (tracktion::getAllTracks (edit).indexOf (lane));
+                clip = carthage::editing::insertFile (edit, carthage::editing::lanes (edit)[1], tone, 8.0);   // 4 s
+                mask.setBit (tracktion::getAllTracks (edit).indexOf (clip->getTrack()));
             });
 
             const auto render = [&] (const String& name)
@@ -690,9 +743,8 @@ namespace
             {
                 session->showProject (0);   // Song
                 editing::Clips all;
-                for (auto* lane : editing::lanes (session->getEdit()))
-                    for (auto* c : lane->getClips())
-                        all.add (c);
+                for (auto* c : editing::allClips (session->getEdit()))
+                    all.add (c);
                 return editing::copy (all);
             });
             check (copied->count() == 1, "Song's clip copied");
@@ -722,8 +774,7 @@ namespace
             check (onMessageThread ([this]
                    {
                        const auto samples = carthage::project::samplesIn (session->getProjectFolder());
-                       for (auto* lane : editing::lanes (session->getEdit()))
-                           for (auto* c : lane->getClips())
+                       for (auto* c : editing::allClips (session->getEdit()))
                                if (auto* audio = dynamic_cast<tracktion::AudioClipBase*> (c))
                                    return audio->getOriginalFile().isAChildOf (samples) && audio->getOriginalFile().existsAsFile();
                        return false;

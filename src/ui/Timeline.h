@@ -65,7 +65,7 @@ namespace carthage::ui
         void addMarkerAtPlayhead();
 
         /** Adds `count` lanes below `after` (or at the end) and scrolls to the first. */
-        void addLane (tracktion::AudioTrack* after = nullptr, int count = 1);
+        void addLane (const editing::Lane& after = {}, int count = 1);
 
         /** The current lane: the one whose name was clicked last (highlighted). ⌥⌘N adds a lane
             below it, ⌘↑/⌘↓ move it (owner's list). */
@@ -143,8 +143,8 @@ namespace carthage::ui
         int scrollY = 0;
         int laneHeight = defaultLaneHeight;   // the default for lanes without a height of their own
         int headerWidth = defaultHeaderWidth;
-        tracktion::EditItemID currentLane;
-        tracktion::AudioTrack* findCurrentLane() const;
+        int currentLane = 0;   // the current lane's id
+        editing::Lane findCurrentLane() const;
 
         // Lane geometry, in content pixels (before scrolling).
         int heightOfLane (int index) const;
@@ -156,7 +156,7 @@ namespace carthage::ui
         // (repaintLanes clears it): painting asks for them per lane, per frame.
         mutable std::vector<int> tops;
         const std::vector<int>& laneTops() const;
-        void setLaneOwnHeight (tracktion::AudioTrack&, std::optional<int>);
+        void setLaneOwnHeight (const editing::Lane&, std::optional<int>);
 
         std::shared_ptr<const editing::Copied> copied;
 
@@ -194,12 +194,12 @@ namespace carthage::ui
 
         /** "Am  120", "F#", "120": a clip's facts, short enough for its name row. */
         static juce::String shortFacts (const engine::SampleLibrary::Analysis&);
-        juce::Array<tracktion::AudioTrack*> laneTracks() const;
+        juce::Array<editing::Lane> laneTracks() const;
         juce::Colour laneColour (int laneIndex) const;
 
         /** A lane's colour (owner): one of the theme's lane colours, or none for the colour its
             place gives it. One undo step; kept in the project. */
-        void setLaneColour (tracktion::AudioTrack&, std::optional<juce::Colour>);
+        void setLaneColour (const editing::Lane&, std::optional<juce::Colour>);
         double secondsToBeats (double seconds) const;
         double beatsToSeconds (double beats) const;
         double playheadBeat() const;

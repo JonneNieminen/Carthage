@@ -26,7 +26,7 @@ namespace
 
     tracktion::Clip* addClip (tracktion::Edit& edit, int lane, const juce::File& audio, double startSeconds)
     {
-        auto c = tracktion::insertWaveClip (*editing::lanes (edit)[lane], audio.getFileNameWithoutExtension(), audio,
+        auto c = tracktion::insertWaveClip (*editing::carrierFor (edit, editing::lanes (edit)[lane], nullptr), audio.getFileNameWithoutExtension(), audio,
                                             { { tracktion::TimePosition::fromSeconds (startSeconds), tracktion::TimeDuration::fromSeconds (1.0) } },
                                             tracktion::DeleteExistingClips::no);
         return c.get();
@@ -64,9 +64,9 @@ public:
         beginTest ("Save and reopen: clips, lanes, tempo, view and id come back the same");
         {
             auto edit = project::createEdit (engine, songFile);
-            edit->ensureNumberOfAudioTracks (3);
+            editing::deleteLane (*edit, editing::lanes (*edit).getLast());   // 7 lanes, to see the count come back
             edit->tempoSequence.getTempo (0)->setBpm (97.0);
-            editing::lanes (*edit)[1]->setName ("Bass");
+            editing::renameLane (*edit, editing::lanes (*edit)[1], "Bass");
             addClip (*edit, 0, take, 0.5);
             addClip (*edit, 2, sample, 3.0);
             editing::addMarker (*edit, 8.0);
@@ -93,19 +93,19 @@ public:
             expectWithinAbsoluteError (e.tempoSequence.getTempo (0)->getBpm(), 97.0, 1.0e-9);
 
             const auto lanes = editing::lanes (e);
-            expectEquals (lanes.size(), 3);
-            expectEquals (lanes[1]->getName(), juce::String ("Bass"));
-            expectEquals (lanes[0]->getClips().size(), 1);
-            expectEquals (lanes[2]->getClips().size(), 1);
-            expectWithinAbsoluteError (lanes[0]->getClips()[0]->getPosition().getStart().inSeconds(), 0.5, 1.0e-9);
+            expectEquals (lanes.size(), 7);
+            expectEquals (lanes[1].getName(), juce::String ("Bass"));
+            expectEquals (editing::clipsOn (e, lanes[0]).size(), 1);
+            expectEquals (editing::clipsOn (e, lanes[2]).size(), 1);
+            expectWithinAbsoluteError (editing::clipsOn (e, lanes[0])[0]->getPosition().getStart().inSeconds(), 0.5, 1.0e-9);
             expectEquals (e.getMarkerManager().getMarkers().size(), 1);
             expectEquals (editing::notes (e), juce::String ("Verse riff in drop D.\nTry a slower take."), "the notes come back");
 
             // Recordings inside the folder are written relative to the file (W32); outside, absolute.
-            expectEquals (sourceOf (*lanes[0]->getClips()[0]), juce::String ("../Recordings/Take 1.wav"));
-            expectEquals (sourceOf (*lanes[2]->getClips()[0]), sample.getFullPathName().replaceCharacter ('\\', '/'));
+            expectEquals (sourceOf (*editing::clipsOn (e, lanes[0])[0]), juce::String ("../Recordings/Take 1.wav"));
+            expectEquals (sourceOf (*editing::clipsOn (e, lanes[2])[0]), sample.getFullPathName().replaceCharacter ('\\', '/'));
 
-            auto* audio = dynamic_cast<tracktion::AudioClipBase*> (lanes[0]->getClips()[0]);
+            auto* audio = dynamic_cast<tracktion::AudioClipBase*> (editing::clipsOn (e, lanes[0])[0]);
             expect (audio != nullptr && audio->getAudioFile().getFile() == take, "the take's audio is found");
         }
 
@@ -123,15 +123,15 @@ public:
 
             auto copy = project::open (engine, copyFile, copyFile);
             expect (copy.edit != nullptr, copy.error);
-            auto* takeClip = dynamic_cast<tracktion::AudioClipBase*> (editing::lanes (*copy.edit)[0]->getClips()[0]);
+            auto* takeClip = dynamic_cast<tracktion::AudioClipBase*> (editing::clipsOn (*copy.edit, editing::lanes (*copy.edit)[0])[0]);
             expect (takeClip->getAudioFile().getFile() == project::recordingsIn (copyFolder).getChildFile ("Take 1.wav"),
                     "the copy plays its own recording");
-            auto* kick = dynamic_cast<tracktion::AudioClipBase*> (editing::lanes (*copy.edit)[2]->getClips()[0]);
+            auto* kick = dynamic_cast<tracktion::AudioClipBase*> (editing::clipsOn (*copy.edit, editing::lanes (*copy.edit)[2])[0]);
             expect (kick->getAudioFile().getFile() == sample, "a sample outside the project still points at itself");
 
             // Relinking the live edit after the move: its clips follow too.
             project::moveTo (e, copyFile, songFolder);
-            auto* live = dynamic_cast<tracktion::AudioClipBase*> (editing::lanes (e)[0]->getClips()[0]);
+            auto* live = dynamic_cast<tracktion::AudioClipBase*> (editing::clipsOn (e, editing::lanes (e)[0])[0]);
             expect (live->getAudioFile().getFile() == project::recordingsIn (copyFolder).getChildFile ("Take 1.wav"));
         }
 
@@ -264,7 +264,7 @@ public:
             // Recovering reads the autosave but lives at the project file: paths still resolve.
             auto recovered = project::open (engine, unclosed.front().autosave, songFile);
             expect (recovered.edit != nullptr, recovered.error);
-            auto* clip = dynamic_cast<tracktion::AudioClipBase*> (editing::lanes (*recovered.edit)[0]->getClips()[0]);
+            auto* clip = dynamic_cast<tracktion::AudioClipBase*> (editing::clipsOn (*recovered.edit, editing::lanes (*recovered.edit)[0])[0]);
             expect (clip->getAudioFile().getFile() == take, "a recovered project finds its recordings");
 
             store.markClosed (info.id);

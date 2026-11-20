@@ -243,3 +243,10 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - `carthage-bench idle-mixer` (built-in audio, 128 samples): 50 empty tracks add 2.66 points of
   audio-thread load; with `Track::setProcessing (false)` on them, -0.01. 5a's rule: a channel with
   nothing that could sound through it (no clips, input, plugin or incoming route) is left out.
+- Built the 5a engine (W49): `engine/Mixer.h` (lanes in CARTHAGELANES, channels, carriers,
+  per-sample routing, feedback refused, delete channel to master, syncMix, prepareMix migration).
+  Timeline, tests, bench and snapshot moved onto it; MixerTests added. Found and handled:
+  Tracktion's track and plugin "process" flags write through undo, and its reaction to a track's
+  flag reads the old value (setProcessing in Mixer.cpp). `project::createEdit` now prepares the mix.
+  Bench renders (overlap, carrier, clip-envelope, clip-formant) pass on the new model.
+  Next: the mixer view (W48), then the 5a checks.

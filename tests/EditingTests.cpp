@@ -43,15 +43,18 @@ public:
         tracktion::Engine engine ("CarthageTests", nullptr, std::make_unique<HeadlessBehaviour>());
         auto edit = tracktion::createEmptyEdit (engine, folder.getChildFile ("Test.tracktionedit"));
         editing::useConsistentFilePaths (*edit);
-        edit->ensureNumberOfAudioTracks (2);
+        editing::prepareMix (*edit, true, 2);   // two lanes, the default channels (W47)
         edit->tempoSequence.getTempo (0)->setBpm (120.0);
 
         auto lanes = editing::lanes (*edit);
         auto& um = edit->getUndoManager();
 
+        // The carrier that holds a lane's clips playing to master: where a new sound goes (W47).
+        const auto carrier = [&] (int lane) { return editing::carrierFor (*edit, editing::lanes (*edit)[lane], nullptr); };
+
         const auto newClip = [&] (double beat)
         {
-            auto c = tracktion::insertWaveClip (*lanes[0], "Tone", audio,
+            auto c = tracktion::insertWaveClip (*carrier (0), "Tone", audio,
                                                 { { tracktion::TimePosition::fromSeconds (beat * 0.5), tracktion::TimeDuration::fromSeconds (4.0) } },
                                                 tracktion::DeleteExistingClips::no);
             return static_cast<tracktion::Clip*> (c.get());
@@ -93,8 +96,8 @@ public:
 
             editing::begin (*edit, "Move clip to lane 2");
             editing::move ({ c }, 0.0, 1);
-            expectEquals (editing::laneOf (*editing::lanes (*edit)[1]->getClips().getFirst()), 1, "on the second lane");
-            editing::remove ({ editing::lanes (*edit)[1]->getClips().getFirst() });
+            expectEquals (editing::laneOf (*editing::clipsOn (*edit, editing::lanes (*edit)[1]).getFirst()), 1, "on the second lane");
+            editing::remove ({ editing::clipsOn (*edit, editing::lanes (*edit)[1]).getFirst() });
         }
 
         beginTest ("Trim keeps the content in place; slip moves it; stretch changes the speed");
@@ -151,7 +154,7 @@ public:
             editing::toggleMute ({ c, right[0] });
             expect (! c->disabled.get());
 
-            auto* painted = editing::placeCopy (*c, *lanes[1], 16.0);
+            auto* painted = editing::placeCopy (*c, lanes[1], 16.0);
             expect (painted != nullptr && editing::laneOf (*painted) == 1 && std::abs (editing::startBeat (*painted) - 16.0) < 1.0e-6,
                     "a copy placed on another lane");
 
@@ -221,11 +224,11 @@ public:
 
         beginTest ("Copy and paste into another project, in another folder and tempo (W30)");
         {
-            for (auto* l : lanes)
-                editing::remove (l->getClips());   // the lane's own list: remove() must hold the clips
+            for (const auto& l : lanes)
+                editing::remove (editing::clipsOn (*edit, l));
 
             auto* a = newClip (2.0);
-            auto* b = tracktion::insertWaveClip (*lanes[1], "Tone 2", audio,
+            auto* b = tracktion::insertWaveClip (*carrier (1), "Tone 2", audio,
                                                  { { tracktion::TimePosition::fromSeconds (3.0), tracktion::TimeDuration::fromSeconds (1.5) },
                                                    tracktion::TimeDuration::fromSeconds (0.5) },
                                                  tracktion::DeleteExistingClips::no).get();
@@ -237,7 +240,7 @@ public:
             other.createDirectory();
             auto target = tracktion::createEmptyEdit (engine, other.getChildFile ("Other.tracktionedit"));
             editing::useConsistentFilePaths (*target);
-            target->ensureNumberOfAudioTracks (8);
+            editing::prepareMix (*target, true);
             target->tempoSequence.getTempo (0)->setBpm (90.0);
 
             editing::begin (*target, "Paste 2 clips");
@@ -259,7 +262,7 @@ public:
                     "the pasted clip finds its audio from the other folder");
 
             target->getUndoManager().undo();
-            expectEquals (editing::lanes (*target)[0]->getClips().size() + editing::lanes (*target)[1]->getClips().size(), 0,
+            expectEquals (editing::allClips (*target).size(), 0,
                           "a paste undoes in one step");
         }
 
@@ -271,7 +274,7 @@ public:
                     "a stretched clip is time-stretched, not sped up");
 
             // The 4-second file as a loop at 60 bpm holds 4 beats; in this 120 bpm project that is 2 s.
-            auto* loop = editing::insertFile (*lanes[1], audio, 16.0);
+            auto* loop = editing::insertFile (*edit, lanes[1], audio, 16.0);
             editing::fitToTempo (*loop, 60.0);
             auto* fitted = dynamic_cast<tracktion::AudioClipBase*> (loop);
             expect (fitted->getAutoTempo(), "it follows the tempo");
@@ -282,12 +285,12 @@ public:
 
         beginTest ("A dropped sound lands at the beat, as long as the file (W30)");
         {
-            auto* dropped = editing::insertFile (*lanes[1], audio, 6.0);
+            auto* dropped = editing::insertFile (*edit, lanes[1], audio, 6.0);
             expect (dropped != nullptr);
             near (editing::startBeat (*dropped), 6.0, "at the drop beat");
             near (dropped->getPosition().getLength().inSeconds(), 4.0, "the whole 4-second file");
             expectEquals (editing::laneOf (*dropped), 1);
-            expect (editing::insertFile (*lanes[1], folder.getChildFile ("missing.wav"), 0.0) == nullptr, "a missing file adds nothing");
+            expect (editing::insertFile (*edit, lanes[1], folder.getChildFile ("missing.wav"), 0.0) == nullptr, "a missing file adds nothing");
         }
 
         beginTest ("A tempo change: clips stay in time, move with the beat, or stretch with it (W38)");
@@ -295,7 +298,7 @@ public:
             const auto run = [&] (editing::TempoFollow how, auto check)
             {
                 editing::setTempo (*edit, 120.0);
-                auto* c = editing::insertFile (*lanes[1], audio, 4.0);   // 4 s at beat 4 (2 s): beats 4 to 12
+                auto* c = editing::insertFile (*edit, lanes[1], audio, 4.0);   // 4 s at beat 4 (2 s): beats 4 to 12
                 const auto before = editing::placesInBeats (*edit);
                 editing::setTempo (*edit, 60.0);
                 editing::followTempo (*edit, before, how);
@@ -322,7 +325,7 @@ public:
             editing::setTempo (*edit, 120.0);
 
             // A fitted loop follows the beat whatever was chosen.
-            auto* loop = editing::insertFile (*lanes[1], audio, 4.0);
+            auto* loop = editing::insertFile (*edit, lanes[1], audio, 4.0);
             editing::fitToTempo (*loop, 120.0);   // 4 s at 120 bpm: 8 beats
             const auto before = editing::placesInBeats (*edit);
             editing::setTempo (*edit, 60.0);
@@ -336,52 +339,55 @@ public:
         beginTest ("Lanes: named Lane N; adding, renaming and deleting are undo steps (W38)");
         {
             lanes = editing::lanes (*edit);
-            lanes[0]->setName ("Lane 1");
-            lanes[1]->setName ("Lane 3");
+            editing::renameLane (*edit, lanes[0], "Lane 1");
+            editing::renameLane (*edit, lanes[1], "Lane 3");
             expectEquals (editing::nextLaneName (*edit), juce::String ("Lane 2"), "the lowest free number");
 
-            auto* added = editing::addLane (*edit, lanes[0]);
-            expect (added != nullptr);
-            expectEquals (added->getName(), juce::String ("Lane 2"));
+            const auto added = editing::addLane (*edit, lanes[0]);
+            expect (added.isValid());
+            expectEquals (added.getName(), juce::String ("Lane 2"));
             expectEquals (editing::lanes (*edit).indexOf (added), 1, "below the lane asked for");
-            expectEquals (editing::addLane (*edit)->getName(), juce::String ("Lane 4"), "at the end");
+            expectEquals (editing::addLane (*edit).getName(), juce::String ("Lane 4"), "at the end");
             expectEquals (editing::lanes (*edit).size(), 4);
             um.undo();
             expectEquals (editing::lanes (*edit).size(), 3, "undo removes the added lane");
 
-            editing::renameLane (*added, "  Bass  ");
-            expectEquals (added->getName(), juce::String ("Bass"), "trimmed");
-            editing::renameLane (*added, "   ");
-            expectEquals (added->getName(), juce::String ("Bass"), "a blank name keeps the old one");
+            editing::renameLane (*edit, added, "  Bass  ");
+            expectEquals (added.getName(), juce::String ("Bass"), "trimmed");
+            editing::renameLane (*edit, added, "   ");
+            expectEquals (added.getName(), juce::String ("Bass"), "a blank name keeps the old one");
             um.undo();
-            expectEquals (added->getName(), juce::String ("Lane 2"), "undo restores the name");
+            expectEquals (added.getName(), juce::String ("Lane 2"), "undo restores the name");
 
-            editing::setLaneMuted (*added, true);
-            editing::setLaneSoloed (*added, true);
-            expect (added->isMuted (false) && added->isSolo (false));
-            editing::setLaneMuted (*added, false);
-            editing::setLaneSoloed (*added, false);
-            expect (! added->isMuted (false) && ! added->isSolo (false));
+            editing::setLaneMuted (*edit, added, true);
+            editing::setLaneSoloed (*edit, added, true);
+            expect (added.isMuted() && added.isSoloed());
+            editing::setLaneMuted (*edit, added, false);
+            editing::setLaneSoloed (*edit, added, false);
+            expect (! added.isMuted() && ! added.isSoloed());
 
-            const auto recordLane = editing::lanes (*edit)[0];
-            expect (! editing::canDeleteLane (*recordLane, *recordLane), "the recording lane stays");
-            expect (editing::canDeleteLane (*added, *recordLane));
-            auto* clip = editing::insertFile (*added, audio, 0.0);
+            const auto recordLane = editing::recordingLane (*edit);
+            expect (recordLane == editing::lanes (*edit)[0], "the first lane records");
+            expect (! editing::canDeleteLane (*edit, recordLane), "the recording lane stays");
+            expect (editing::canDeleteLane (*edit, added));
+            auto* clip = editing::insertFile (*edit, added, audio, 0.0);
             expect (clip != nullptr);
-            editing::deleteLane (*added);
+            const auto clipsBefore = editing::allClips (*edit).size();
+            editing::deleteLane (*edit, added);
             expectEquals (editing::lanes (*edit).size(), 2, "deleted with its clip");
+            expectEquals (editing::allClips (*edit).size(), clipsBefore - 1, "its clip went with it");
             um.undo();
             const auto back = editing::lanes (*edit);
             expectEquals (back.size(), 3, "undo brings it back");
-            expectEquals (back[1]->getName(), juce::String ("Lane 2"));
-            expectEquals (back[1]->getClips().size(), 1, "with its clip");
+            expectEquals (back[1].getName(), juce::String ("Lane 2"));
+            expectEquals (editing::clipsOn (*edit, back[1]).size(), 1, "with its clip");
             lanes = editing::lanes (*edit);
         }
 
         beginTest ("Lanes: several added at once, moved, muted around and soloed alone (owner's list)");
         {
             const auto before = editing::lanes (*edit).size();
-            auto* first = editing::addLanes (*edit, 4, editing::lanes (*edit)[0]);
+            const auto first = editing::addLanes (*edit, 4, editing::lanes (*edit)[0]);
             auto all = editing::lanes (*edit);
             expectEquals (all.size(), before + 4);
             expectEquals (all.indexOf (first), 1, "below the lane asked for");
@@ -389,10 +395,10 @@ public:
             expectEquals (editing::lanes (*edit).size(), before, "one undo step");
 
             all = editing::lanes (*edit);
-            auto* moving = all[0];
-            editing::moveLane (*moving, all.size() - 1);
+            const auto moving = all[0];
+            editing::moveLane (*edit, moving, all.size() - 1);
             expect (editing::lanes (*edit).getLast() == moving, "to the bottom");
-            editing::moveLane (*moving, 0);
+            editing::moveLane (*edit, moving, 0);
             expect (editing::lanes (*edit).getFirst() == moving, "back to the top");
             um.undo();
             expect (editing::lanes (*edit).getLast() == moving, "undo moves it back");
@@ -400,15 +406,15 @@ public:
             expect (editing::lanes (*edit).getFirst() == moving);
 
             all = editing::lanes (*edit);
-            editing::muteOthers (*all[1]);
-            for (auto* t : all) expect (t->isMuted (false) == (t != all[1]), "others muted");
-            editing::muteOthers (*all[1]);
-            for (auto* t : all) expect (! t->isMuted (false), "again: all play");
+            editing::muteOthers (*edit, all[1]);
+            for (const auto& t : all) expect (t.isMuted() == ! (t == all[1]), "others muted");
+            editing::muteOthers (*edit, all[1]);
+            for (const auto& t : all) expect (! t.isMuted(), "again: all play");
 
-            editing::soloAlone (*all[0]);
-            for (auto* t : all) expect (t->isSolo (false) == (t == all[0]), "soloed alone");
-            editing::soloAlone (*all[0]);
-            for (auto* t : all) expect (! t->isSolo (false), "again: no solo");
+            editing::soloAlone (*edit, all[0]);
+            for (const auto& t : all) expect (t.isSoloed() == (t == all[0]), "soloed alone");
+            editing::soloAlone (*edit, all[0]);
+            for (const auto& t : all) expect (! t.isSoloed(), "again: no solo");
             lanes = editing::lanes (*edit);
         }
 

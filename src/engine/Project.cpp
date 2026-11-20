@@ -31,6 +31,7 @@ namespace carthage::project
     {
         auto edit = createEmptyEdit (engine, projectFile);
         editing::useConsistentFilePaths (*edit);
+        editing::prepareMix (*edit, true);   // 8 lanes, 50 channels (W47)
         return edit;
     }
 

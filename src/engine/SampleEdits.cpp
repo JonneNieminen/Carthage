@@ -61,8 +61,7 @@ namespace carthage::editing
         Clips same;
         const auto key = sampleKey (clip);
 
-        for (auto* lane : lanes (clip.edit))
-            for (auto* c : lane->getClips())
+        for (auto* c : allClips (clip.edit))
                 if (audioOf (*c) != nullptr && sampleKey (*c) == key)
                     same.add (c);
 
@@ -76,8 +75,7 @@ namespace carthage::editing
         const auto base = audio != nullptr ? audio->getOriginalFile().getFileNameWithoutExtension() : clip.getName();
         std::set<juce::String> taken;
 
-        for (auto* lane : lanes (clip.edit))
-            for (auto* c : lane->getClips())
+        for (auto* c : allClips (clip.edit))
                 taken.insert (sampleName (*c));
 
         int n = 2;
@@ -102,8 +100,7 @@ namespace carthage::editing
         if (name == sampleName (clip))
             return juce::Result::ok();
 
-        for (auto* lane : lanes (clip.edit))
-            for (auto* c : lane->getClips())
+        for (auto* c : allClips (clip.edit))
                 if (! same.contains (c) && sampleName (*c) == name)
                     return juce::Result::fail ("Another sample is called " + name);
 
@@ -304,8 +301,7 @@ namespace carthage::editing
 
     void syncEnvelopes (Edit& edit)
     {
-        for (auto* lane : lanes (edit))
-            for (auto* c : lane->getClips())
+        for (auto* c : allClips (edit))
                 if (c->state.getChildWithName (envelopeTag).isValid() || envelopePlugin (*c) != nullptr)
                     syncEnvelope (*c);
     }

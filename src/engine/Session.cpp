@@ -456,7 +456,9 @@ namespace carthage::engine
 
         const auto clipName = result.file.getFileNameWithoutExtension();
         editing::begin (*front().edit, "Record take");
-        tracktion::insertWaveClip (*front().track, clipName, result.file, position, tracktion::DeleteExistingClips::yes);
+        // On the recording lane, playing through the channel that has the input (W47).
+        if (auto* carrier = editing::carrierFor (*front().edit, editing::recordingLane (*front().edit), front().track))
+            tracktion::insertWaveClip (*carrier, clipName, result.file, position, tracktion::DeleteExistingClips::yes);
 
         lastTake = TakeInfo { result, startSeconds, alignment, clipName, interrupted, placedByGuess };
         return result;
@@ -578,6 +580,9 @@ namespace carthage::engine
         // Clips moved, trimmed or undone take their envelopes with them (4e).
         editing::syncEnvelopes (*edit);
 
+        // Lane mute and solo onto the carriers; only what could sound in the graph (W49).
+        editing::syncMix (*edit, track);
+
         // The transport's loop points follow the region after an edit or an undo (4g).
         editing::syncLoop (*edit);
 
@@ -617,18 +622,15 @@ namespace carthage::engine
         auto& edit = *p->edit;
         edit.playInStopEnabled = true;    // the graph runs while stopped, so the input is always heard
 
-        // A new project has eight lanes, Lane 1 to Lane 8 (W38); one opened keeps the lanes it was
-        // saved with, so a deleted lane stays deleted. The first lane records the input.
-        const auto existing = isNew ? 0 : tracktion::getAudioTracks (edit).size();
-        edit.ensureNumberOfAudioTracks (existing == 0 ? 8 : existing);
-        const auto lanes = tracktion::getAudioTracks (edit);
-        p->track = lanes.getFirst();
-
-        for (int i = existing; i < lanes.size(); ++i)
-            lanes[i]->setName ("Lane " + juce::String (i + 1));
+        // A new project has eight lanes (W38) and fifty channels; one saved before 5a keeps its
+        // sound, lane n playing through channel n (W47). The first channel has the input.
+        const auto fresh = isNew || tracktion::getAudioTracks (edit).isEmpty();
+        editing::prepareMix (edit, fresh);
+        p->track = editing::channels (edit).getFirst();
+        editing::syncMix (edit, p->track);
 
         // A new project's metronome marks the first beat of the bar (the tick-tock's deeper tock).
-        if (existing == 0)
+        if (fresh)
             edit.clickTrackEmphasiseBars = true;
 
         // An untouched untitled tab gives its place to this one.
@@ -1069,9 +1071,8 @@ namespace carthage::engine
         std::vector<Move> moves;
         juce::Array<juce::File> targets;
 
-        for (auto* lane : editing::lanes (*p.edit))
         {
-            for (auto* c : lane->getClips())
+            for (auto* c : editing::allClips (*p.edit))
             {
                 if (c == nullptr)
                     continue;
