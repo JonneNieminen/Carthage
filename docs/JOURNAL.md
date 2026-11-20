@@ -5,12 +5,18 @@ first, then `AGENTS.md`, `docs/ROADMAP.md` (status table and the latest report) 
 entries in `docs/DECISIONS.md`. Add a dated entry at the end of every working session: what was
 done, what is in hand, what is next. Keep it short; the details live in the commits and the docs.
 
-## Now (2026-11-19)
+## Now (2026-11-21)
 
-- **Phases 1 to 4g are verified** (reports in ROADMAP). **Phase 5 started** (owner: "Yes, start
-  phase 5"); its plan is W47 (questions page https://claude.ai/artifact/HWFLoVfJYknY5D9g7xxA8P,
-  db `answers`; its saving stopped connecting, so the owner asked for questions in the chat
-  instead). Mixer placement: W48. Next: 5a, channels as Tracktion tracks, lanes as a clip property.
+- **Phases 1 to 4g are verified.** **Phase 5 is mostly built** (W47 to W57): channels and routing,
+  insert Lines, sends, buses, Pre-Master, per-channel inputs, export (Cmd+R), delay compensation
+  (verified headless), and recording (arming, several takes at once, loop takes, punch, count-in,
+  low-latency monitoring). Settings is a view with pages.
+- **Next session starts with:** check CI for 1dd4f12 (`gh run list`); then the owner's recording
+  checklist with the iD44 (last entry below; the new build needs microphone access allowed);
+  fix what they find. Then the remaining exit checks: re-routing while playing, a busy session
+  without dropouts (bench), 50 idle channels (bench `idle-mixer`), a whole-project export null;
+  then 5e presets.
+- Stray file from a test: `build/demo/Demo/Recordings/Take 1 2026-11-20 171237.wav` (undone take).
 - **Open:** CI's Windows job on the 4f motion code (Motion_win.cpp) had not finished when the 4f
   report was written; check `gh run list` before the next code push.
 - The owner's macOS Zoom gesture was on Cmd + scroll and swallowed Carthage's zoom; they moved it.
