@@ -234,3 +234,12 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   as -deltaX, so Shift + wheel on a Mac moved sliders backwards. ValueSlider takes it as the wheel
   turn it was; the test fails without that.
 - Owner: all 4g checks pass.
+
+### 2026-11-20 (phase 5a, footing)
+
+- Owner: mixer replaces the grid via a toolbar button and F9, pops out like other views (W48).
+- `carthage-bench overlap`: two identical clips at the same time on one track both play (RMS
+  0.1000 → 0.2001), so lanes can share channel tracks.
+- `carthage-bench idle-mixer` (built-in audio, 128 samples): 50 empty tracks add 2.66 points of
+  audio-thread load; with `Track::setProcessing (false)` on them, -0.01. 5a's rule: a channel with
+  nothing that could sound through it (no clips, input, plugin or incoming route) is left out.

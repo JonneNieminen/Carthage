@@ -140,6 +140,8 @@ namespace
             else if (args.command == "settings-test") result = settingsTest();
             else if (args.command == "clip-envelope") result = clipEnvelope();
             else if (args.command == "clip-formant") result = clipFormant();
+            else if (args.command == "overlap") result = overlap();
+            else if (args.command == "idle-mixer") result = idleMixer();
             else say ("unknown command: " + args.command);
 
             onMessageThreadVoid ([this] { session.reset(); });
@@ -415,6 +417,104 @@ namespace
             check (moved (5.25) > 0.05f && moved (5.75) < 0.001f, "the envelope moves with the clip");
             say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
             return checksFailed == 0 ? 0 : 1;
+        }
+
+        /** Phase 5a's footing (W47): once lanes are only where clips are drawn, clips of different
+            lanes share a channel's track and may overlap on it. Two identical tones at the same
+            time on one track must both play: the render is twice as loud as one. */
+        int overlap()
+        {
+            const auto tone = folder.getChildFile ("tone.wav");
+            {
+                WavAudioFormat wav;
+                std::unique_ptr<OutputStream> out = std::make_unique<FileOutputStream> (tone);
+                auto writer = wav.createWriterFor (out, AudioFormatWriterOptions{}.withSampleRate (48000.0).withNumChannels (1).withBitsPerSample (24));
+                AudioBuffer<float> b (1, 48000);
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                    b.setSample (0, i, 0.2f * std::sin (static_cast<float> (i) * 0.05f));
+                writer->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
+            }
+
+            BigInteger mask;
+            tracktion::AudioTrack* track = nullptr;
+            onMessageThreadVoid ([&]
+            {
+                auto& edit = session->getEdit();
+                track = carthage::editing::lanes (edit)[1];
+                carthage::editing::insertFile (*track, tone, 8.0);   // 4 s at 120 bpm
+                mask.setBit (tracktion::getAllTracks (edit).indexOf (track));
+            });
+
+            const auto render = [&] (const String& name)
+            {
+                const auto out = folder.getChildFile (name + ".wav");
+                waitMs (300);
+                tracktion::Renderer::renderToFile (name, out, session->getEdit(), { tracktion::TimePosition(), tracktion::TimePosition::fromSeconds (6.0) },
+                                                   mask, true, true, {}, false);
+                AudioFormatManager formats;
+                carthage::audio::registerReadable (formats);
+                std::unique_ptr<AudioFormatReader> reader (formats.createReaderFor (out));
+                AudioBuffer<float> b (1, 4800);
+                if (reader != nullptr)
+                    reader->read (&b, 0, 4800, static_cast<int64> (4.5 * reader->sampleRate), true, false);
+                return reader != nullptr ? b.getRMSLevel (0, 0, 4800) : -1.0f;
+            };
+
+            const auto one = render ("one");
+            onMessageThreadVoid ([&] { carthage::editing::insertFile (*track, tone, 8.0); });   // the same tone, the same time, the same track
+            const auto clips = onMessageThread ([&] { return track->getClips().size(); });
+            const auto two = render ("two");
+            say ("RMS at 4.5 s: one clip " + String (one, 4) + ", two overlapping clips on one track " + String (two, 4)
+                 + " (" + String (clips) + " clips on the track)");
+            check (clips == 2, "both clips are on the track");
+            check (one > 0.05f && std::abs (two / one - 2.0f) < 0.05f, "both play: twice as loud");
+            say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
+            return checksFailed == 0 ? 0 : 1;
+        }
+
+        /** What 50 empty channels cost (5a exit check): the audio thread's load playing an empty
+            project with its 8 tracks, then with 58 (the default mixer's 50 plus the lanes'). */
+        int idleMixer()
+        {
+            if (! openDevice (args.getInt ("buffer", 128)))
+                return 1;
+
+            const auto measure = [this] (const String& what)
+            {
+                onMessageThreadVoid ([this] { session->getEdit().getTransport().play (false); });
+                waitMs (1500);
+                onMessageThreadVoid ([this] { session->getCallback().takeLoad(); });
+                double sum = 0.0;
+                float worst = 0.0f;
+                for (int i = 0; i < 10; ++i)
+                {
+                    waitMs (1000);
+                    const auto load = onMessageThread ([this] { return session->getCallback().takeLoad(); });
+                    sum += load.average;
+                    worst = std::max (worst, load.peak);
+                }
+                onMessageThreadVoid ([this] { session->getEdit().getTransport().stop (false, false); });
+                say (what + ": audio-thread load " + String (sum / 10.0 * 100.0, 2) + "% average, " + String (worst * 100.0f, 2) + "% worst block");
+                return sum / 10.0;
+            };
+
+            const auto tracks = onMessageThread ([this] { return tracktion::getAudioTracks (session->getEdit()).size(); });
+            const auto before = measure (String (tracks) + " tracks, playing, empty");
+            onMessageThreadVoid ([this, tracks] { session->getEdit().ensureNumberOfAudioTracks (tracks + 50); });
+            waitMs (1000);
+            const auto after = measure (String (tracks + 50) + " tracks, playing, empty");
+            // 5a's rule: a channel with nothing that could sound through it is left out of the graph.
+            onMessageThreadVoid ([this, tracks]
+            {
+                const auto all = tracktion::getAudioTracks (session->getEdit());
+                for (int i = tracks; i < all.size(); ++i)
+                    all[i]->setProcessing (false);
+            });
+            waitMs (1000);
+            const auto skipped = measure (String (tracks + 50) + " tracks, the 50 empty ones left out of the graph");
+            say ("RESULT idle-mixer: 50 more empty tracks add " + String ((after - before) * 100.0, 2) + " points of audio-thread load; left out of the graph, "
+                 + String ((skipped - before) * 100.0, 2) + " points");
+            return 0;
         }
 
         /** The sample editor's formant shift (4e), rendered: the same tone plain and shifted 6
