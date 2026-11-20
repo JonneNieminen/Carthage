@@ -11,6 +11,10 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Bus channels (Settings > Mixer, off by default): every 4th, 5th, 8th, 10th, 12th or 16th
+  channel is drawn wider and marked "Bus", a place to route a group of channels.
+- The plugin browser's manufacturer filter has its own search: type a few letters to narrow the
+  list, the arrows and Return choose. Each manufacturer shows how many plugins it has.
 - Settings is now a view like the mixer: it takes the place of the lanes (or a window of its own),
   with its pages listed on the left (Audio, Recording, Projects, Timeline, Mixer, Browser, Display,
   Shortcuts, Updates). The search looks through every page and shows how many settings match on
@@ -80,6 +84,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   its name. Settings > Browser can fit a dropped loop to the project's tempo.
 
 ### Changed
+- The Settings button is a gear, and its tooltip says Settings.
+- "Maker" is now "manufacturer" in the plugin browser.
+- Double-clicking the metronome level returns it to 60 %.
 - Plugin windows open at the plugin's own size whatever the interface size (they were shrunk with
   it, clipping or cramping the editor). The plugin list shows AU or VST3 beside each name.
 - Choosing a channel's input, hearing it and the channel that takes record are undo steps; a wheel

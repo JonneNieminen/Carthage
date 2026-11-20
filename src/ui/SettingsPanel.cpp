@@ -141,7 +141,7 @@ namespace carthage::ui
             case Page::recording: return "How new takes are saved, and the metronome you play along to.";
             case Page::projects:  return "What Carthage opens with, what tempo changes do to clips, and where samples are kept.";
             case Page::timeline:  return "How the lanes look and what the mouse does on them.";
-            case Page::mixer:     return "How channels reach master.";
+            case Page::mixer:     return "How channels reach master, and which channels are buses.";
             case Page::browser:   return "The samples and plugins panel beside the lanes.";
             case Page::display:   return "How large everything is, and the window layouts you can recall.";
             case Page::shortcuts: return "Every command and the keys that run it. Click a key to change it.";
@@ -319,6 +319,34 @@ namespace carthage::ui
                               "Off, everything goes straight to master; its plugins stay, unused.");
         preMaster.onClick = [this] { session.setUsePreMaster (preMaster.getToggleState()); };
 
+        // Bus channels (owner): off by default; every Nth channel wider and marked "Bus".
+        busChannels.setToggleState (props.getBoolValue ("busChannels", false), dontSendNotification);
+        busChannels.setTooltip ("Every few channels, one is drawn wider and marked Bus: a place to route a group of channels "
+                                "(drums, guitars) and process them together. Only how the mixer looks; routing stays yours.");
+        styleLabel (busEveryLabel, theme::textMd, theme::muted);
+        busEveryLabel.setText ("Bus every", dontSendNotification);
+
+        for (const auto n : { 4, 5, 8, 10, 12, 16 })
+            busEvery.addItem (String (n) + "th channel", n);
+
+        busEvery.setSelectedId (props.getIntValue ("busEvery", 10), dontSendNotification);
+        if (busEvery.getSelectedId() == 0)
+            busEvery.setSelectedId (10, dontSendNotification);
+
+        busEvery.setTooltip ("Which channels are buses: with every 10th, channels 10, 20, 30 and so on");
+        busEvery.setEnabled (busChannels.getToggleState());
+
+        const auto busChanged = [this]
+        {
+            auto& p = session.getEngine().getPropertyStorage().getPropertiesFile();
+            p.setValue ("busChannels", busChannels.getToggleState());
+            p.setValue ("busEvery", busEvery.getSelectedId());
+            busEvery.setEnabled (busChannels.getToggleState());
+            if (onBusChannelsChanged) onBusChannelsChanged();
+        };
+        busChannels.onClick = busChanged;
+        busEvery.onChange = busChanged;
+
         // Windows (F21): how many layouts the Layouts menu offers.
         styleLabel (slotsLabel, theme::textMd, theme::muted);
         slotsLabel.setText ("Layout slots", dontSendNotification);
@@ -342,7 +370,7 @@ namespace carthage::ui
         for (auto* c : std::initializer_list<Component*> { &windowsHeading, &slotsLabel, &slots, &uiScaleLabel, &uiScale })
             body.addAndMakeVisible (c);
 
-        for (auto* c : std::initializer_list<Component*> { &browserHeading, &panelWidthLabel, &panelWidth, &textSizeLabel, &textSize, &playWhileHeld, &fitLoops, &preMaster })
+        for (auto* c : std::initializer_list<Component*> { &browserHeading, &panelWidthLabel, &panelWidth, &textSizeLabel, &textSize, &playWhileHeld, &fitLoops, &preMaster, &busChannels, &busEveryLabel, &busEvery })
             body.addAndMakeVisible (c);
 
         styleLabel (atLaunchLabel, theme::textMd, theme::muted);
@@ -380,7 +408,7 @@ namespace carthage::ui
         clickLevel.setTextBoxStyle (Slider::TextBoxRight, false, 52, 22);
         clickLevel.setRange (20.0, 100.0, 1.0);
         clickLevel.setTextValueSuffix (" %");
-        clickLevel.setTooltip ("How loud the metronome is, for this project");
+        clickLevel.setTooltip ("How loud the metronome is, for this project. Double-click: 60 %.");
         clickLevel.onValueChange = [this] { session.getEdit().clickTrackGain = static_cast<float> (clickLevel.getValue() / 100.0); };
         clickAccent.setTooltip ("The first beat of each bar plays the louder, brighter sound. For this project.");
         clickAccent.onClick = [this] { session.getEdit().clickTrackEmphasiseBars = clickAccent.getToggleState(); };
@@ -890,7 +918,7 @@ namespace carthage::ui
         sections.push_back ({ Page::recording, &metronomeHeading, { row (clickSoundLabel, clickSound), row (clickLevelLabel, clickLevel),
                                                    whole (clickAccent, rowHeight), whole (clickWhileRecording, rowHeight) } });
         sections.push_back ({ Page::timeline, &timelineHeading, { row (beatShadingLabel, beatShading), whole (clickPlaces, rowHeight), whole (rightClickDeletes, rowHeight) } });
-        sections.push_back ({ Page::mixer, &mixerHeading, { whole (preMaster, rowHeight) } });
+        sections.push_back ({ Page::mixer, &mixerHeading, { whole (preMaster, rowHeight), whole (busChannels, rowHeight), row (busEveryLabel, busEvery) } });
         const auto hintHeight = updatesHint.getText().isEmpty() ? 0 : 36;
         sections.push_back ({ Page::updates, &updatesHeading, { Line { { &versionLabel, &versionValue, &checkNow }, rowHeight + theme::space1, [this] (Rectangle<int> line)
                                                         {

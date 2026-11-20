@@ -171,7 +171,7 @@ namespace carthage::app
                     info.addDefaultKeypress ('b', primary | juce::ModifierKeys::shiftModifier);
                     break;
                 case audioSettings:
-                    info.setInfo ("Settings", "Audio interface, latency and updates", "Settings", 0);
+                    info.setInfo ("Settings", "Open or close Settings: audio, recording, projects, the mixer, display, shortcuts and updates", "Settings", 0);
                     info.addDefaultKeypress (',', primary);
                     break;
                 // Tools: a tap switches; holding the key switches until it is released (F7).

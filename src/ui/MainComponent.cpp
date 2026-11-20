@@ -322,6 +322,7 @@ namespace carthage::ui
         settings.onPlayWhileHeldChanged = [this] (bool held) { samples.setPlayWhileHeld (held); };
         settings.onShowLoadChanged = [this] (bool) { resized(); };
         settings.onBeatShadingChanged = [this] { timeline.gridChanged(); };
+        settings.onBusChannelsChanged = [this] { mixer.busesChanged(); };
         settings.onRunSettingsTest = [this] { runSettingsTest (false); };
 
         addChildComponent (sampleEditor);

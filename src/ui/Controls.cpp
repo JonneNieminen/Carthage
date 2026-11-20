@@ -399,18 +399,39 @@ namespace carthage::ui
             }
             case Glyph::settings:
             {
-                // Three sliders: "settings" without a cog's fuss.
-                const auto w = s * 0.8f;
-                for (int i = -1; i <= 1; ++i)
+                // A gear with spokes, as macOS draws Settings (owner): ten teeth round a rim,
+                // six spokes from the hub.
+                constexpr int teeth = 10;
+                const auto outer = s * 0.62f, root = s * 0.49f, rim = s * 0.34f, hub = s * 0.1f;
+                const auto step = MathConstants<float>::twoPi / static_cast<float> (teeth);
+                const auto at = [c] (float angle, float radius) { return c.getPointOnCircumference (radius, angle); };
+
+                Path gear;
+                for (int k = 0; k < teeth; ++k)
                 {
-                    const auto y = c.y + static_cast<float> (i) * s * 0.33f;
-                    Path p;
-                    p.startNewSubPath (c.x - w * 0.5f, y);
-                    p.lineTo (c.x + w * 0.5f, y);
-                    g.strokePath (p, roundStroke);
-                    const auto kx = c.x + static_cast<float> (i) * w * 0.22f;
-                    g.fillEllipse (kx - 2.5f, y - 2.5f, 5.0f, 5.0f);
+                    const auto a = static_cast<float> (k) * step;
+                    const auto p0 = at (a - step * 0.5f, root), p1 = at (a - step * 0.2f, outer), p2 = at (a + step * 0.2f, outer);
+
+                    if (k == 0) gear.startNewSubPath (p0); else gear.lineTo (p0);
+                    gear.lineTo (at (a - step * 0.28f, root));
+                    gear.lineTo (p1);
+                    gear.lineTo (p2);
+                    gear.lineTo (at (a + step * 0.28f, root));
                 }
+                gear.closeSubPath();
+                g.strokePath (gear, PathStrokeType (1.5f, PathStrokeType::mitered, PathStrokeType::rounded));
+
+                g.drawEllipse (Rectangle<float> (rim * 2.0f, rim * 2.0f).withCentre (c), 1.5f);
+
+                Path spokes;
+                for (int k = 0; k < 6; ++k)
+                {
+                    const auto a = static_cast<float> (k) * MathConstants<float>::twoPi / 6.0f;
+                    spokes.startNewSubPath (at (a, hub));
+                    spokes.lineTo (at (a, rim));
+                }
+                g.strokePath (spokes, PathStrokeType (1.25f, PathStrokeType::curved, PathStrokeType::rounded));
+                g.fillEllipse (Rectangle<float> (hub * 2.4f, hub * 2.4f).withCentre (c));
                 break;
             }
             case Glyph::mixer:

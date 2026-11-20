@@ -227,7 +227,8 @@ namespace carthage::ui
             const auto r = getLocalBounds().toFloat();
             const auto chosen = track != nullptr ? view.selected == track->itemID : view.masterSelected;
 
-            g.setColour (! channelStrip() ? theme::card : theme::bg2);
+            const auto bus = channelStrip() && view.isBus (index);
+            g.setColour (! channelStrip() || bus ? theme::card : theme::bg2);   // a bus sits forward, as master does
             g.fillRoundedRectangle (r, theme::radiusSm);
 
             if (chosen || dropHover)
@@ -241,9 +242,21 @@ namespace carthage::ui
             g.setColour (track != nullptr && editing::isChannelMuted (*track) ? colour.withMultipliedAlpha (0.35f) : colour);
             g.fillRoundedRectangle (colourBar.toFloat(), 1.5f);
 
+            auto nameBox = nameArea;
+
+            if (bus)
+            {
+                // "Bus" in a small tag in the channel's colour, beside the name.
+                const auto tag = nameBox.removeFromRight (30).reduced (1, 1).toFloat();
+                g.setColour (colourOf (*track, index));
+                g.drawRoundedRectangle (tag.reduced (0.5f), theme::radiusXs, theme::stroke);
+                g.setFont (theme::denseFont (theme::textXs, true));
+                g.drawText ("Bus", tag, Justification::centred, false);
+            }
+
             g.setColour (theme::text);
             g.setFont (theme::denseFont (theme::textSm, true));
-            g.drawFittedText (track != nullptr ? shortName (track->getName()) : String ("Master"), nameArea, Justification::centred, 1, 0.7f);
+            g.drawFittedText (track != nullptr ? shortName (track->getName()) : String ("Master"), nameBox, Justification::centred, 1, 0.7f);
 
             if (channelStrip())
             {
@@ -442,7 +455,8 @@ namespace carthage::ui
                 if (soloArea.contains (pos))
                     return (editing::isChannelSoloed (*track) ? "Stop soloing this channel" : "Solo this channel") + String (". ") + cmd + "-click: this channel alone; again: no solo";
                 if (nameArea.contains (pos))
-                    return "Double-click to rename. Right-click for its colour, to route, move or delete it.";
+                    return (view.isBus (index) ? String ("A bus channel: route other channels into it to process them together. ") : String())
+                           + "Double-click to rename. Right-click for its colour, to route, move or delete it.";
                 if (inputArea.contains (pos))
                     return "The interface input it takes. Click to choose.";
                 if (outputArea.contains (pos))
@@ -1426,6 +1440,24 @@ namespace carthage::ui
         session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("mixerZoom", static_cast<double> (zoom));
     }
 
+    int MixerView::busInterval() const
+    {
+        auto& props = session.getEngine().getPropertyStorage().getPropertiesFile();
+        return props.getBoolValue ("busChannels", false) ? std::clamp (props.getIntValue ("busEvery", 10), 2, 64) : 0;
+    }
+
+    bool MixerView::isBus (int channelIndex) const
+    {
+        const auto every = busInterval();
+        return every > 0 && channelIndex >= 0 && (channelIndex + 1) % every == 0;
+    }
+
+    void MixerView::busesChanged()
+    {
+        resized();
+        repaint();
+    }
+
     void MixerView::repaintCables()
     {
         if (stripHolder != nullptr)
@@ -1915,13 +1947,20 @@ namespace carthage::ui
 
         addButton.setBounds (bottom.withX (r.getX()).withWidth (120).reduced (0, 2));
         viewport.setBounds (r);
-        const auto channelCount = strips.size() - pinned;
         const auto width = roundToInt (static_cast<float> (stripWidth) * zoom);
-        stripHolder->setSize (std::max (r.getWidth(), channelCount * (width + stripGap)), height);
+        const auto busWidth = roundToInt (static_cast<float> (width) * 1.5f);   // a bus stands out by its size
 
         // The strips leave a band under them for the cables (W51).
+        int x = 0;
+
         for (int i = pinned; i < strips.size(); ++i)
-            strips[i]->setBounds ((i - pinned) * (width + stripGap), 0, width, height - cableBand);
+        {
+            const auto w = isBus (i - pinned) ? busWidth : width;
+            strips[i]->setBounds (x, 0, w, height - cableBand);
+            x += w + stripGap;
+        }
+
+        stripHolder->setSize (std::max (r.getWidth(), x), height);
 
         {
             auto title = column.removeFromTop (28);

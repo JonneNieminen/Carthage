@@ -315,3 +315,14 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   the toolbar's Settings button; full-screen clicks stopped reaching the toolbar after the window
   moved (the mixer button failed the same way), so it is untested, not known broken.
 
+### 2026-11-20 (gear, manufacturer search, bus channels, W53)
+
+- Settings glyph is a spoked gear; its tooltip starts "Open or close Settings". Metronome level
+  double-click returns to 60 %. "Maker" renamed "manufacturer"; the filter (a ComboBox whose
+  showPopup opens a call-out) has a search field, counts, arrows and Return.
+- Bus channels: Settings > Mixer, off by default; every Nth channel 1.5x wide with a "Bus" tag.
+  `carthage-snapshot` writes `mixer-buses.png` (every 4th).
+- Checked in the app: the gear opens Settings (the earlier failed clicks were the tool), the
+  manufacturer search ("fab" + Return filters to FabFilter's 28; arrows back to Any manufacturer).
+  Bus channels checked by snapshot only. Each new ad-hoc build asks for microphone access again.
+

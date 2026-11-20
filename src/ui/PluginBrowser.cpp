@@ -1,5 +1,7 @@
 #include "PluginBrowser.h"
 
+#include <map>
+
 namespace carthage::ui
 {
     using namespace juce;
@@ -20,6 +22,141 @@ namespace carthage::ui
         Rectangle<int> starArea (int width, int height)   { return { width - 30, 0, 30, height }; }
 
         String formatShort (const String& f)   { return f == "AudioUnit" ? "AU" : f; }
+
+        /** The manufacturers in a call-out: a search field above them, typing narrows the list,
+            the arrows move, Return or a click chooses, Escape closes. */
+        class ManufacturerList final : public Component, private ListBoxModel
+        {
+        public:
+            ManufacturerList (StringArray all, std::map<String, int> countsIn, String current, std::function<void (const String&)> chosen)
+                : names (std::move (all)), counts (std::move (countsIn)), choice (std::move (current)), onChosen (std::move (chosen))
+            {
+                search.setTextToShowWhenEmpty (String::fromUTF8 ("Search manufacturers\xe2\x80\xa6"), theme::faint);
+                search.setFont (theme::uiFont());
+                search.setIndents (theme::space2, 6);
+                search.onTextChange = [this] { refresh(); };
+                search.onReturnKey = [this] { choose (std::max (0, list.getSelectedRow())); };
+                search.onEscapeKey = [this] { if (auto* box = findParentComponentOfClass<CallOutBox>()) box->dismiss(); };
+                search.addKeyListener (&arrows);
+                addAndMakeVisible (search);
+
+                list.setRowHeight (26);
+                list.setColour (ListBox::backgroundColourId, theme::bg2);
+                list.setOutlineThickness (0);
+                addAndMakeVisible (list);
+
+                setSize (260, 340);
+                refresh();
+            }
+
+            ~ManufacturerList() override   { search.removeKeyListener (&arrows); }
+
+            void focusSearch()   { search.grabKeyboardFocus(); }
+
+            void resized() override
+            {
+                auto r = getLocalBounds();
+                search.setBounds (r.removeFromTop (30));
+                r.removeFromTop (theme::space1);
+                list.setBounds (r);
+            }
+
+        private:
+            StringArray names;
+            std::map<String, int> counts;
+            String choice;
+            std::function<void (const String&)> onChosen;
+            TextEditor search;
+            ListBox list { {}, this };
+            StringArray shown;   // "" first: any manufacturer
+
+            /** Up and Down from the search field move through the list. */
+            struct Arrows final : public KeyListener
+            {
+                ListBox* target = nullptr;
+
+                bool keyPressed (const KeyPress& key, Component*) override
+                {
+                    if (target == nullptr || (key != KeyPress::upKey && key != KeyPress::downKey))
+                        return false;
+
+                    const auto row = std::clamp (target->getSelectedRow() + (key == KeyPress::upKey ? -1 : 1), 0, target->getListBoxModel()->getNumRows() - 1);
+                    target->selectRow (row);
+                    return true;
+                }
+            } arrows;
+
+            void refresh()
+            {
+                arrows.target = &list;
+                const auto query = search.getText().trim();
+                shown.clear();
+
+                if (query.isEmpty())
+                    shown.add ({});   // "Any manufacturer" while not searching
+
+                for (const auto& n : names)
+                    if (query.isEmpty() || n.containsIgnoreCase (query))
+                        shown.add (n);
+
+                list.updateContent();
+                const auto current = shown.indexOf (choice);
+                list.selectRow (query.isEmpty() && current >= 0 ? current : 0);
+                list.repaint();
+            }
+
+            void choose (int row)
+            {
+                if (row < 0 || row >= shown.size())
+                    return;
+
+                const auto picked = shown[row];
+
+                if (auto* box = findParentComponentOfClass<CallOutBox>())
+                    box->dismiss();
+
+                if (onChosen)
+                    onChosen (picked);
+            }
+
+            int getNumRows() override   { return std::max (1, shown.size()); }
+
+            void paintListBoxItem (int row, Graphics& g, int width, int height, bool selected) override
+            {
+                if (shown.isEmpty())
+                {
+                    g.setColour (theme::muted);
+                    g.setFont (theme::uiFont (theme::textSm));
+                    g.drawText ("No manufacturer matches", theme::space2, 0, width - theme::space4, height, Justification::centredLeft, true);
+                    return;
+                }
+
+                if (row < 0 || row >= shown.size())
+                    return;
+
+                if (selected)
+                {
+                    g.setColour (theme::hover);
+                    g.fillRect (0, 0, width, height);
+                }
+
+                const auto& name = shown[row];
+                const auto isChoice = name == choice;
+                g.setColour (isChoice ? theme::accentText : theme::text);   // the one in use
+                g.setFont (theme::uiFont (theme::textMd, isChoice));
+                g.drawText (name.isEmpty() ? String ("Any manufacturer") : name, theme::space2, 0, width - 48, height, Justification::centredLeft, true);
+
+                if (const auto found = counts.find (name); found != counts.end() && name.isNotEmpty())
+                {
+                    g.setColour (theme::muted);
+                    g.setFont (theme::denseFont (theme::textXs));
+                    g.drawText (String (found->second), width - 44, 0, 36, height, Justification::centredRight, false);
+                }
+            }
+
+            void listBoxItemClicked (int row, const MouseEvent&) override   { choose (row); }
+            void returnKeyPressed (int row) override                       { choose (row); }
+        };
     }
 
     PluginBrowser::PluginBrowser (engine::Session& s) : session (s)
@@ -34,7 +171,7 @@ namespace carthage::ui
         search.setTextToShowWhenEmpty ("Search plugins", theme::faint);
         search.setFont (theme::uiFont());
         search.setIndents (theme::space2, 6);
-        search.setTooltip ("Type part of a name or maker; letters can be spread out (\"nam\" finds Neural Amp Modeler)");
+        search.setTooltip ("Type part of a name or manufacturer; letters can be spread out (\"nam\" finds Neural Amp Modeler)");
         search.onTextChange = [this] { filter.query = search.getText(); refresh(); };
         search.onReturnKey = [this]
         {
@@ -65,7 +202,8 @@ namespace carthage::ui
             refresh();
         };
 
-        vendor.setTooltip ("Show one maker's plugins");
+        vendor.setTooltip ("Show one manufacturer's plugins. Type to find one in the list.");
+        vendor.onPopup = [this] { showManufacturers(); };
         vendor.onChange = [this]
         {
             filter.vendor = vendor.getSelectedId() > 1 ? vendor.getText() : String();
@@ -94,6 +232,29 @@ namespace carthage::ui
         search.selectAll();
     }
 
+    void PluginBrowser::showManufacturers()
+    {
+        auto& library = session.getPluginLibrary();
+        std::map<String, int> counts;
+
+        for (const auto& e : library.getEntries())
+            ++counts[e.description.manufacturerName];
+
+        auto chooser = std::make_unique<ManufacturerList> (library.getVendors(), std::move (counts), filter.vendor,
+                                                           [safe = SafePointer<PluginBrowser> (this)] (const String& name)
+        {
+            if (safe == nullptr)
+                return;
+
+            const auto index = safe->session.getPluginLibrary().getVendors().indexOf (name);
+            safe->vendor.setSelectedId (name.isEmpty() || index < 0 ? 1 : index + 2, sendNotificationSync);
+        });
+
+        auto* picker = chooser.get();
+        CallOutBox::launchAsynchronously (std::move (chooser), vendor.getScreenBounds(), nullptr);
+        picker->focusSearch();
+    }
+
     void PluginBrowser::setKind (Kind kind)
     {
         filter.kind = kind;
@@ -113,10 +274,10 @@ namespace carthage::ui
         auto& library = session.getPluginLibrary();
         auto& catalogue = session.getPlugins();
 
-        // The maker list follows the plugins; keep the choice if that maker is still there.
+        // The manufacturer list follows the plugins; keep the choice if that one is still there.
         const auto chosen = filter.vendor;
         vendor.clear (dontSendNotification);
-        vendor.addItem ("Any maker", 1);
+        vendor.addItem ("Any manufacturer", 1);
         const auto vendors = library.getVendors();
 
         for (int i = 0; i < vendors.size(); ++i)

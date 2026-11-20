@@ -6,8 +6,17 @@
 
 namespace carthage::ui
 {
+    /** The manufacturer filter: looks like the other menus, but opens a list with its own search,
+        so one manufacturer among many is a few letters away (owner). */
+    class ManufacturerBox final : public juce::ComboBox
+    {
+    public:
+        std::function<void()> onPopup;
+        void showPopup() override   { if (onPopup) onPopup(); }
+    };
+
     /** The plugin browser (brief, feature 6): a panel on the left of the window. The scan's state
-        and Rescan at the top; a search field and filters for type, format and maker; the list,
+        and Rescan at the top; a search field and filters for type, format and manufacturer; the list,
         which without a search shows Recent, Favourites and every plugin A to Z, and with one shows
         the best matches first. A plugin goes into the insert by double-click, Enter, or a drag onto
         the plugin card. Plugins that can not be used are listed last, each with its reason and
@@ -63,7 +72,9 @@ namespace carthage::ui
         juce::TextButton rescan { "Rescan" };
         juce::TextEditor search;
         juce::TextButton kindAll { "All" }, kindInstruments { "Instruments" }, kindEffects { "Effects" };
-        juce::ComboBox format, vendor;
+        juce::ComboBox format;
+        ManufacturerBox vendor;
+        void showManufacturers();
         juce::ListBox list;
 
         const engine::PluginLibrary::Entry* entryAt (int row) const;

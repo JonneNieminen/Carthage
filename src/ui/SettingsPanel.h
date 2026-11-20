@@ -54,6 +54,9 @@ namespace carthage::ui
         std::function<void (bool)> onShowLoadChanged;
         std::function<void()> onBeatShadingChanged;
 
+        /** "Mark bus channels" or its interval changed: the mixer draws them again. */
+        std::function<void()> onBusChannelsChanged;
+
         /** "Check now", beside the version: the same as "Check for updates…" in the menu. */
         std::function<void()> onCheckForUpdates;
         void setBetaUpdates (bool on, bool available, const juce::String& note);
@@ -99,7 +102,7 @@ namespace carthage::ui
 
         juce::Label metronomeHeading, clickSoundLabel, clickLevelLabel;
         juce::ComboBox clickSound;
-        ValueSlider clickLevel { 100.0 };   // %, Tracktion's own range 20-100
+        ValueSlider clickLevel { 60.0 };   // %, Tracktion's own range 20-100; double-click: 60 % (owner)
         Switch clickAccent { "Accent the first beat of each bar" };
         Switch clickWhileRecording { "Only while recording" };
         std::unique_ptr<juce::FileChooser> clickChooser;
@@ -118,6 +121,9 @@ namespace carthage::ui
         Switch playWhileHeld { "Play sounds only while held" };
         Switch fitLoops { "Fit loops to the project tempo" };
         Switch preMaster { "Pre-Master channel before master" };
+        Switch busChannels { "Mark bus channels" };
+        juce::Label busEveryLabel;
+        juce::ComboBox busEvery;
         Switch checkPlugins { "Check for new plugins at every launch" };
         ShortcutEditor shortcuts;
         juce::Viewport viewport;

@@ -69,6 +69,12 @@ namespace carthage::ui
         void routesChanged();
         void repaintCables();
 
+        /** Bus channels (owner, Settings > Mixer, off by default): every Nth channel is drawn wider
+            and marked "Bus", a place to gather others. Only how it looks; routing is unchanged. */
+        int busInterval() const;   // 0: off
+        bool isBus (int channelIndex) const;
+        void busesChanged();
+
         /** Strip width, as the lanes zoom in time: Cmd+wheel or pinch over the strips (W51). */
         void zoomBy (float factor);
 

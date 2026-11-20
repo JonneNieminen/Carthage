@@ -5,7 +5,7 @@
 //   carthage-snapshot OUTPUT_FOLDER [--device NAME] [--output-device NAME]
 //                     [--plugin-format VST3 --plugin FILE_OR_ID] [--record-seconds 3] [--scan]
 //
-// Writes main.png, samples*.png (with --samples FOLDER), start*.png (start.png with --project FILE), tabs.png, settings.png, settings-updates.png, settings-shortcuts.png, mixer.png, mixer-in.png, update*.png (the update banner with sample text), plugin.png
+// Writes main.png, samples*.png (with --samples FOLDER), start*.png (start.png with --project FILE), tabs.png, settings.png, settings-updates.png, settings-shortcuts.png, mixer.png, mixer-in.png, mixer-buses.png, update*.png (the update banner with sample text), plugin.png
 // (with --plugin) and take.png (after recording).
 
 #include <app/Commands.h>
@@ -284,6 +284,22 @@ namespace
             onMessageThreadVoid ([this] { content->getMixer().select (carthage::editing::channels (session->getEdit())[4]); });
             Thread::sleep (200);
             capture (outDir.getChildFile ("mixer-in.png"));
+
+            // Bus channels on, every 4th (Settings > Mixer): Snare and Reverb are buses.
+            onMessageThreadVoid ([this]
+            {
+                auto& props = session->getEngine().getPropertyStorage().getPropertiesFile();
+                props.setValue ("busChannels", true);
+                props.setValue ("busEvery", 4);
+                content->getMixer().busesChanged();
+            });
+            Thread::sleep (200);
+            capture (outDir.getChildFile ("mixer-buses.png"));
+            onMessageThreadVoid ([this]
+            {
+                session->getEngine().getPropertyStorage().getPropertiesFile().setValue ("busChannels", false);
+                content->getMixer().busesChanged();
+            });
             onMessageThreadVoid ([this] { content->getMixer().select (carthage::editing::channels (session->getEdit())[2]); });
 
             // CARTHAGE_SNAPSHOT_PLUGIN=<VST3 file>: a real plugin onto Kick's Line through the
