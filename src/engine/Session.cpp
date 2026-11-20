@@ -127,7 +127,7 @@ namespace carthage::engine
         // short. Run it now, while nothing plays. Later scans only rebuild on a hardware change.
         dm.rescanMidiDeviceList();
 
-        callback = std::make_unique<AudioCallback> (*engine, recorder, probe, preview);
+        callback = std::make_unique<AudioCallback> (*engine, std::span<TakeRecorder, AudioCallback::maxTakes> (recorders), probe, preview);
         callback->attach();
 
         dm.addChangeListener (this);
@@ -144,8 +144,9 @@ namespace carthage::engine
         pluginScanner.reset();   // stops a scan and waits for its scanners before anything else goes
         engine->getDeviceManager().removeChangeListener (this);
 
-        if (isRecording())
-            recorder.stop();
+        for (auto& r : recorders)
+            if (r.isRecording())
+                r.stop();
 
         for (auto& p : projects)
             p->edit->getTransport().stop (false, true);
@@ -194,7 +195,8 @@ namespace carthage::engine
 
         // Eight seconds of FIFO: the writer drains it every few milliseconds, so this only matters
         // if the disk stalls. Allocated here, never on the audio thread.
-        recorder.prepare (2, static_cast<int> (rate * 8.0));
+        for (auto& r : recorders)
+            r.prepare (2, static_cast<int> (rate * 8.0));
         probe.prepare (rate);
         preparedRate = rate;
         preparedInputs = inputs;
@@ -246,6 +248,107 @@ namespace carthage::engine
         editing::setRecordChannel (*front().edit, channel);
         front().track = &channel;
         applyInputRouting();
+    }
+
+    void Session::setArmed (tracktion::AudioTrack& channel, bool on)
+    {
+        if (projects.empty() || isRecording() || editing::isArmed (channel) == on)
+            return;
+
+        editing::begin (channel.edit, (on ? "Arm " : "Disarm ") + channel.getName());
+        editing::setArmed (channel, on);
+    }
+
+    void Session::playInHere (tracktion::AudioTrack& channel, editing::ChannelInput input)
+    {
+        if (projects.empty() || isRecording())
+            return;
+
+        editing::begin (channel.edit, "Play into " + channel.getName());
+        editing::setInput (channel, input);
+        editing::setMonitoring (channel, true);
+        editing::setArmed (channel, true);
+        applyInputRouting();
+    }
+
+    int Session::getCountInBars() const
+    {
+        return std::clamp (engine->getPropertyStorage().getPropertiesFile().getIntValue ("countInBars", 0), 0, 2);
+    }
+
+    void Session::setCountInBars (int bars)
+    {
+        engine->getPropertyStorage().getPropertiesFile().setValue ("countInBars", std::clamp (bars, 0, 2));
+    }
+
+    bool Session::getLowLatencyMonitoring() const
+    {
+        return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("lowLatencyMonitoring", false);
+    }
+
+    void Session::setLowLatencyMonitoring (bool on)
+    {
+        engine->getPropertyStorage().getPropertiesFile().setValue ("lowLatencyMonitoring", on);
+        applyLowLatency();
+    }
+
+    bool Session::isPausedForLowLatency (const tracktion::Plugin& p) const
+    {
+        return std::find (lowLatencyFrozen.begin(), lowLatencyFrozen.end(), p.itemID) != lowLatencyFrozen.end();
+    }
+
+    void Session::applyLowLatency()
+    {
+        if (projects.empty())
+            return;
+
+        auto& edit = *front().edit;
+        std::vector<tracktion::EditItemID> wanted;
+        bool heard = false;
+        juce::Array<tracktion::Plugin*> kept;   // the armed channels' own plugins
+
+        for (auto* ch : editing::armedChannels (edit))
+        {
+            heard = heard || (editing::inputOf (*ch).isSet() && editing::isMonitoring (*ch));
+            kept.addArray (editing::insertsOf (*ch));
+        }
+
+        const auto all = tracktion::getAllPlugins (edit, false);
+
+        if (getLowLatencyMonitoring() && heard)
+            for (auto* p : all)
+                if (editing::latencyOf (*p) > 0.0 && ! kept.contains (p))
+                    wanted.push_back (p->itemID);
+
+        bool changed = false;
+
+        for (auto* p : all)
+        {
+            const auto want = std::find (wanted.begin(), wanted.end(), p->itemID) != wanted.end();
+            const auto ours = isPausedForLowLatency (*p);
+
+            if (want != p->isFrozen() && (want || ours))   // only ever undo what this mode did
+            {
+                p->setFrozen (want);
+                changed = true;
+            }
+        }
+
+        lowLatencyFrozen = std::move (wanted);
+
+        if (changed)
+            edit.restartPlayback();   // frozen plugins are left out when the graph is built
+    }
+
+    bool Session::isPunchOn() const
+    {
+        return ! projects.empty() && editing::isPunchOn (*front().edit);
+    }
+
+    void Session::setPunch (bool on)
+    {
+        if (! projects.empty())
+            editing::setPunch (*front().edit, on);
     }
 
     juce::String Session::inputSignature (tracktion::Edit& edit)
@@ -351,6 +454,7 @@ namespace carthage::engine
             }
         }
 
+        applyLowLatency();
         edit->restartPlayback();
     }
 
@@ -451,25 +555,95 @@ namespace carthage::engine
         if (device == nullptr)
             return juce::Result::fail ("No audio interface is open");
 
+        // What records: every armed channel with an input (owner: only what the person arms).
+        auto& edit = *front().edit;
+        juce::Array<tracktion::AudioTrack*> armed;
+
+        for (auto* ch : editing::armedChannels (edit))
+            if (editing::inputOf (*ch).isSet())
+                armed.add (ch);
+
+        if (armed.isEmpty())
+            return juce::Result::fail (editing::armedChannels (edit).isEmpty()
+                                           ? "Arm a channel to record: the R on its mixer strip, or Arm in the mixer's column"
+                                           : "The armed channels have no input: choose one on the strip or in the mixer's column");
+
+        if (armed.size() > AudioCallback::maxTakes)
+            return juce::Result::fail ("At most " + juce::String (AudioCallback::maxTakes) + " channels record at once; disarm some");
+
         prepareForDevice();
 
-        ++takeNumber;
-        const auto name = "Take " + juce::String (takeNumber);
         if (! front().recordings.createDirectory())
             return juce::Result::fail ("Carthage could not create " + front().recordings.getFullPathName());
 
-        const auto file = front().recordings.getNonexistentChildFile (
-            name + juce::Time::getCurrentTime().formatted (" %Y-%m-%d %H%M%S"), ".wav", false);
+        ++takeNumber;
+        const auto stamp = juce::Time::getCurrentTime().formatted (" %Y-%m-%d %H%M%S");
+        activeTakes.clear();
 
-        TakeRecorder::Format format;
-        format.sampleRate = device->getCurrentSampleRate();
-        format.numChannels = inputStereo ? 2 : 1;
-        format.sampleFormat = recordFormat;
+        for (int slot = 0; slot < armed.size(); ++slot)
+        {
+            auto* ch = armed[slot];
+            const auto in = editing::inputOf (*ch);
+            callback->setTakeInputs (slot, in.firstChannel, in.stereo ? 2 : 1);
 
-        if (auto r = recorder.start (file, format); r.failed())
-            return r;
+            const auto name = "Take " + juce::String (takeNumber) + (armed.size() > 1 ? " " + ch->getName() : juce::String());
+            const auto file = front().recordings.getNonexistentChildFile (juce::File::createLegalFileName (name + stamp), ".wav", false);
 
-        auto& transport = front().edit->getTransport();
+            TakeRecorder::Format format;
+            format.sampleRate = device->getCurrentSampleRate();
+            format.numChannels = in.stereo ? 2 : 1;
+            format.sampleFormat = recordFormat;
+
+            if (auto r = recorders[static_cast<size_t> (slot)].start (file, format); r.failed())
+            {
+                for (int i = 0; i < slot; ++i)
+                    recorders[static_cast<size_t> (i)].stop().file.deleteFile();
+
+                activeTakes.clear();
+                applyInputRouting();
+                return r;
+            }
+
+            activeTakes.push_back ({ ch, file });
+        }
+
+        for (int slot = armed.size(); slot < AudioCallback::maxTakes; ++slot)
+            callback->setTakeInputs (slot, 0, 0);
+
+        auto& transport = edit.getTransport();
+        takeKeepFrom = std::max (0.0, transport.getPosition().inSeconds());
+
+        // Loop recording and punch (5d): what the take is cut into when it ends.
+        takeLoop.reset();
+        takePunch.reset();
+
+        if (const auto region = editing::loopRegion (edit))
+        {
+            const takes::Span span { edit.tempoSequence.toTime (tracktion::BeatPosition::fromBeats (region->from)).inSeconds(),
+                                     edit.tempoSequence.toTime (tracktion::BeatPosition::fromBeats (region->to)).inSeconds() };
+
+            if (editing::isLooping (edit))
+                takeLoop = span;
+
+            if (editing::isPunchOn (edit))
+                takePunch = span;
+        }
+
+        // Count-in from a stop: play from a bar or two before, the click sounding only there.
+        if (const auto bars = getCountInBars(); bars > 0 && ! transport.isPlaying())
+        {
+            const auto beatsPerBar = edit.tempoSequence.getTimeSigAt (transport.getPosition()).numerator.get();
+            const auto startBeat = edit.tempoSequence.toBeats (transport.getPosition());
+            const auto preroll = edit.tempoSequence.toTime (startBeat - tracktion::BeatDuration::fromBeats (bars * beatsPerBar));
+            edit.setCountInMode (bars == 2 ? tracktion::Edit::CountIn::twoBar : tracktion::Edit::CountIn::oneBar);   // lets the playhead go before zero
+            edit.setClickTrackRange ({ preroll, transport.getPosition() });
+            transport.setPosition (preroll);
+        }
+        else
+        {
+            edit.setClickTrackRange ({});
+        }
+
         takeStartedMs = juce::Time::getMillisecondCounter();
         takeStartPosition = transport.getPosition().inSeconds();
         takeBlockSamples = device->getCurrentBufferSizeSamples();
@@ -524,12 +698,17 @@ namespace carthage::engine
     TakeRecorder::Result Session::stopRecording()
     {
         stopTimer();
-        auto result = recorder.stop();
+        std::vector<TakeRecorder::Result> results;
+        results.reserve (activeTakes.size());
+
+        for (size_t slot = 0; slot < activeTakes.size(); ++slot)
+            results.push_back (recorders[slot].stop());
 
         // Map the first captured sample to edit time with the offset seen while the take played.
         // If the take is stopped before the first check, use the live mapping; if playback never
         // ran, place it where it began.
-        auto& transport = front().edit->getTransport();
+        auto& edit = *front().edit;
+        auto& transport = edit.getTransport();
         const bool interrupted = takeWatch.getState() == TakeWatch::State::interrupted;
         auto offset = takeWatch.getOffset();
 
@@ -537,40 +716,67 @@ namespace carthage::engine
             offset = currentStreamToEditOffset();
 
         transport.stop (false, false);
+        edit.setClickTrackRange ({});
+        edit.setCountInMode (tracktion::Edit::CountIn::none);
 
-        if (! result.succeeded() || result.framesWritten == 0)
-            return result;
+        const auto takes = std::exchange (activeTakes, {});
+        applyInputRouting();   // the first recorder and the meters follow the record channel again
+
+        if (results.empty())
+            return {};
 
         const auto rate = preparedRate > 0 ? preparedRate : 48000.0;
         const auto alignment = getAlignmentSamples();
         const bool placedByGuess = ! offset.has_value();
-        const auto startSeconds = placedByGuess
-                                    ? takeStartPosition - alignment / rate
-                                    : takeStartSeconds (result.firstBlockStreamTime, *offset, takeBlockSamples, alignment, rate);
+        int clips = 0;
+        editing::begin (edit, takes.size() > 1 ? "Record " + juce::String (takes.size()) + " takes" : juce::String ("Record take"));
 
-        const auto length = static_cast<double> (result.framesWritten) / rate;
-        tracktion::ClipPosition position;
-
-        if (startSeconds >= 0.0)
+        for (size_t slot = 0; slot < takes.size(); ++slot)
         {
-            position.time = { tracktion::TimePosition::fromSeconds (startSeconds), tracktion::TimeDuration::fromSeconds (length) };
-        }
-        else
-        {
-            // The take began before zero (latency at the very start): trim its head, keep it in time.
-            const auto trimmed = -startSeconds;
-            position.time = { tracktion::TimePosition(), tracktion::TimeDuration::fromSeconds (std::max (0.0, length - trimmed)) };
-            position.offset = tracktion::TimeDuration::fromSeconds (trimmed);
+            const auto& result = results[slot];
+
+            if (! result.succeeded() || result.framesWritten == 0)
+            {
+                result.file.deleteFile();
+                continue;
+            }
+
+            const auto startSeconds = placedByGuess
+                                        ? takeStartPosition - alignment / rate
+                                        : takeStartSeconds (result.firstBlockStreamTime, *offset, takeBlockSamples, alignment, rate);
+            const auto length = static_cast<double> (result.framesWritten) / rate;
+            const auto pieces = takes::piecesOf (startSeconds, length, takeKeepFrom, takeLoop, takePunch);
+            const auto clipName = result.file.getFileNameWithoutExtension().upToLastOccurrenceOf (" 20", false, false);
+            auto lane = editing::recordingLane (edit);
+
+            for (size_t i = 0; i < pieces.size(); ++i)
+            {
+                const auto& piece = pieces[i];
+                tracktion::ClipPosition position;
+                position.time = { tracktion::TimePosition::fromSeconds (piece.time.from), tracktion::TimePosition::fromSeconds (piece.time.to) };
+                position.offset = tracktion::TimeDuration::fromSeconds (piece.fileOffset);
+
+                // FL-style (owner): a lane with nothing there, or a new one.
+                lane = editing::freeLaneFor (edit, position.time, lane);
+                const auto name = pieces.size() > 1 ? clipName + " pass " + juce::String (static_cast<int> (i) + 1) : clipName;
+
+                if (auto* carrier = editing::carrierFor (edit, lane, takes[slot].channel))
+                    if (auto clip = tracktion::insertWaveClip (*carrier, name, result.file, position, tracktion::DeleteExistingClips::no))
+                    {
+                        clip->setMuted (! piece.plays);
+                        ++clips;
+                    }
+            }
+
+            if (pieces.empty())
+                result.file.deleteFile();   // nothing of it was kept (punch outside the take)
         }
 
-        const auto clipName = result.file.getFileNameWithoutExtension();
-        editing::begin (*front().edit, "Record take");
-        // On the recording lane, playing through the channel that has the input (W47).
-        if (auto* carrier = editing::carrierFor (*front().edit, editing::recordingLane (*front().edit), front().track))
-            tracktion::insertWaveClip (*carrier, clipName, result.file, position, tracktion::DeleteExistingClips::yes);
-
-        lastTake = TakeInfo { result, startSeconds, alignment, clipName, interrupted, placedByGuess };
-        return result;
+        const auto& first = results.front();
+        lastTake = TakeInfo { first, placedByGuess ? takeStartPosition : (offset ? takeStartSeconds (first.firstBlockStreamTime, *offset, takeBlockSamples, alignment, rate) : 0.0),
+                              alignment, first.file.getFileNameWithoutExtension(), interrupted, placedByGuess,
+                              static_cast<int> (takes.size()), clips };
+        return first;
     }
 
     void Session::play()
@@ -703,6 +909,9 @@ namespace carthage::engine
 
         // Lane mute and solo onto the carriers; only what could sound in the graph (W49).
         editing::syncMix (*edit, track);
+
+        if (&session.front() == this)
+            session.applyLowLatency();   // arming, hearing and plugins change what it leaves out
 
         // The transport's loop points follow the region after an edit or an undo (4g).
         editing::syncLoop (*edit);

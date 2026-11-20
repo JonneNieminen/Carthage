@@ -540,6 +540,19 @@ namespace carthage::editing
         edit.getTransport().looping.setValue (on && loopRegion (edit).has_value(), nullptr);
     }
 
+    void setPunch (Edit& edit, bool on)
+    {
+        if (on)
+            edit.state.setProperty ("carthagePunch", true, nullptr);
+        else
+            edit.state.removeProperty ("carthagePunch", nullptr);
+    }
+
+    bool isPunchOn (const Edit& edit)
+    {
+        return static_cast<bool> (edit.state["carthagePunch"]);
+    }
+
     bool isLooping (const Edit& edit)
     {
         return loopRegion (edit).has_value() && const_cast<Edit&> (edit).getTransport().looping.get();

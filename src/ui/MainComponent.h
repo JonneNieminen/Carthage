@@ -167,6 +167,7 @@ namespace carthage::ui
         IconButton toStartButton { IconButton::Glyph::toStart };
         IconButton metronomeButton { IconButton::Glyph::metronome };
         IconButton loopButton { IconButton::Glyph::loop };
+        IconButton punchButton { IconButton::Glyph::punch };
         IconButton settingsButton { IconButton::Glyph::settings };
         IconButton mixerButton { IconButton::Glyph::mixer };
         juce::Label timeLabel, latencyLabel, latencyWords, statusLabel;

@@ -122,7 +122,9 @@ namespace carthage::ui
         Switch fitLoops { "Fit loops to the project tempo" };
         Switch preMaster { "Pre-Master channel before master" };
         Switch busChannels { "Mark bus channels" };
-        juce::Label exportHeading, exportFormatLabel, exportRateLabel;
+        juce::Label exportHeading, exportFormatLabel, exportRateLabel, countInLabel;
+        juce::ComboBox countIn;
+        Switch lowLatency { "Low-latency monitoring" };
         juce::ComboBox exportFormat, exportRate;
         juce::Label busEveryLabel;
         juce::ComboBox busEvery;

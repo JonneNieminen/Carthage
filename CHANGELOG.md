@@ -11,6 +11,20 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Recording, part two:
+  - Arm channels with the R on their mixer strip (or Arm in the mixer's column); R then records
+    every armed channel at once, each its own input to its own take. Nothing records unless armed.
+  - Each take goes to a lane that is free at that time, or a new lane if none is (FL-style).
+  - Loop recording: with the loop on, every pass becomes its own clip; the newest full pass plays
+    and the earlier ones are kept, muted.
+  - Punch in/out: a Punch button beside Loop records only inside the loop region. Off by default;
+    without it recording runs until you stop.
+  - Count-in before recording from a stop: off, 1 bar or 2 bars (Settings > Recording); the click
+    plays through it, and the take starts where you pressed record.
+  - "Guitar in here" in a mixer channel's right-click menu: input 1, heard and armed, in one step.
+  - Low-latency monitoring (Settings > Recording, off by default): while you play through an armed
+    channel you hear, plugins elsewhere that delay their sound are paused, so what you hear is not
+    held back. The Line marks them "(paused)"; exports always use every plugin.
 - Export the mix with Cmd+R (or File > Export): the loop region if there is one, otherwise the
   whole project from its first sound to its last, letting reverbs and delays ring out. WAV 16-bit,
   24-bit or 32-bit float, or FLAC 16 or 24-bit, at the interface's rate or another; set in the

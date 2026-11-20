@@ -1244,7 +1244,7 @@ namespace
             const auto startLate = onMessageThread ([this] { return session->getCallback().getLateCallbackCount(); });
             const auto startSamples = onMessageThread ([this] { return session->getCallback().getSamplesProcessed(); });
 
-            if (const auto r = onMessageThread ([this] { return session->startRecording(); }); r.failed())
+            if (const auto r = onMessageThread ([this] { session->setArmed (session->getTrack(), true); return session->startRecording(); }); r.failed())
             {
                 say ("record failed: " + r.getErrorMessage());
                 return 1;
@@ -1450,7 +1450,7 @@ namespace
                     onMessageThreadVoid ([this] { session->play(); });
 
                 waitMs (gap);
-                onMessageThreadVoid ([this] { session->startRecording(); });
+                onMessageThreadVoid ([this] { session->setArmed (session->getTrack(), true); [[maybe_unused]] const auto started = session->startRecording(); });
 
                 for (int t = 0; t < seconds * 100 && onMessageThread ([this] { return session->isRecording(); }); ++t)
                     waitMs (10);
@@ -1534,7 +1534,7 @@ namespace
             }
 
             waitMs (args.getInt ("settle-ms", 0));
-            onMessageThreadVoid ([this] { session->startRecording(); });
+            onMessageThreadVoid ([this] { session->setArmed (session->getTrack(), true); [[maybe_unused]] const auto started = session->startRecording(); });
 
             // Session may end the take itself if playback stops under it.
             for (int t = 0; t < seconds * 100 && onMessageThread ([this] { return session->isRecording(); }); ++t)

@@ -121,7 +121,7 @@ namespace carthage::ui
         std::unique_ptr<Swatch> swatch;   // the selected channel's colour; a click chooses another
         juce::Label columnName, columnInto, columnFrom, columnFromList, columnPlugins, columnInput;
         juce::ComboBox input, masterOutput;
-        Switch hear { "Hear the input" }, recordHere { "Takes record here" };
+        Switch hear { "Hear the input" }, recordHere { "Arm: record this channel" };
         std::unique_ptr<InsertLine> line;
         juce::ComboBox output;
         void refreshColumn();

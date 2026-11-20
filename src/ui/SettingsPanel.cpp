@@ -321,6 +321,26 @@ namespace carthage::ui
                               "Off, everything goes straight to master; its plugins stay, unused.");
         preMaster.onClick = [this] { session.setUsePreMaster (preMaster.getToggleState()); };
 
+        // Count-in (5d): Off, 1 or 2 bars before a recording that starts from a stop.
+        styleLabel (countInLabel, theme::textMd, theme::muted);
+        countInLabel.setText ("Count-in", dontSendNotification);
+        countIn.addItem ("Off", 1);
+        countIn.addItem ("1 bar", 2);
+        countIn.addItem ("2 bars", 3);
+        countIn.setSelectedId (session.getCountInBars() + 1, dontSendNotification);
+        countIn.setTooltip ("Before recording from a stop, play this much earlier with the click, so you come in on the beat. The take starts where you pressed record.");
+        countIn.onChange = [this] { session.setCountInBars (countIn.getSelectedId() - 1); };
+        body.addAndMakeVisible (countInLabel);
+        body.addAndMakeVisible (countIn);
+
+        // Low-latency monitoring (brief, feature 8; W57).
+        lowLatency.setToggleState (session.getLowLatencyMonitoring(), dontSendNotification);
+        lowLatency.setTooltip ("While you play through an armed channel you hear, plugins elsewhere that delay their sound (lookahead "
+                               "limiters, linear-phase EQs) are paused, so what you hear is not held back to line up with them. The armed "
+                               "channels keep theirs. They come back when you stop hearing the input; an export always uses every plugin.");
+        lowLatency.onClick = [this] { session.setLowLatencyMonitoring (lowLatency.getToggleState()); };
+        body.addAndMakeVisible (lowLatency);
+
         // Export (brief, feature 8): the format and rate Cmd+R uses; its window shows the same.
         styleLabel (exportHeading, theme::textSm, theme::muted, true);
         exportHeading.setText ("Export", dontSendNotification);
@@ -904,7 +924,7 @@ namespace carthage::ui
                                                               testButton.setBounds (b.removeFromTop (rowHeight).removeFromLeft (150));
                                                               testHint.setBounds (b.removeFromTop (20));
                                                           } } } });
-        sections.push_back ({ Page::recording, &recordingHeading, { row (formatLabel, format) } });
+        sections.push_back ({ Page::recording, &recordingHeading, { row (formatLabel, format), row (countInLabel, countIn), whole (lowLatency, rowHeight) } });
         sections.push_back ({ Page::recording, &exportHeading, { row (exportFormatLabel, exportFormat), row (exportRateLabel, exportRate) } });
         sections.push_back ({ Page::audio, &latencyHeading, { row (reportedLabel, reportedValue), row (measuredLabel, measuredValue),
                                                  Line { { &loopHint, &loopOutLabel, &loopOut, &loopInLabel, &loopIn, &measureButton },

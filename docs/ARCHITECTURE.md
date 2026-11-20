@@ -297,7 +297,10 @@ Rules that follow:
   message posted from the audio thread.
 - **UI to audio thread:** through the engine's own real-time-safe mechanisms (graph rebuilds swapped in
   atomically, parameter smoothing). Never a mutex the audio thread could wait on.
-- **Recording** goes audio thread → lock-free FIFO → disk-writer thread → file (brief, feature 10). If
+- **Recording** goes audio thread → lock-free FIFO → disk-writer thread → file (brief, feature 10),
+  one TakeRecorder per armed channel (up to 8, W57), each with its own FIFO, writer and file; the
+  device callback copies each one's inputs into it. A finished take is cut by `engine/TakePlan`
+  (count-in, loop passes, punch) and each piece goes to a lane free at that time. If
   the FIFO overflows, count and report the dropout; never block the audio thread to avoid it.
 - **macOS audio workgroups:** every thread that renders audio joins the device's workgroup (F8). The
   device's own I/O thread is in it already; Tracktion's render threads join it because `Session` calls

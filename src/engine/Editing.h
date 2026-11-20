@@ -121,6 +121,12 @@ namespace carthage::editing
     void setLooping (tracktion::Edit&, bool);
     bool isLooping (const tracktion::Edit&);
 
+    /** Punch in/out (5d, owner): off unless turned on. While on, a take keeps only what falls inside
+        the loop region; without a region it records as usual. Kept with the project, outside undo,
+        as looping is. */
+    void setPunch (tracktion::Edit&, bool);
+    bool isPunchOn (const tracktion::Edit&);
+
     /** Puts the transport's loop points where the region is, after any edit or undo; a region
         that comes back (an undone clear) loops again. */
     void syncLoop (tracktion::Edit&);

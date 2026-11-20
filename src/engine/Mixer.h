@@ -42,6 +42,11 @@ namespace carthage::editing
     /** The lane takes are recorded on (the first lane until another is chosen). */
     Lane recordingLane (const tracktion::Edit&);
 
+    /** Where a take goes (owner, FL-style): the first lane, from `from` down, with nothing in
+        `time`; a new lane at the end when every lane has something there. Inside the caller's
+        undo step. */
+    Lane freeLaneFor (tracktion::Edit&, tracktion::TimeRange time, const Lane& from);
+
     /** A clip's lane, and its index among the lanes (-1 if it has none). */
     Lane laneOfClip (const tracktion::Clip&);
     int laneOf (const tracktion::Clip&);
@@ -183,7 +188,14 @@ namespace carthage::editing
     bool isMonitoring (const tracktion::AudioTrack&);
     void setMonitoring (tracktion::AudioTrack&, bool);
 
-    /** The channel takes are recorded through (one at a time until 5d). */
+    /** Arming (5d, owner): the channels that record when recording starts, each its own input to
+        its own take. Only what the person arms records; nothing is armed by default. Inside the
+        caller's undo step. */
+    bool isArmed (const tracktion::AudioTrack&);
+    void setArmed (tracktion::AudioTrack&, bool);
+    juce::Array<tracktion::AudioTrack*> armedChannels (const tracktion::Edit&);
+
+    /** The channel the settings' input and hearing figures follow (the record channel before 5d). */
     tracktion::AudioTrack* recordChannel (const tracktion::Edit&);
     void setRecordChannel (tracktion::Edit&, tracktion::AudioTrack&);
 

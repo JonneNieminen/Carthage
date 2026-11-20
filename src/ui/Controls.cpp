@@ -451,6 +451,24 @@ namespace carthage::ui
                 break;
             }
 
+            case Glyph::punch:
+            {
+                // A record dot between brackets: recording only inside.
+                const auto h = s * 0.42f, w = s * 0.62f, lip = s * 0.16f;
+                for (const auto side : { -1.0f, 1.0f })
+                {
+                    Path bracket;
+                    bracket.startNewSubPath (c.x + side * (w - lip), c.y - h);
+                    bracket.lineTo (c.x + side * w, c.y - h);
+                    bracket.lineTo (c.x + side * w, c.y + h);
+                    bracket.lineTo (c.x + side * (w - lip), c.y + h);
+                    g.strokePath (bracket, roundStroke);
+                }
+                const auto d = s * 0.42f;
+                g.fillEllipse (c.x - d * 0.5f, c.y - d * 0.5f, d, d);
+                break;
+            }
+
             case Glyph::loop:
             {
                 // Two arcs chasing each other round, each with its arrowhead: play it again.

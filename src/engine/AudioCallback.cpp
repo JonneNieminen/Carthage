@@ -32,9 +32,11 @@ namespace carthage::engine
         }
     }
 
-    AudioCallback::AudioCallback (tracktion::Engine& e, TakeRecorder& r, LatencyProbe& p, SamplePreview& s)
-        : engine (e), engineCallback (engineCallbackOf (e.getDeviceManager())), recorder (r), probe (p), preview (s)
+    AudioCallback::AudioCallback (tracktion::Engine& e, std::span<TakeRecorder, maxTakes> r, LatencyProbe& p, SamplePreview& s)
+        : engine (e), engineCallback (engineCallbackOf (e.getDeviceManager())), recorders (r), probe (p), preview (s)
     {
+        numDeviceInputs[0] = 1;
+        numInputs[0].store (1, std::memory_order_relaxed);
     }
 
     AudioCallback::~AudioCallback()
@@ -65,10 +67,13 @@ namespace carthage::engine
         attached = false;
     }
 
-    void AudioCallback::setRecordChannels (int firstDeviceChannel, int numChannels)
+    void AudioCallback::setTakeInputs (int slot, int firstDeviceChannel, int numChannels)
     {
-        firstDeviceInput = std::max (0, firstDeviceChannel);
-        numDeviceInputs = std::clamp (numChannels, 1, 2);
+        if (slot < 0 || slot >= maxTakes)
+            return;
+
+        firstDeviceInput[static_cast<size_t> (slot)] = std::max (0, firstDeviceChannel);
+        numDeviceInputs[static_cast<size_t> (slot)] = slot == 0 ? std::clamp (numChannels, 1, 2) : std::clamp (numChannels, 0, 2);
         updateInputIndices();
     }
 
@@ -110,26 +115,28 @@ namespace carthage::engine
     {
         // The callback receives only the device's active input channels, packed in order, so a
         // device channel number becomes "how many active channels come before it".
-        int first = -1, count = 0;
+        auto* device = engine.getDeviceManager().deviceManager.getCurrentAudioDevice();
+        const auto active = device != nullptr ? device->getActiveInputChannels() : juce::BigInteger();
 
-        if (auto* device = engine.getDeviceManager().deviceManager.getCurrentAudioDevice())
+        for (size_t slot = 0; slot < static_cast<size_t> (maxTakes); ++slot)
         {
-            const auto active = device->getActiveInputChannels();
+            int first = -1, count = 0;
+            const auto wanted = firstDeviceInput[slot];
 
-            if (active[firstDeviceInput])
+            if (numDeviceInputs[slot] > 0 && active[wanted])
             {
                 first = 0;
 
-                for (int i = 0; i < firstDeviceInput; ++i)
+                for (int i = 0; i < wanted; ++i)
                     if (active[i])
                         ++first;
 
-                count = (numDeviceInputs == 2 && active[firstDeviceInput + 1]) ? 2 : 1;
+                count = (numDeviceInputs[slot] == 2 && active[wanted + 1]) ? 2 : 1;
             }
-        }
 
-        firstInput.store (first, std::memory_order_relaxed);
-        numInputs.store (count, std::memory_order_relaxed);
+            firstInput[slot].store (first, std::memory_order_relaxed);
+            numInputs[slot].store (count, std::memory_order_relaxed);
+        }
     }
 
     void AudioCallback::audioDeviceAboutToStart (juce::AudioIODevice* device)
@@ -169,16 +176,30 @@ namespace carthage::engine
         const auto blockStart = engine.getDeviceManager().getCurrentStreamTime()
                                   - (rate > 0 ? numSamples / rate : 0.0);
 
-        const auto first = firstInput.load (std::memory_order_relaxed);
-        const auto count = numInputs.load (std::memory_order_relaxed);
+        // Each recorder its own inputs (5d: one take per armed channel). An idle one returns at once.
         std::array<const float*, 2> recorded { nullptr, nullptr };
         int numRecorded = 0;
 
-        for (int i = 0; i < count; ++i)
-            if (first >= 0 && first + i < numInputChannels)
-                recorded[static_cast<size_t> (numRecorded++)] = inputChannelData[first + i];
+        for (size_t slot = 0; slot < static_cast<size_t> (maxTakes); ++slot)
+        {
+            const auto first = firstInput[slot].load (std::memory_order_relaxed);
+            const auto count = numInputs[slot].load (std::memory_order_relaxed);
+            std::array<const float*, 2> channels { nullptr, nullptr };
+            int n = 0;
 
-        recorder.pushBlock (recorded.data(), numRecorded, numSamples, blockStart);
+            for (int i = 0; i < count; ++i)
+                if (first >= 0 && first + i < numInputChannels)
+                    channels[static_cast<size_t> (n++)] = inputChannelData[first + i];
+
+            if (slot == 0)
+            {
+                recorded = channels;   // the meters show the first recorder's inputs
+                numRecorded = n;
+            }
+
+            if (count > 0)
+                recorders[slot].pushBlock (channels.data(), n, numSamples, blockStart);
+        }
 
         // 3. The sample browser's preview, on the main outputs.
         const auto left = previewLeft.load (std::memory_order_relaxed);

@@ -359,3 +359,13 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - CI on Windows failed for a04d9fd: `JUCE_MAC` used as a value in ExportWindow (only defined on
   macOS). Fixed with an `#if`-chosen constant. Rule: platform macros only in `#if`.
 
+### 2026-11-21 (recording, 5d, W57)
+
+- Arming (Mixer `isArmed`/`setArmed`, R pills, column switch), several recorders (AudioCallback
+  `setTakeInputs`, Session `recorders`), `engine/TakePlan` (count-in cut, loop passes, punch),
+  `freeLaneFor`, Punch button and command, count-in and low-latency settings, "Guitar in here".
+- Tests: TakePlanTests, arming and free-lane cases in MixerTests, and a frozen plugin out of
+  playback but in the export (DelayCompensationTests). Bench `takes` arms the record channel.
+- Not tried with an interface yet: the new build waits for macOS microphone access. Next: the
+  owner's checklist with the iD44 (two armed channels, loop takes, punch, count-in).
+

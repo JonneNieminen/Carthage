@@ -681,10 +681,16 @@ Deliver:
 - [ ] Insert Lines: unlimited growing list; reorder by drag, bypass, wet/dry, open UI, drag between channels
       (built 2026-11-20 with master's and the Pre-Master's Lines, W51; owner's checks pending)
 - [ ] Input/output picker per channel; "Guitar in → this channel, armed, monitoring" action; keyboard-driven selection
+      (built: pickers on the strip and column, W51; "Guitar in here" in the strip's menu, arming
+      with R on each strip, Left/Right between strips, 2026-11-20/21, W54, W57; owner's checks pending)
 - [ ] Plugin delay compensation across the whole graph; low-latency monitoring mode (compensation
       verified 2026-11-20 on channels, sends, buses, the Pre-Master and master, in export and
-      playback, W56; the low-latency mode waits for arming in 5d, where what it bypasses is decided)
+      playback, W56; low-latency monitoring built 2026-11-21, W57: plugins that delay their sound are
+      left out of playback, except on armed channels, while an armed channel is heard)
 - [ ] **Proposed here, owner to confirm (O5):** metronome, count-in, loop recording with takes, punch in/out
+      (built 2026-11-21, W57: count-in off/1/2 bars; loop recording, one clip per pass on a free
+      lane, the newest full pass playing; punch in the loop region, off by default; several armed
+      channels record at once, each to its own take; tested headless, not yet tried with an interface)
 - [ ] **Owner's addition (F19, W30):** plugin presets in one format for one plugin or a whole Insert Line, in a folder the user chooses; opening .vstpreset and .aupreset, and other DAWs' presets as far as their formats allow
 - [ ] **Owner's list (F22, W38):** plugins in their own processes except the live input chain,
       grouped automatically by crash history (on by default; your own grouping when off); presets

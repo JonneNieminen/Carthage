@@ -8,6 +8,7 @@
 #include <tracktion_engine/tracktion_engine.h>
 
 #include <array>
+#include <span>
 #include <atomic>
 
 namespace carthage::engine
@@ -29,15 +30,21 @@ namespace carthage::engine
     class AudioCallback final : public juce::AudioIODeviceCallback
     {
     public:
-        AudioCallback (tracktion::Engine&, TakeRecorder&, LatencyProbe&, SamplePreview&);
+        /** Several recorders (5d): each armed channel's take has its own, fed from its own inputs.
+            The first also gives the input meters. */
+        static constexpr int maxTakes = 8;
+        AudioCallback (tracktion::Engine&, std::span<TakeRecorder, maxTakes>, LatencyProbe&, SamplePreview&);
         ~AudioCallback() override;
 
         /** Message thread. Puts this callback in place of the engine's own. */
         void attach();
         void detach();
 
-        /** Message thread. Which device input channels are recorded and metered (1 or 2). */
-        void setRecordChannels (int firstDeviceChannel, int numChannels);
+        /** Message thread. Which device input channels the first recorder takes and the meters show (1 or 2). */
+        void setRecordChannels (int firstDeviceChannel, int numChannels)   { setTakeInputs (0, firstDeviceChannel, numChannels); }
+
+        /** Message thread, never while recording. The inputs recorder `slot` takes (0: none). */
+        void setTakeInputs (int slot, int firstDeviceChannel, int numChannels);
 
         /** Message thread. The device output channel the preview's left side goes to; the right
             side goes to the next one. */
@@ -81,7 +88,7 @@ namespace carthage::engine
     private:
         tracktion::Engine& engine;
         juce::AudioIODeviceCallback& engineCallback;
-        TakeRecorder& recorder;
+        std::span<TakeRecorder, maxTakes> recorders;
         LatencyProbe& probe;
         SamplePreview& preview;
         bool attached = false;
@@ -90,8 +97,8 @@ namespace carthage::engine
 
         // The recorded channels as device channel numbers (message thread), and as indices into the
         // callback's input array, which only holds the device's active channels (audio thread).
-        int firstDeviceInput = 0, numDeviceInputs = 1;
-        std::atomic<int> firstInput { 0 }, numInputs { 1 };
+        std::array<int, maxTakes> firstDeviceInput {}, numDeviceInputs {};
+        std::array<std::atomic<int>, maxTakes> firstInput {}, numInputs {};
 
         std::atomic<double> sampleRate { 0.0 };
         std::atomic<std::int64_t> callbacks { 0 }, samplesProcessed { 0 };

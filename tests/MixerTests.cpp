@@ -233,6 +233,48 @@ public:
                 expect (! ch->isMuted (false), "and every channel plays");
         }
 
+        beginTest ("Arming (5d): nothing is armed until the person arms it; several can be; undo takes it back");
+        {
+            const auto chs = editing::channels (*edit);
+            expect (editing::armedChannels (*edit).isEmpty(), "nothing armed by default");
+
+            editing::begin (*edit, "Arm");
+            editing::setArmed (*chs[0], true);
+            editing::begin (*edit, "Arm");
+            editing::setArmed (*chs[3], true);
+            expect (editing::armedChannels (*edit) == juce::Array<tracktion::AudioTrack*> { chs[0], chs[3] });
+
+            edit->getUndoManager().undo();
+            expect (editing::armedChannels (*edit) == juce::Array<tracktion::AudioTrack*> { chs[0] }, "undo disarms the last");
+            editing::setArmed (*chs[0], false);
+            expect (editing::armedChannels (*edit).isEmpty());
+        }
+
+        beginTest ("A take goes to the first lane with room for it, or a new lane (FL-style)");
+        {
+            const auto all = editing::lanes (*edit);
+            const auto span = [] (double a, double b) { return tracktion::TimeRange (tracktion::TimePosition::fromSeconds (a), tracktion::TimePosition::fromSeconds (b)); };
+            const auto busy = editing::clipsOn (*edit, all[1]);
+            expect (! busy.isEmpty(), "lane 2 has a clip (set up above)");
+            const auto taken = busy.getFirst()->getEditTimeRange();
+
+            expect (editing::freeLaneFor (*edit, taken, all[1]) == all[2] || ! editing::clipsOn (*edit, all[2]).isEmpty(),
+                    "a busy lane is passed over");
+            expect (editing::freeLaneFor (*edit, span (500.0, 501.0), all[1]) == all[1], "a lane free at that time is used");
+
+            const auto lanesBefore = all.size();
+            const auto last = all.getLast();
+            editing::begin (*edit, "Fill");
+            auto* filler = editing::insertFile (*edit, last, kick, 2000.0);
+            expect (filler != nullptr);
+            const auto at = filler->getEditTimeRange();
+            const auto made = editing::freeLaneFor (*edit, at, last);
+            expectEquals (editing::lanes (*edit).size(), lanesBefore + 1, "every lane busy there: a new one at the end");
+            expect (made == editing::lanes (*edit).getLast());
+            edit->getUndoManager().undo();
+            expectEquals (editing::lanes (*edit).size(), lanesBefore, "the new lane is part of the same undo step");
+        }
+
         beginTest ("Every channel and master have a peak and an RMS meter; none counts as an insert");
         {
             auto* ch = editing::channels (*edit)[5];

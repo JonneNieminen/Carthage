@@ -232,6 +232,46 @@ public:
             expect (db < -90.0, "playback nulls against the export once lined up (" + juce::String (db, 1) + " dB)");
             expect (offset >= 0 && offset <= 480, "the whole mix is late by the plugin's latency at most: " + juce::String (offset));
 
+            // Low-latency monitoring (W57) freezes such a plugin: playback no longer waits for it,
+            // and an export still has it.
+            const auto playOnce = [&]
+            {
+                transport.setPosition (tracktion::TimePosition());
+                transport.play (false);
+                juce::AudioBuffer<float> out (2, total);
+
+                for (int done = 0; done < total; done += block)
+                {
+                    buffer.clear();
+                    io.processBlock (buffer, midi);
+                    for (int c = 0; c < 2; ++c)
+                        out.copyFrom (c, done, buffer, c, 0, std::min (block, total - done));
+                }
+
+                transport.stop (false, false);
+                return out;
+            };
+
+            const auto firstSound = [] (const juce::AudioBuffer<float>& buf)
+            {
+                for (int i = 0; i < buf.getNumSamples(); ++i)
+                    if (std::abs (buf.getSample (0, i)) > 0.01f)
+                        return i;
+                return -1;
+            };
+
+            const auto delayed = firstSound (playOnce());
+            plugin->setFrozen (true);
+            transport.ensureContextAllocated (true);   // the app's restartPlayback() does this on its next timer tick
+            const auto undelayed = firstSound (playOnce());
+            logMessage ("First sound in playback: " + juce::String (delayed) + " samples with the plugin, " + juce::String (undelayed) + " with it frozen");
+            expect (delayed - undelayed >= 470, "frozen, the plugin no longer delays playback");
+
+            if (range.has_value())
+                expect (exporting::render (*edit, *range, { exporting::Format::wav32Float, rate }, file).wasOk());
+            expect (compare (exported, read (file), 0).first < -150.0, "an export still has the frozen plugin");
+            plugin->setFrozen (false);
+
             dm.deviceManager.closeAudioDevice();
             dm.removeHostedAudioDeviceInterface();
         }

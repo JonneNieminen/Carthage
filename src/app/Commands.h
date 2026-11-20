@@ -73,6 +73,7 @@ namespace carthage::app
             // Added after the tabs, so the ids above stay as saved.
             previousLane = afterTabs, nextLane,
             exportMix,
+            togglePunch,
         };
 
         /** Layout slots there can be; Settings chooses how many are offered (F21). */
@@ -95,7 +96,7 @@ namespace carthage::app
                      windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings, windowMixer,
                      defaultLayout, commandPalette, keepPluginOnTop, lanesTaller, lanesShorter,
                      uiLarger, uiSmaller, uiActualSize, toggleMetronome, toggleLoop, undoHistory, exportLog, projectNotes, restoreVersion,
-                     addLaneBelow, moveLaneUp, moveLaneDown, viewsPalette, previousLane, nextLane, exportMix };
+                     addLaneBelow, moveLaneUp, moveLaneDown, viewsPalette, previousLane, nextLane, exportMix, togglePunch };
         }
 
         /** Cmd/Ctrl+1 to 9: the project tabs; 9 is always the last tab (W41). */
@@ -253,6 +254,7 @@ namespace carthage::app
                 case addLaneBelow:    info.setInfo ("Add lane", "Add a lane below the current lane (the one whose name you clicked last)", "Lanes", 0); info.addDefaultKeypress ('n', primary | juce::ModifierKeys::altModifier); break;
                 case moveLaneUp:      info.setInfo ("Move lane up", "Move the current lane one place up", "Lanes", 0); info.addDefaultKeypress (KP::upKey, primary); break;
                 case moveLaneDown:    info.setInfo ("Move lane down", "Move the current lane one place down", "Lanes", 0); info.addDefaultKeypress (KP::downKey, primary); break;
+                case togglePunch:     info.setInfo ("Punch in/out", "Record only inside the loop region: play from before it and play along; off, recording runs until you stop", "Transport", 0); break;
                 case exportMix:       info.setInfo ("Export", "Render the mix to a WAV or FLAC file: the loop region, or the whole project", "File", 0); info.addDefaultKeypress ('r', primary); break;
                 case previousLane:    info.setInfo ("Lane above", "Make the lane above the current one current", "Lanes", 0); info.addDefaultKeypress (KP::upKey, 0); break;
                 case nextLane:        info.setInfo ("Lane below", "Make the lane below the current one current", "Lanes", 0); info.addDefaultKeypress (KP::downKey, 0); break;

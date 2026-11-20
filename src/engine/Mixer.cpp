@@ -557,6 +557,23 @@ namespace carthage::editing
         return first;
     }
 
+    Lane freeLaneFor (Edit& edit, TimeRange time, const Lane& from)
+    {
+        const auto all = lanes (edit);
+        const auto start = std::max (0, all.indexOf (from));
+
+        for (int i = start; i < all.size(); ++i)
+        {
+            const auto clips = clipsOn (edit, all.getReference (i));
+            const auto taken = std::any_of (clips.begin(), clips.end(), [&time] (Clip* c) { return c->getEditTimeRange().overlaps (time); });
+
+            if (! taken)
+                return all.getReference (i);
+        }
+
+        return insertLane (edit, all.getLast());   // inside the take's own undo step
+    }
+
     void moveLane (Edit& edit, const Lane& lane, int newIndex)
     {
         auto tree = lanesStateForWriting (edit);
@@ -888,6 +905,32 @@ namespace carthage::editing
 
     bool isMonitoring (const AudioTrack& t)        { return flag (t, monitorProp); }
     void setMonitoring (AudioTrack& t, bool on)    { t.state.setProperty (monitorProp, on, undoOf (t.edit)); }
+
+    namespace
+    {
+        const juce::Identifier armedProp ("carthageArmed");
+    }
+
+    bool isArmed (const AudioTrack& t)   { return flag (t, armedProp); }
+
+    void setArmed (AudioTrack& t, bool on)
+    {
+        if (on)
+            t.state.setProperty (armedProp, true, undoOf (t.edit));
+        else
+            t.state.removeProperty (armedProp, undoOf (t.edit));
+    }
+
+    juce::Array<AudioTrack*> armedChannels (const Edit& edit)
+    {
+        juce::Array<AudioTrack*> out;
+
+        for (auto* ch : channels (edit))
+            if (isArmed (*ch))
+                out.add (ch);
+
+        return out;
+    }
 
     AudioTrack* recordChannel (const Edit& edit)
     {

@@ -13,6 +13,7 @@
 #include "SampleLibrary.h"
 #include "SamplePreview.h"
 #include "TakePlacement.h"
+#include "TakePlan.h"
 #include "TakeRecorder.h"
 
 #include <tracktion_engine/tracktion_engine.h>
@@ -259,8 +260,36 @@ namespace carthage::engine
         void setChannelInput (tracktion::AudioTrack&, editing::ChannelInput);
         void setChannelMonitoring (tracktion::AudioTrack&, bool);
 
-        /** The channel takes record through (the armed one); getTrack() returns it. */
+        /** The channel the settings' input and hearing figures follow; getTrack() returns it. */
         void setRecordChannel (tracktion::AudioTrack&);
+
+        /** Arming (5d): a channel records its input when recording starts; several can, each to
+            its own take (up to AudioCallback::maxTakes). One undo step. Not while recording. */
+        void setArmed (tracktion::AudioTrack&, bool);
+
+        /** The brief's quick action (feature 5): this channel takes `input`, is heard and armed, in
+            one undo step ("Guitar in here"). */
+        void playInHere (tracktion::AudioTrack&, editing::ChannelInput);
+
+        /** Count-in before recording from a stop (5d): 0 (the default), 1 or 2 bars, in the app's
+            settings. The click sounds through it whether the metronome is on or not. */
+        int getCountInBars() const;
+        void setCountInBars (int);
+
+        /** Low-latency monitoring (brief, feature 8; W57). Off by default. While on and an armed
+            channel is heard, every plugin that delays its sound (reports latency) is left out of
+            playback, except those on the armed channels: what you hear through them is no longer
+            held back for the others' delay compensation. Nothing in the project changes (plugins
+            are frozen, which is not saved), and exports always use every plugin. */
+        bool getLowLatencyMonitoring() const;
+        void setLowLatencyMonitoring (bool);
+
+        /** The plugins low-latency monitoring has left out right now (for the UI). */
+        bool isPausedForLowLatency (const tracktion::Plugin&) const;
+
+        /** Punch in/out for the front project (off by default). */
+        bool isPunchOn() const;
+        void setPunch (bool);
 
         /** Every channel's input and hearing and the record channel, as one string: an undo that
             changes it puts the input routing back into effect. */
@@ -281,6 +310,8 @@ namespace carthage::engine
         void setRecordFormat (TakeRecorder::SampleFormat f) noexcept    { recordFormat = f; }
         TakeRecorder::SampleFormat getRecordFormat() const noexcept    { return recordFormat; }
 
+        /** Records every armed channel that has an input, each to its own take, until stopped.
+            Fails with a reason when nothing is armed. */
         juce::Result startRecording();
         TakeRecorder::Result stopRecording();
         bool isRecording() const noexcept       { return recorder.isRecording(); }
@@ -305,6 +336,8 @@ namespace carthage::engine
             juce::String clipName;
             bool interrupted = false;   ///< Playback stopped during the take, so Session ended it
             bool placedByGuess = false; ///< Playback never ran during the take; placed where it began
+            int channels = 1;           ///< How many armed channels recorded
+            int clips = 1;              ///< How many clips the takes became (loop passes, punch)
         };
         const std::optional<TakeInfo>& getLastTake() const noexcept     { return lastTake; }
 
@@ -353,7 +386,8 @@ namespace carthage::engine
         std::unique_ptr<SampleLibrary> sampleLibrary;
         std::unique_ptr<SampleAnalyser> sampleAnalyser;   // after the library: stopped first
         std::unique_ptr<tracktion::Engine> engine;
-        TakeRecorder recorder;
+        std::array<TakeRecorder, AudioCallback::maxTakes> recorders;
+        TakeRecorder& recorder { recorders[0] };   // the first take's, and the meters'
         LatencyProbe probe;
         SamplePreview preview;
         std::unique_ptr<AudioCallback> callback;
@@ -423,6 +457,19 @@ namespace carthage::engine
         // Take placement: the stream-to-edit offset is sampled while the take plays (TakeWatch),
         // not at stop, when the playhead may already have stopped.
         TakeWatch takeWatch;
+
+        // The take in hand (5d): which channel each recorder records, and how it is cut.
+        struct ActiveTake
+        {
+            tracktion::AudioTrack* channel = nullptr;
+            juce::File file;
+        };
+
+        std::vector<ActiveTake> activeTakes;   // index = recorder slot
+        std::vector<tracktion::EditItemID> lowLatencyFrozen;   // the plugins this mode froze
+        void applyLowLatency();
+        double takeKeepFrom = 0.0;
+        std::optional<takes::Span> takeLoop, takePunch;
         juce::uint32 takeStartedMs = 0;
         double takeStartPosition = 0.0;
         int takeBlockSamples = 0;

@@ -286,6 +286,7 @@ namespace carthage::ui
 
                 pill (g, muteArea, "M", editing::isChannelMuted (*track), theme::warn);
                 pill (g, soloArea, "S", editing::isChannelSoloed (*track), theme::ok);
+                pill (g, armArea, "R", editing::isArmed (*track), theme::clip);   // record arm (AGENTS.md: --clip)
             }
 
             if (track == nullptr)
@@ -363,8 +364,10 @@ namespace carthage::ui
             if (channelStrip())
             {
                 auto pills = r.removeFromTop (18);
-                muteArea = pills.removeFromLeft (pills.getWidth() / 2).reduced (2, 0);
-                soloArea = pills.reduced (2, 0);
+                const auto third = pills.getWidth() / 3;
+                muteArea = pills.removeFromLeft (third).reduced (1, 0);
+                soloArea = pills.removeFromLeft (third).reduced (1, 0);
+                armArea = pills.reduced (1, 0);
                 r.removeFromTop (theme::space1);
             }
 
@@ -429,6 +432,21 @@ namespace carthage::ui
             // As on the lanes: Cmd-click mutes every other channel, or solos this one alone.
             if (muteArea.contains (e.getPosition()))
                 e.mods.isCommandDown() ? editing::muteOtherChannels (*track) : editing::setChannelMuted (*track, ! editing::isChannelMuted (*track));
+            else if (armArea.contains (e.getPosition()))
+            {
+                if (view.session.isRecording())
+                {
+                    if (view.onStatus) view.onStatus ("Stop recording to arm or disarm a channel");
+                }
+                else
+                {
+                    view.session.setArmed (*track, ! editing::isArmed (*track));
+                    view.refreshColumn();
+
+                    if (! editing::inputOf (*track).isSet() && editing::isArmed (*track) && view.onStatus)
+                        view.onStatus (track->getName() + " is armed but has no input: choose one above its name");
+                }
+            }
             else if (soloArea.contains (e.getPosition()))
                 e.mods.isCommandDown() ? editing::soloChannelAlone (*track) : editing::setChannelSoloed (*track, ! editing::isChannelSoloed (*track));
             else if (outputArea.contains (e.getPosition()))
@@ -482,6 +500,8 @@ namespace carthage::ui
             {
                 if (muteArea.contains (pos))
                     return (editing::isChannelMuted (*track) ? "Unmute this channel" : "Mute this channel") + String (". ") + cmd + "-click: mute every other channel; again: every channel plays";
+                if (armArea.contains (pos))
+                    return (editing::isArmed (*track) ? "Disarm this channel" : "Arm this channel: R records its input, with every other armed channel, each to its own take");
                 if (soloArea.contains (pos))
                     return (editing::isChannelSoloed (*track) ? "Stop soloing this channel" : "Solo this channel") + String (". ") + cmd + "-click: this channel alone; again: no solo";
                 if (nameArea.contains (pos))
@@ -547,7 +567,7 @@ namespace carthage::ui
         Route route = Route::none;
         bool showsRoute = false;
         Rectangle<int> routeArea;
-        Rectangle<int> colourBar, nameArea, outputArea, inputArea, muteArea, soloArea, meterArea, figureArea;
+        Rectangle<int> colourBar, nameArea, outputArea, inputArea, muteArea, soloArea, armArea, meterArea, figureArea;
 
         String nameForUndo() const   { return track != nullptr ? track->getName() : String ("Master"); }
 
@@ -934,6 +954,10 @@ namespace carthage::ui
 
             const auto ms = editing::latencyOf (*plugins[i]) * 1000.0;
 
+            if (view.session.isPausedForLowLatency (*plugins[i]))
+                return plugins[i]->getName() + " is paused while you play through an armed channel (low-latency monitoring, in Settings > Recording): "
+                       "its " + String (ms, 1) + " ms delay would hold back what you hear. It plays again when you stop hearing the input, and exports always use it.";
+
             if (ms <= 0.0)
                 return {};
 
@@ -1009,9 +1033,10 @@ namespace carthage::ui
                     name = name.withTrimmedRight (16);
                 }
 
-                g.setColour (bypassed ? theme::muted : theme::text);
-                g.setFont (theme::uiFont (theme::textSm, ! bypassed));
-                g.drawText (p->getName(), name, Justification::centredLeft, true);
+                const auto paused = view.session.isPausedForLowLatency (*p);
+                g.setColour (bypassed || paused ? theme::muted : theme::text);
+                g.setFont (theme::uiFont (theme::textSm, ! bypassed && ! paused));
+                g.drawText (paused ? p->getName() + " (paused)" : p->getName(), name, Justification::centredLeft, true);
 
                 if (dropSlot == i)
                 {
@@ -1258,22 +1283,21 @@ namespace carthage::ui
                 repaint();
             }
         };
-        recordHere.setTooltip ("Takes are recorded from this channel's input, onto the recording lane");
+        recordHere.setTooltip ("Armed channels record their input when you press R, each to its own take, on a lane with room for it. "
+                               "Arm as many as you play into at once.");
         recordHere.onClick = [this]
         {
-            if (auto* channel = selectedChannel(); channel != nullptr && recordHere.getToggleState())
+            if (auto* channel = selectedChannel())
             {
-                session.setRecordChannel (*channel);
+                session.setArmed (*channel, recordHere.getToggleState());
 
                 if (onStatus)
-                    onStatus ("Takes now record through " + channel->getName());
-            }
-            else if (onStatus)
-            {
-                onStatus ("One channel always takes record: choose another channel to move it there");
+                    onStatus (recordHere.getToggleState() ? channel->getName() + " is armed: R records its input"
+                                                          : channel->getName() + " is no longer armed");
             }
 
             refreshColumn();
+            repaint();
         };
         masterOutput.setTooltip ("Where you hear Carthage: the interface's outputs");
         masterOutput.onChange = [this]
@@ -1352,7 +1376,7 @@ namespace carthage::ui
 
         // Names, colours, routes and mutes repaint; a track becoming a channel rebuilds.
         if (id == tracktion::IDs::name || id == colourProp || id == Identifier ("carthageRole") || id == tracktion::IDs::dst
-            || id == tracktion::IDs::mute || id == Identifier ("carthageMuted") || id == Identifier ("carthageSoloed"))
+            || id == tracktion::IDs::mute || id == Identifier ("carthageMuted") || id == Identifier ("carthageSoloed") || id == Identifier ("carthageArmed"))
         {
             if (id == Identifier ("carthageRole") || id == tracktion::IDs::dst)
                 triggerRebuild();
@@ -1867,9 +1891,8 @@ namespace carthage::ui
         fillInputs (input);
         input.setSelectedId (idForInput (editing::inputOf (*channel)), dontSendNotification);
         hear.setToggleState (editing::isMonitoring (*channel), dontSendNotification);
-        const auto records = channel == editing::recordChannel (edit);
-        recordHere.setToggleState (records, dontSendNotification);
-        recordHere.setEnabled (! session.isRecording());   // on stays on until another channel takes it
+        recordHere.setToggleState (editing::isArmed (*channel), dontSendNotification);
+        recordHere.setEnabled (! session.isRecording());   // what records is fixed while it records
 
         columnName.setText (channel->getName(), dontSendNotification);
 
@@ -1954,6 +1977,15 @@ namespace carthage::ui
         const auto isInput = &channel == &session.getTrack();
 
         PopupMenu m;
+        m.addItem ("Guitar in here: input 1, heard and armed", ! session.isRecording(), false, [this, held]
+        {
+            session.playInHere (*held, { 0, false });
+            select (held);
+
+            if (onStatus)
+                onStatus ("You hear input 1 through " + held->getName() + ", and R records it");
+        });
+        m.addSeparator();
         m.addItem (String::fromUTF8 ("Rename\xe2\x80\xa6"), [this, held]
         {
             for (auto* s : strips)

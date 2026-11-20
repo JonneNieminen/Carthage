@@ -23,6 +23,7 @@ add_library(carthage_engine STATIC
     AudioFormats.h
     Session.cpp Session.h
     TakePlacement.h
+    TakePlan.cpp TakePlan.h
     TakeRecorder.cpp TakeRecorder.h)
 
 target_include_directories(carthage_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
