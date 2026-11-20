@@ -63,8 +63,9 @@ namespace carthage::ui
         enum class Route { none, output, send, sidechain };
         Route routeTo (tracktion::AudioTrack* to);
 
-        /** A click on a strip's route button (FL): send here or stop; with Cmd, play only here. */
-        void toggleRoute (tracktion::AudioTrack* to, bool only);
+        /** A click on a strip's route button: the selected channel's main output goes here, or back
+            to master (owner); `send`: a copy at its own level instead, or no longer. */
+        void toggleRoute (tracktion::AudioTrack* to, bool send);
         void showRouteMenu (tracktion::AudioTrack& to, juce::Component& from);
         void routesChanged();
         void repaintCables();
@@ -74,6 +75,10 @@ namespace carthage::ui
         int busInterval() const;   // 0: off
         bool isBus (int channelIndex) const;
         void busesChanged();
+
+        /** Left and Right move the selection between channels, master and the Pre-Master. */
+        bool keyPressed (const juce::KeyPress&) override;
+        void selectNeighbour (int step);
 
         /** Strip width, as the lanes zoom in time: Cmd+wheel or pinch over the strips (W51). */
         void zoomBy (float factor);
@@ -93,7 +98,18 @@ namespace carthage::ui
         juce::Viewport viewport;
         class StripHolder;
         std::unique_ptr<StripHolder> stripHolder;
-        juce::TextButton addButton { "Add channel" };
+        /** "Add channel"; a right-click offers several at once (owner). */
+        struct AddButton final : public juce::TextButton
+        {
+            AddButton() : juce::TextButton ("Add channel") {}
+            std::function<void()> onRightClick;
+            void mouseDown (const juce::MouseEvent& e) override   { if (e.mods.isPopupMenu()) { if (onRightClick) onRightClick(); return; } juce::TextButton::mouseDown (e); }
+            void mouseUp (const juce::MouseEvent& e) override     { if (! e.mods.isPopupMenu()) juce::TextButton::mouseUp (e); }
+        } addButton;
+
+        /** Adds `count` channels after `after` (null: at the end) as one undo step, and selects the first. */
+        void addChannels (tracktion::AudioTrack* after, int count);
+        juce::PopupMenu addChannelsMenu (tracktion::AudioTrack* after);
         tracktion::EditItemID selected;
         bool masterSelected = false;
         int pinned = 1;

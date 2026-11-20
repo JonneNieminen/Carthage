@@ -326,3 +326,12 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   manufacturer search ("fab" + Return filters to FabFilter's 28; arrows back to Any manufacturer).
   Bus channels checked by snapshot only. Each new ad-hoc build asks for microphone access again.
 
+### 2026-11-20 (mixer clicks and keys, W54)
+
+- Route button: click = main output here / back to master; Option-click = send. Fader: cap only;
+  wheel over the selected strip anywhere. Left/Right between strips (MixerView has keyboard
+  focus after a click on a strip); Up/Down commands previousLane/nextLane (ids after afterTabs).
+  Add 1/2/4/8/16 channels from the strip menu or a right-click on Add channel.
+- CI run for a683709 ended "failure" only because GitHub had no macOS arm64 runner (jobs
+  cancelled: "not acquired by Runner"); every job that ran passed. The next push re-runs all.
+

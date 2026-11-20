@@ -76,9 +76,16 @@ namespace carthage::ui
             fader.setRange (minDb, maxDb, 0.1);
             fader.setSkewFactorFromMidPoint (-12.0);
             fader.setDefault (0.0);
-            fader.setTooltip ("Volume. Double-click: 0 dB. Scroll to adjust, Shift for fine steps.");
-            fader.onDragStart = [this] { editing::begin (view.session.getEdit(), nameForUndo() + " volume"); };
-            fader.onWheelStart = fader.onDragStart;
+            fader.setTooltip ("Volume. Drag the cap; double-click it for 0 dB. Scroll anywhere over the selected channel, Shift for fine steps.");
+            fader.onlyThumbGrabs = true;   // a click on the strip selects it; only the cap moves the fader (owner)
+            fader.onDragStart = [this]
+            {
+                if (! isSelected())
+                    track != nullptr ? view.select (track) : view.selectMaster();
+
+                editing::begin (view.session.getEdit(), nameForUndo() + " volume");
+            };
+            fader.onWheelStart = [this] { editing::begin (view.session.getEdit(), nameForUndo() + " volume"); };
             fader.onValueChange = [this]
             {
                 if (volume != nullptr && std::abs (volume->getVolumeDb() - static_cast<float> (fader.getValue())) > 0.01f)
@@ -143,6 +150,8 @@ namespace carthage::ui
         {
             if (e.mods.isCommandDown())
                 view.zoomBy (std::pow (1.15f, w.deltaY * 8.0f));
+            else if (isSelected() && volume != nullptr)
+                fader.mouseWheelMove (e.getEventRelativeTo (&fader), w);   // anywhere over the channel in context (owner)
             else
                 Component::mouseWheelMove (e, w);
         }
@@ -379,10 +388,12 @@ namespace carthage::ui
                 if (e.mods.isPopupMenu() && track != nullptr)
                     view.showRouteMenu (*track, *this);
                 else
-                    view.toggleRoute (track, e.mods.isCommandDown());
+                    view.toggleRoute (track, e.mods.isAltDown());   // a click routes here or back; Option: a send
 
                 return;   // routing does not change the selection: the source stays selected
             }
+
+            view.grabKeyboardFocus();   // the arrow keys move between channels from here
 
             if (track == nullptr)
             {
@@ -447,6 +458,25 @@ namespace carthage::ui
         {
             const auto pos = getMouseXYRelative();
             const auto cmd = String (app::commands::commandName);
+
+            if (showsRoute && routeArea.contains (pos) && ! sendLevel.getBounds().contains (pos))
+            {
+                const auto* from = view.selectedChannel();
+                const auto fromName = from != nullptr ? from->getName() : String ("The selected channel");
+                const auto here = track != nullptr ? track->getName() : String ("master");
+                const auto opt = String (app::commands::optionName);
+
+                switch (route)
+                {
+                    case Route::output:    return fromName + " plays into " + here + ". Click to send it back to master.";
+                    case Route::send:      return fromName + " sends a copy to " + here + ". Click to stop the send.";
+                    case Route::sidechain: return fromName + " drives a sidechain here. Click to play into " + here + " instead; right-click to change the sidechain.";
+                    case Route::none:      break;
+                }
+
+                return track == nullptr ? fromName + " is not heard through master. Click to play into master again."
+                                        : "Click to play " + fromName + " into " + here + ". " + opt + "-click: send a copy instead. Right-click: sidechain and more.";
+            }
 
             if (channelStrip())
             {
@@ -1145,25 +1175,16 @@ namespace carthage::ui
           zoom (static_cast<float> (s.getEngine().getPropertyStorage().getPropertiesFile().getDoubleValue ("mixerZoom", 1.0)))
     {
         setOpaque (true);
+        setWantsKeyboardFocus (true);   // Left and Right move between channels (owner)
         stripHolder = std::make_unique<StripHolder> (*this);
         viewport.setViewedComponent (stripHolder.get(), false);
         viewport.setScrollBarsShown (false, true);
         addAndMakeVisible (viewport);
 
         addButton.setTooltip ("Add a channel at the end");
-        addButton.onClick = [this]
-        {
-            auto& edit = session.getEdit();
-            editing::begin (edit, "Add channel");
-
-            if (auto* added = editing::addChannel (edit))
-            {
-                select (added);
-
-                if (onStatus)
-                    onStatus ("Added " + added->getName());
-            }
-        };
+        addButton.onClick = [this] { addChannels (nullptr, 1); };
+        addButton.onRightClick = [this] { addChannelsMenu (nullptr).showMenuAsync (PopupMenu::Options().withTargetComponent (&addButton)); };
+        addButton.setTooltip ("Add a channel at the end. Right-click to add several at once.");
         addAndMakeVisible (addButton);
 
         styleLabel (columnName, theme::textLg, theme::text, true);
@@ -1440,6 +1461,79 @@ namespace carthage::ui
         session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("mixerZoom", static_cast<double> (zoom));
     }
 
+    void MixerView::addChannels (tracktion::AudioTrack* after, int count)
+    {
+        auto& edit = session.getEdit();
+        editing::begin (edit, count == 1 ? String ("Add channel") : "Add " + String (count) + " channels");
+        tracktion::AudioTrack* first = nullptr;
+        auto* previous = after;
+
+        for (int i = 0; i < count; ++i)
+            if (auto* added = editing::addChannel (edit, previous))
+            {
+                first = first != nullptr ? first : added;
+                previous = added;
+            }
+
+        if (first == nullptr)
+            return;
+
+        select (first);
+
+        if (onStatus)
+            onStatus (count == 1 ? "Added " + first->getName() : "Added " + String (count) + " channels, from " + first->getName());
+    }
+
+    PopupMenu MixerView::addChannelsMenu (tracktion::AudioTrack* after)
+    {
+        PopupMenu m;
+
+        for (const auto n : { 1, 2, 4, 8, 16 })
+            m.addItem (n == 1 ? String ("1 channel") : String (n) + " channels", [this, after, n] { addChannels (after, n); });
+
+        return m;
+    }
+
+    bool MixerView::keyPressed (const KeyPress& key)
+    {
+        if (key == KeyPress::leftKey || key == KeyPress::rightKey)
+        {
+            selectNeighbour (key == KeyPress::leftKey ? -1 : 1);
+            return true;
+        }
+
+        return false;
+    }
+
+    void MixerView::selectNeighbour (int step)
+    {
+        // The strips in their order on screen: master, the Pre-Master while on, the channels.
+        int current = -1;
+
+        for (int i = 0; i < strips.size(); ++i)
+        {
+            auto* t = strips[i]->getTrack();
+            if ((t == nullptr && masterSelected) || (t != nullptr && t->itemID == selected))
+                current = i;
+        }
+
+        const auto next = std::clamp (current < 0 ? pinned : current + step, 0, strips.size() - 1);
+        auto* strip = strips[next];
+        strip->getTrack() != nullptr ? select (strip->getTrack()) : selectMaster();
+
+        // Keep it in view.
+        if (strip->getParentComponent() == stripHolder.get())
+        {
+            const auto b = strip->getBounds();
+            const auto view = viewport.getViewArea();
+
+            if (b.getX() < view.getX())
+                viewport.setViewPosition (b.getX() - stripGap, 0);
+            else if (b.getRight() > view.getRight())
+                viewport.setViewPosition (b.getRight() - view.getWidth() + stripGap, 0);
+        }
+    }
+
     int MixerView::busInterval() const
     {
         auto& props = session.getEngine().getPropertyStorage().getPropertiesFile();
@@ -1473,7 +1567,7 @@ namespace carthage::ui
             stripHolder->repaint();
     }
 
-    void MixerView::toggleRoute (tracktion::AudioTrack* to, bool only)
+    void MixerView::toggleRoute (tracktion::AudioTrack* to, bool send)
     {
         auto* from = selectedChannel();
 
@@ -1498,21 +1592,30 @@ namespace carthage::ui
                 editing::setPlaysToOutput (*from, ! editing::playsToOutput (*from));
             }
         }
-        else if (only)
+        else if (send)
         {
-            // Cmd-click (FL's "route to this track only"): its main output goes here alone.
-            editing::removeSend (*from, *to);
-            result = editing::setOutput (*from, to);
-            if (result.wasOk()) editing::setPlaysToOutput (*from, true);
+            // Option-click: a copy at its own level, the main output untouched.
+            switch (routeTo (to))
+            {
+                case Route::send:      editing::removeSend (*from, *to); break;
+                case Route::output:    result = editing::setOutput (*from, nullptr); if (result.wasOk()) result = editing::addSend (*from, *to); break;
+                case Route::sidechain:
+                case Route::none:      result = editing::addSend (*from, *to); break;
+            }
         }
         else
         {
+            // A click (owner): the main output goes here; again, it goes back to master. A send
+            // here is taken away instead.
             switch (routeTo (to))
             {
-                case Route::output:    result = editing::setOutput (*from, nullptr); break;   // back to master
+                case Route::output:    result = editing::setOutput (*from, nullptr); break;
                 case Route::send:      editing::removeSend (*from, *to); break;
                 case Route::sidechain:
-                case Route::none:      result = editing::addSend (*from, *to); break;
+                case Route::none:
+                    result = editing::setOutput (*from, to);
+                    if (result.wasOk()) editing::setPlaysToOutput (*from, true);
+                    break;
             }
         }
 
@@ -1534,8 +1637,8 @@ namespace carthage::ui
         auto* held = &to;
         PopupMenu m;
         const auto kind = routeTo (&to);
-        m.addItem ("Send here", kind != Route::send && kind != Route::output, kind == Route::send, [this, held] { toggleRoute (held, false); });
-        m.addItem ("Play only here (main output)", true, kind == Route::output, [this, held] { toggleRoute (held, true); });
+        m.addItem ("Play into this channel (main output)", true, kind == Route::output, [this, held] { toggleRoute (held, false); });
+        m.addItem ("Send a copy here", kind != Route::output, kind == Route::send, [this, held] { toggleRoute (held, true); });
 
         PopupMenu keys;
         for (auto* p : editing::insertsOf (to))
@@ -1832,12 +1935,8 @@ namespace carthage::ui
         m.addItem ("Move left", index > 0, false, [&edit, held, index] { editing::begin (edit, "Move channel"); editing::moveChannel (*held, index - 1); });
         m.addItem ("Move right", index < editing::channels (edit).size() - 1, false, [&edit, held, index] { editing::begin (edit, "Move channel"); editing::moveChannel (*held, index + 1); });
         m.addSeparator();
-        m.addItem ("Add a channel after it", [this, &edit, held]
-        {
-            editing::begin (edit, "Add channel");
-            if (auto* added = editing::addChannel (edit, held))
-                select (added);
-        });
+        m.addItem ("Add a channel after it", [this, held] { addChannels (held, 1); });
+        m.addSubMenu ("Add channels after it", addChannelsMenu (held));
         m.addItem (isInput ? "Delete channel (the input plays here)" : "Delete channel", ! isInput, false, [this, &edit, held]
         {
             const auto name = held->getName();

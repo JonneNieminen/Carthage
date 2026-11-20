@@ -1752,6 +1752,30 @@ namespace carthage::ui
         editing::moveLane (session.getEdit(), lane, laneTracks().indexOf (lane) + delta);
     }
 
+    void Timeline::selectNeighbourLane (int delta)
+    {
+        const auto all = laneTracks();
+
+        if (all.isEmpty())
+            return;
+
+        const auto current = all.indexOf (findCurrentLane());
+        const auto index = current < 0 ? 0 : std::clamp (current + delta, 0, all.size() - 1);
+        currentLane = all.getReference (index).id();
+
+        // Keep it in view.
+        const auto visible = lanesArea().getHeight();
+        const auto top = laneTop (index);
+
+        if (top < scrollY)
+            scrollY = top;
+        else if (top + heightOfLane (index) > scrollY + visible)
+            scrollY = std::max (0, top + heightOfLane (index) - visible);
+
+        repaintLanes();
+        resized();
+    }
+
     void Timeline::addLane (const editing::Lane& after, int count)
     {
         const auto lane = editing::addLanes (session.getEdit(), count, after);

@@ -11,6 +11,10 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Left and Right move between mixer channels; Up and Down make the lane above or below the
+  current one current (both shown in Keyboard shortcuts for the lanes; rebindable).
+- Add several mixer channels at once: right-click a channel (Add channels after it) or the Add
+  channel button, and choose 2, 4, 8 or 16.
 - Bus channels (Settings > Mixer, off by default): every 4th, 5th, 8th, 10th, 12th or 16th
   channel is drawn wider and marked "Bus", a place to route a group of channels.
 - The plugin browser's manufacturer filter has its own search: type a few letters to narrow the
@@ -35,8 +39,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 - A Pre-Master channel beside master: everything heading to master passes through it, for the
   processing the whole mix shares. On by default; Settings can turn it off.
 - FL-style routing: select a channel and every other strip shows a route button at its foot; click
-  to send the selected channel there too (with a level knob), Cmd-click to play only there, master's
-  button turns the main output on or off; right-click for sidechain. A cable under the strips shows
+  to play the selected channel into it (click again: back to master), Option-click to send a copy
+  there instead (with a level knob), master's button turns the main output on or off; right-click
+  for these and sidechain. A cable under the strips shows
   where the selected channel goes. A route that would loop back is refused.
 - Every mixer channel picks its own interface input and can be heard as you play ("Hear the input");
   choose which channel takes record. The input row above the lanes is gone: its plugin is channel
@@ -84,6 +89,8 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   its name. Settings > Browser can fit a dropped loop to the project's tempo.
 
 ### Changed
+- A mixer fader moves only when you drag its cap or scroll over the selected channel; a click
+  anywhere else on a strip just selects it.
 - The Settings button is a gear, and its tooltip says Settings.
 - "Maker" is now "manufacturer" in the plugin browser.
 - Double-clicking the metronome level returns it to 60 %.

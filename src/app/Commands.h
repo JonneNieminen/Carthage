@@ -69,6 +69,9 @@ namespace carthage::app
             viewsPalette,
             showTabFirst,                                // showTabFirst + 0..8: Cmd+1 to Cmd+9
             afterTabs = showTabFirst + 9,
+
+            // Added after the tabs, so the ids above stay as saved.
+            previousLane = afterTabs, nextLane,
         };
 
         /** Layout slots there can be; Settings chooses how many are offered (F21). */
@@ -91,7 +94,7 @@ namespace carthage::app
                      windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings, windowMixer,
                      defaultLayout, commandPalette, keepPluginOnTop, lanesTaller, lanesShorter,
                      uiLarger, uiSmaller, uiActualSize, toggleMetronome, toggleLoop, undoHistory, exportLog, projectNotes, restoreVersion,
-                     addLaneBelow, moveLaneUp, moveLaneDown, viewsPalette };
+                     addLaneBelow, moveLaneUp, moveLaneDown, viewsPalette, previousLane, nextLane };
         }
 
         /** Cmd/Ctrl+1 to 9: the project tabs; 9 is always the last tab (W41). */
@@ -249,6 +252,8 @@ namespace carthage::app
                 case addLaneBelow:    info.setInfo ("Add lane", "Add a lane below the current lane (the one whose name you clicked last)", "Lanes", 0); info.addDefaultKeypress ('n', primary | juce::ModifierKeys::altModifier); break;
                 case moveLaneUp:      info.setInfo ("Move lane up", "Move the current lane one place up", "Lanes", 0); info.addDefaultKeypress (KP::upKey, primary); break;
                 case moveLaneDown:    info.setInfo ("Move lane down", "Move the current lane one place down", "Lanes", 0); info.addDefaultKeypress (KP::downKey, primary); break;
+                case previousLane:    info.setInfo ("Lane above", "Make the lane above the current one current", "Lanes", 0); info.addDefaultKeypress (KP::upKey, 0); break;
+                case nextLane:        info.setInfo ("Lane below", "Make the lane below the current one current", "Lanes", 0); info.addDefaultKeypress (KP::downKey, 0); break;
                 case restoreVersion:  info.setInfo (juce::String::fromUTF8 ("Restore a version\xe2\x80\xa6"), "Go back to how this project was at an earlier save", "File", 0); break;
                 case projectNotes:    info.setInfo ("Project notes", "Notes kept with this project: lyrics, settings you used, what to try next", "File", 0); info.addDefaultKeypress ('n', primary | juce::ModifierKeys::shiftModifier); break;
                 case exportLog:       info.setInfo (juce::String::fromUTF8 ("Export log\xe2\x80\xa6"), "Save or copy Carthage's log, to send with a problem report", "Help", 0); break;

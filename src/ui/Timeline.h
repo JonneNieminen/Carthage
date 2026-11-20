@@ -71,6 +71,9 @@ namespace carthage::ui
             below it, ⌘↑/⌘↓ move it (owner's list). */
         void addLaneBelowCurrent();
         void moveCurrentLane (int delta);
+
+        /** Up and Down (owner): the lane above or below the current one becomes current, in view. */
+        void selectNeighbourLane (int delta);
         void loopSelection();
 
         /** Looping turned on or off from outside (the loop button, L): the region's look follows. */

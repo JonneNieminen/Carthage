@@ -143,6 +143,20 @@ namespace carthage::ui
 
         void setDefault (double v)   { setDoubleClickReturnValue (true, v); }
 
+        /** A fader that only its cap takes hold of (owner): a click elsewhere on its track goes
+            through to what is behind it (the mixer strip, which selects), and never jumps the
+            value. The wheel is unaffected. */
+        bool onlyThumbGrabs = false;
+
+        bool hitTest (int x, int y) override
+        {
+            if (! onlyThumbGrabs || ! isVertical())
+                return juce::Slider::hitTest (x, y);
+
+            const auto thumb = getPositionOfValue (getValue());
+            return std::abs (static_cast<float> (y) - thumb) <= 13.0f;
+        }
+
         /** When set and false, the wheel passes on to the parent instead (the mixer: only the
             selected channel's controls take it; elsewhere it scrolls, W51). */
         std::function<bool()> acceptsWheel;
