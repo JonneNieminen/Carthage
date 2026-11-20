@@ -53,6 +53,21 @@ public:
             expect (fine < plain, "and by less");
         }
 
+        beginTest ("A control that does not take the wheel leaves its value alone (the mixer, W51)");
+        {
+            ui::ValueSlider slider (0.0);
+            slider.setRange (-48.0, 12.0, 0.01);
+            slider.setValue (0.0);
+            slider.setSize (200, 24);
+            bool selected = false;
+            slider.acceptsWheel = [&selected] { return selected; };
+            wheel (slider, {}, 0.0f, 0.1f);
+            expectWithinAbsoluteError (slider.getValue(), 0.0, 1.0e-9, "not the selected channel's: the mixer scrolls instead");
+            selected = true;
+            wheel (slider, {}, 0.0f, 0.1f);
+            expect (slider.getValue() > 0.0, "the selected channel's: it adjusts");
+        }
+
         beginTest ("Shift + wheel over the lanes scrolls in time");
         {
             juce::MouseWheelDetails macShift {};

@@ -676,8 +676,10 @@ Deliver:
       reorder by the strip's menu; owner's checks pending)
 - [ ] Per channel: fader, pan, mute, solo, record arm, input monitoring, peak/RMS meter (5a: all but
       arming and monitoring, which come with the per-channel inputs in 5d)
-- [ ] Sends and buses; any channel routes to any other or to master
+- [ ] Sends and buses; any channel routes to any other or to master (built: sends to several channels,
+      main output on/off, sidechain, cables, W51; owner's checks pending)
 - [ ] Insert Lines: unlimited growing list; reorder by drag, bypass, wet/dry, open UI, drag between channels
+      (built 2026-11-20 with master's and the Pre-Master's Lines, W51; owner's checks pending)
 - [ ] Input/output picker per channel; "Guitar in → this channel, armed, monitoring" action; keyboard-driven selection
 - [ ] Plugin delay compensation across the whole graph; low-latency monitoring mode
 - [ ] **Proposed here, owner to confirm (O5):** metronome, count-in, loop recording with takes, punch in/out

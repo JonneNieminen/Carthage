@@ -280,3 +280,6 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   name master (null) and physically go to it while on (`physicalMaster`, `logicalDestination`);
   the setting `usePreMaster` (default on) rewires all. Bench renders now take the whole mix (a
   lane's carrier plays through the Pre-Master, which a one-track render left out).
+- Wheel and zoom: ValueSlider::acceptsWheel gates the mixer's controls to the selected strip,
+  passing the wheel to the parent (the viewport scrolls); Cmd+wheel and pinch zoom strip widths
+  (0.75 to 2.5, kept in the settings).

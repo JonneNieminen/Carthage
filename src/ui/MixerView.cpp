@@ -110,6 +110,11 @@ namespace carthage::ui
             };
             addChildComponent (sendLevel);
 
+            // The wheel adjusts only the selected channel's controls; over any other strip it
+            // scrolls the mixer (owner, W51).
+            for (auto* control : { &fader, &pan, &sendLevel })
+                control->acceptsWheel = [this, control] { return control == &sendLevel ? true : isSelected(); };
+
             readModel();
             setTooltip (track != nullptr ? "Click to select. Right-click to rename, colour, route or delete it." : "Master: everything you hear goes through it");
         }
@@ -121,6 +126,19 @@ namespace carthage::ui
         }
 
         tracktion::AudioTrack* getTrack() const noexcept   { return track; }
+
+        bool isSelected() const   { return track != nullptr ? view.selected == track->itemID : view.masterSelected; }
+
+        /** Cmd+wheel zooms the strips, as on the lanes; a plain wheel goes on to the mixer's scrolling. */
+        void mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& w) override
+        {
+            if (e.mods.isCommandDown())
+                view.zoomBy (std::pow (1.15f, w.deltaY * 8.0f));
+            else
+                Component::mouseWheelMove (e, w);
+        }
+
+        void mouseMagnify (const MouseEvent&, float scale) override   { view.zoomBy (scale); }
 
         /** A channel's strip: not master's, not the Pre-Master's (no input, route or mute here). */
         bool channelStrip() const noexcept   { return track != nullptr && ! pre; }
@@ -851,7 +869,9 @@ namespace carthage::ui
     };
 
     //==============================================================================================
-    MixerView::MixerView (engine::Session& s, PluginWindows& w) : session (s), windows (w)
+    MixerView::MixerView (engine::Session& s, PluginWindows& w)
+        : session (s), windows (w),
+          zoom (static_cast<float> (s.getEngine().getPropertyStorage().getPropertiesFile().getDoubleValue ("mixerZoom", 1.0)))
     {
         setOpaque (true);
         stripHolder = std::make_unique<StripHolder> (*this);
@@ -1101,6 +1121,21 @@ namespace carthage::ui
                 return Route::sidechain;
 
         return Route::none;
+    }
+
+    void MixerView::zoomBy (float factor)
+    {
+        // Strip widths, as the lanes zoom in time (owner): around the strip under the pointer.
+        const auto before = zoom;
+        zoom = std::clamp (zoom * factor, 0.75f, 2.5f);
+
+        if (std::abs (zoom - before) < 0.001f)
+            return;
+
+        const auto mouseX = viewport.getViewPositionX() + viewport.getMouseXYRelative().x;
+        resized();
+        viewport.setViewPosition (roundToInt (static_cast<float> (mouseX) * zoom / before) - viewport.getMouseXYRelative().x, 0);
+        session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("mixerZoom", static_cast<double> (zoom));
     }
 
     void MixerView::routesChanged()
@@ -1542,11 +1577,12 @@ namespace carthage::ui
         addButton.setBounds (bottom.withX (r.getX()).withWidth (120).reduced (0, 2));
         viewport.setBounds (r);
         const auto channelCount = strips.size() - pinned;
-        stripHolder->setSize (std::max (r.getWidth(), channelCount * (stripWidth + stripGap)), height);
+        const auto width = roundToInt (static_cast<float> (stripWidth) * zoom);
+        stripHolder->setSize (std::max (r.getWidth(), channelCount * (width + stripGap)), height);
 
         // The strips leave a band under them for the cables (W51).
         for (int i = pinned; i < strips.size(); ++i)
-            strips[i]->setBounds ((i - pinned) * (stripWidth + stripGap), 0, stripWidth, height - cableBand);
+            strips[i]->setBounds ((i - pinned) * (width + stripGap), 0, width, height - cableBand);
 
         columnName.setBounds (column.removeFromTop (28));
         column.removeFromTop (theme::space2);

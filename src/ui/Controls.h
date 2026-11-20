@@ -143,8 +143,20 @@ namespace carthage::ui
 
         void setDefault (double v)   { setDoubleClickReturnValue (true, v); }
 
+        /** When set and false, the wheel passes on to the parent instead (the mixer: only the
+            selected channel's controls take it; elsewhere it scrolls, W51). */
+        std::function<bool()> acceptsWheel;
+
         void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override
         {
+            if (acceptsWheel != nullptr && ! acceptsWheel())
+            {
+                if (auto* parent = getParentComponent())   // on to the parent: the mixer scrolls
+                    parent->mouseWheelMove (e.getEventRelativeTo (parent), wheel);
+
+                return;
+            }
+
             auto w = wheel;
 
             if (e.mods.isShiftDown())

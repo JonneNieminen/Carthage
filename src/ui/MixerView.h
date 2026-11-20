@@ -68,6 +68,9 @@ namespace carthage::ui
         void showRouteMenu (tracktion::AudioTrack& to, juce::Component& from);
         void routesChanged();
 
+        /** Strip width, as the lanes zoom in time: Cmd+wheel or pinch over the strips (W51). */
+        void zoomBy (float factor);
+
         /** The plugin dragged from a Line, by its drag description. */
         tracktion::Plugin* draggedInsert (const juce::var& description) const;
 
@@ -82,7 +85,8 @@ namespace carthage::ui
         juce::TextButton addButton { "Add channel" };
         tracktion::EditItemID selected;
         bool masterSelected = false;
-        int pinned = 1;   // strips left of the scrolling channels: master, and the Pre-Master while on
+        int pinned = 1;
+        float zoom = 1.0f;   // strips left of the scrolling channels: master, and the Pre-Master while on
         bool rebuildPending = false;
 
         // The selected channel's column.

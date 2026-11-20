@@ -11,6 +11,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- In the mixer the wheel adjusts only the selected channel's fader and knobs; over other strips it,
+  and a trackpad swipe, scroll the mixer sideways. Cmd+scroll or a pinch makes the strips wider or
+  narrower, as on the lanes.
 - A Pre-Master channel beside master: everything heading to master passes through it, for the
   processing the whole mix shares. On by default; Settings can turn it off.
 - FL-style routing: select a channel and every other strip shows a route button at its foot; click
