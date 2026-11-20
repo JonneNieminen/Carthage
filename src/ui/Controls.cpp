@@ -413,6 +413,23 @@ namespace carthage::ui
                 }
                 break;
             }
+            case Glyph::mixer:
+            {
+                // Three faders at different heights: the mixer.
+                const auto h = s * 0.42f;
+                for (int i = -1; i <= 1; ++i)
+                {
+                    const auto x = c.x + static_cast<float> (i) * s * 0.3f;
+                    Path line;
+                    line.startNewSubPath (x, c.y - h);
+                    line.lineTo (x, c.y + h);
+                    g.strokePath (line, roundStroke);
+                    const auto knob = c.y + static_cast<float> (i == 0 ? -1 : i) * h * 0.45f;
+                    g.fillRoundedRectangle (x - s * 0.11f, knob - s * 0.06f, s * 0.22f, s * 0.12f, s * 0.04f);
+                }
+                break;
+            }
+
             case Glyph::loop:
             {
                 // Two arcs chasing each other round, each with its arrowhead: play it again.

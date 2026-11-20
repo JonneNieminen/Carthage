@@ -51,11 +51,11 @@ namespace carthage::app
             nextProject, previousProject,
             copyClips, cutClips, pasteClips,
             collectSamples,
-            sampleBrowser,
+            sampleBrowser, toggleMixer,
             startScreen, saveAsTemplate,
 
             // Views in their own windows and window layouts (F21)
-            windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings,
+            windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings, windowMixer,
             defaultLayout, commandPalette, keepPluginOnTop,
             recallLayoutFirst,                          // recallLayoutFirst + 0..8: layouts 1-9
             saveLayoutFirst = recallLayoutFirst + 9,    // saveLayoutFirst + 0..8
@@ -87,8 +87,8 @@ namespace carthage::app
                      toolSelect, toolDraw, toolPaint, toolSlice, toolDelete, toolMute, toolZoom, toolStretch,
                      undo, redo, toggleGrid, splitAtPlayhead, duplicateClips, deleteClips,
                      nudgeLeft, nudgeRight, addMarker, loopSelection, keyboardShortcuts,
-                     copyClips, cutClips, pasteClips, sampleBrowser,
-                     windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings,
+                     copyClips, cutClips, pasteClips, sampleBrowser, toggleMixer,
+                     windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings, windowMixer,
                      defaultLayout, commandPalette, keepPluginOnTop, lanesTaller, lanesShorter,
                      uiLarger, uiSmaller, uiActualSize, toggleMetronome, toggleLoop, undoHistory, exportLog, projectNotes, restoreVersion,
                      addLaneBelow, moveLaneUp, moveLaneDown, viewsPalette };
@@ -106,8 +106,8 @@ namespace carthage::app
         /** What the views palette lists (W41). */
         inline juce::Array<juce::CommandID> views()
         {
-            return { sampleBrowser, pluginBrowser, audioSettings, keyboardShortcuts, projectNotes, startScreen,
-                     windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings, defaultLayout };
+            return { sampleBrowser, pluginBrowser, toggleMixer, audioSettings, keyboardShortcuts, projectNotes, startScreen,
+                     windowSamples, windowPlugins, windowTimeline, windowSignal, windowSettings, windowMixer, defaultLayout };
         }
 
         /** The layout commands, recall then save, slot 1 first. */
@@ -207,6 +207,10 @@ namespace carthage::app
                     info.setInfo ("Show samples", "Show or hide the sample browser", "Window", 0);
                     info.addDefaultKeypress (KP::F7Key, 0);
                     break;
+                case toggleMixer:
+                    info.setInfo ("Show mixer", "Show the mixer in place of the lanes, or the lanes again (in its own window: bring it forward)", "Window", 0);
+                    info.addDefaultKeypress (KP::F9Key, 0);
+                    break;
                 case pluginBrowser:
                     info.setInfo ("Show plugins", "Show or hide the plugin browser", "Plugin", 0);
                     info.addDefaultKeypress (KP::F8Key, 0);
@@ -234,6 +238,7 @@ namespace carthage::app
                 case windowSamples:   info.setInfo ("Samples in its own window", "Move the sample browser to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('s', primary | juce::ModifierKeys::altModifier); break;
                 case windowPlugins:   info.setInfo ("Plugins in its own window", "Move the plugin browser to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('p', primary | juce::ModifierKeys::altModifier); break;
                 case windowTimeline:  info.setInfo ("Timeline in its own window", "Move the timeline to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('t', primary | juce::ModifierKeys::altModifier); break;
+                case windowMixer:     info.setInfo ("Mixer in its own window", "Move the mixer to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('x', primary | juce::ModifierKeys::altModifier); break;
                 case windowSignal:    info.setInfo ("Signal path in its own window", "Move the input, plugin and output row to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('i', primary | juce::ModifierKeys::altModifier); break;
                 case windowSettings:  info.setInfo ("Settings in its own window", "Move Settings to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress (',', primary | juce::ModifierKeys::altModifier); break;
                 case defaultLayout:   info.setInfo ("Default layout", "Every view back in the main window, as Carthage starts", "Layouts", 0); info.addDefaultKeypress ('0', primary | juce::ModifierKeys::altModifier); break;

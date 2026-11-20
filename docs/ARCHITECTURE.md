@@ -109,6 +109,9 @@ The mapping onto Tracktion that F5 asked to be written down once proven:
   and undo): a carrier with clips; a channel with sound playing into it, plugins of its own or the
   live input. 50 empty channels cost nothing measurable (`carthage-bench idle-mixer`). The flags are
   written outside undo (see `setProcessing` in `engine/Mixer.cpp` for Tracktion's quirk).
+- **The mixer view** (`ui/MixerView`) reads all of this and keeps nothing: master's strip and one
+  per channel, rebuilt when the edit's tracks change; meters poll the channels' measurers at 30 Hz,
+  the one thing in it that moves during playback. F9 shows it in place of the lanes (W48).
 - **The live input** plays through channel 1, whose insert Line is the phase 1 input chain; takes go
   to the recording lane's carrier for channel 1.
 - **Older projects** (before 5a) open with each old lane track turned into the carrier of lane n

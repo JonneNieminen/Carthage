@@ -249,4 +249,7 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   Tracktion's track and plugin "process" flags write through undo, and its reaction to a track's
   flag reads the old value (setProcessing in Mixer.cpp). `project::createEdit` now prepares the mix.
   Bench renders (overlap, carrier, clip-envelope, clip-formant) pass on the new model.
-  Next: the mixer view (W48), then the 5a checks.
+  Then channel mute/solo and meters (W50), and the mixer view: MixerView (strips, master pinned,
+  column with "Plays into" and "Sound from"), F9 / mixer button / Cmd+Option+X window, clip menu
+  "Route to" (master, a new channel, any channel). Snapshot `mixer.png`. Next: the owner's 5a
+  checks; then routing while playing (exit check) measured with the bench.

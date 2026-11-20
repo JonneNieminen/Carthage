@@ -672,8 +672,10 @@ their own processes; 5g CPU per plugin, stems export, the processed sound record
 Routing is per sample; channels are the engine's tracks and lanes only where clips are drawn (W47).
 
 Deliver:
-- [ ] Master pinned left, 50 channels by default; add, remove, rename, colour, reorder
-- [ ] Per channel: fader, pan, mute, solo, record arm, input monitoring, peak/RMS meter
+- [ ] Master pinned left, 50 channels by default; add, remove, rename, colour, reorder (5a: built,
+      reorder by the strip's menu; owner's checks pending)
+- [ ] Per channel: fader, pan, mute, solo, record arm, input monitoring, peak/RMS meter (5a: all but
+      arming and monitoring, which come with the per-channel inputs in 5d)
 - [ ] Sends and buses; any channel routes to any other or to master
 - [ ] Insert Lines: unlimited growing list; reorder by drag, bypass, wet/dry, open UI, drag between channels
 - [ ] Input/output picker per channel; "Guitar in → this channel, armed, monitoring" action; keyboard-driven selection

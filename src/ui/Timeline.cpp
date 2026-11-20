@@ -1075,6 +1075,37 @@ namespace carthage::ui
                     if (timeline.onStatus) timeline.onStatus ("This clip is now " + name);
                 }
             });
+            // Where its sample plays (W47): every clip of the sample goes, each on its own lane.
+            PopupMenu routes;
+            auto* current = editing::routeOf (c);
+            const auto route = [this, find] (tracktion::AudioTrack* to, const String& name)
+            {
+                if (auto* clip = find())
+                {
+                    begin ("Route " + editing::sampleName (*clip));
+                    editing::routeSample (*clip, to);
+                    if (timeline.onStatus) timeline.onStatus (editing::sampleName (*clip) + " plays into " + name);
+                }
+            };
+            routes.addItem ("Master", true, current == nullptr, [route] { route (nullptr, "master"); });
+            routes.addItem ("A new channel", [this, find]
+            {
+                auto& e = timeline.session.getEdit();
+                begin ("Route to a new channel");
+
+                if (auto* added = editing::addChannel (e); added != nullptr && find() != nullptr)
+                {
+                    added->setName (editing::sampleName (*find()));
+                    editing::routeSample (*find(), added);
+                    if (timeline.onStatus) timeline.onStatus (added->getName() + " plays into its own new channel");
+                }
+            });
+            routes.addSeparator();
+
+            for (auto* ch : editing::channels (timeline.session.getEdit()))
+                routes.addItem (ch->getName(), true, ch == current, [route, ch] { route (ch, ch->getName()); });
+
+            m.addSubMenu ("Route to", routes, audio != nullptr);
             m.addSeparator();
             m.addItem ("Delete", [this] { timeline.deleteSelection(); });
             m.showMenuAsync (PopupMenu::Options().withTargetComponent (this).withMousePosition());

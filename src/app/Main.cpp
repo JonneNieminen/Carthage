@@ -121,7 +121,7 @@ namespace carthage::app
                     m.addSeparator();
 
                     for (auto id : { commands::windowSamples, commands::windowPlugins, commands::windowTimeline,
-                                     commands::windowSignal, commands::windowSettings })
+                                     commands::windowSignal, commands::windowSettings, commands::windowMixer })
                         m.addCommandItem (&commands, id);
                     break;
                 }
@@ -135,6 +135,7 @@ namespace carthage::app
                     m.addSeparator();
                     m.addCommandItem (&commands, commands::sampleBrowser);
                     m.addCommandItem (&commands, commands::pluginBrowser);
+                    m.addCommandItem (&commands, commands::toggleMixer);
                     m.addSeparator();
                     m.addCommandItem (&commands, commands::nextProject);
                     m.addCommandItem (&commands, commands::previousProject);

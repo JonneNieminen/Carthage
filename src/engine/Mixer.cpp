@@ -14,6 +14,8 @@ namespace carthage::editing
         const juce::Identifier recordingProp ("recording"), nextIDProp ("nextID");
         const juce::Identifier roleProp ("carthageRole"), carrierLaneProp ("carthageLane");
         const juce::Identifier colourProp ("carthageColour"), heightProp ("carthageHeight");   // the timeline's own (4d)
+        const juce::Identifier channelMutedProp ("carthageMuted"), channelSoloedProp ("carthageSoloed");
+        const juce::Identifier meterProp ("carthageMeter");   // "peak" or "rms" on the meters Carthage adds
         constexpr const char* channelRole = "channel";
         constexpr const char* carrierRole = "carrier";
 
@@ -51,31 +53,84 @@ namespace carthage::editing
             return Lane (lane);
         }
 
-        /** Lane mute and solo onto the carriers: a carrier plays unless its lane is muted, or some
-            lane is soloed and not its own. Tracktion's track mute is outside undo, as lane mute is. */
-        void applyLaneMutes (Edit& edit)
+        bool flag (const Track& t, const juce::Identifier& p)   { return static_cast<bool> (t.state[p]); }
+
+        /** Lane and channel mute and solo onto Tracktion's track mute, which is outside undo.
+            A carrier plays unless its lane is silenced (muted, or another lane soloed), or a
+            channel is soloed and the carrier plays straight to master. A channel plays unless it
+            is muted, or some channel is soloed and it is neither that channel, nor upstream of it
+            (feeding it), nor downstream (fed by it). Tracktion's own solo is not used (W50). */
+        void applyMutes (Edit& edit)
         {
             const auto all = lanes (edit);
-            const auto anySolo = std::any_of (all.begin(), all.end(), [] (const Lane& l) { return l.isSoloed(); });
+            const auto anyLaneSolo = std::any_of (all.begin(), all.end(), [] (const Lane& l) { return l.isSoloed(); });
+            const auto chs = channels (edit);
+            std::set<const AudioTrack*> soloPath;
+
+            for (auto* ch : chs)
+                if (flag (*ch, channelSoloedProp))
+                {
+                    for (auto* d = ch; d != nullptr && ! soloPath.contains (d); d = d->getOutput().getDestinationTrack())
+                        soloPath.insert (d);   // it and what it plays into
+
+                    for (auto* other : chs)
+                        if (other->getOutput().feedsInto (ch))
+                            soloPath.insert (other);   // what plays into it
+                }
+
+            const auto anyChannelSolo = ! soloPath.empty();
 
             for (auto* c : carriers (edit))
             {
                 const auto lane = laneWithID (edit, carrierLaneID (*c));
-                const auto silent = lane.isValid() && (lane.isMuted() || (anySolo && ! lane.isSoloed()));
+                const auto laneSilent = lane.isValid() && (lane.isMuted() || (anyLaneSolo && ! lane.isSoloed()));
+                const auto toMaster = c->getOutput().getDestinationTrack() == nullptr;
+                const auto silent = laneSilent || (anyChannelSolo && toMaster);
 
                 if (c->isMuted (false) != silent)
                     c->setMute (silent);
             }
+
+            for (auto* ch : chs)
+            {
+                const auto silent = flag (*ch, channelMutedProp) || (anyChannelSolo && ! soloPath.contains (ch));
+
+                if (ch->isMuted (false) != silent)
+                    ch->setMute (silent);
+            }
         }
 
-        bool hasOwnPlugins (AudioTrack& t)
+        LevelMeterPlugin* meterIn (const PluginList& list, const char* kind)
         {
-            for (auto* p : t.pluginList)
-                if (dynamic_cast<VolumeAndPanPlugin*> (p) == nullptr && dynamic_cast<LevelMeterPlugin*> (p) == nullptr)
-                    return true;
+            for (auto* p : list)
+                if (auto* m = dynamic_cast<LevelMeterPlugin*> (p); m != nullptr && p->state[meterProp].toString() == kind)
+                    return m;
 
-            return false;
+            return nullptr;
         }
+
+        /** The RMS meter after the fader's own (peak) meter, and the master's pair. */
+        void addMeters (PluginList& list, bool withPeak)
+        {
+            for (const auto* kind : { "peak", "rms" })
+            {
+                if (! withPeak && juce::String (kind) == "peak")
+                    continue;
+
+                if (meterIn (list, kind) != nullptr)
+                    continue;
+
+                auto plugin = list.getEdit().getPluginCache().createNewPlugin (LevelMeterPlugin::xmlTypeName, {});
+
+                if (plugin == nullptr)
+                    continue;
+
+                plugin->state.setProperty (meterProp, kind, nullptr);
+                list.insertPlugin (plugin, -1, nullptr);
+            }
+        }
+
+        bool hasOwnPlugins (AudioTrack& t)   { return ! insertsOf (t).isEmpty(); }
 
         /** In or out of the audio graph, outside undo. Tracktion's setters for a track and for its
             plugins are undo steps. When a track's flag changes, Tracktion copies it onto its
@@ -282,13 +337,13 @@ namespace carthage::editing
     void setLaneMuted (Edit& edit, const Lane& lane, bool muted)
     {
         Lane (lane).state.setProperty (mutedProp, muted, nullptr);
-        applyLaneMutes (edit);
+        applyMutes (edit);
     }
 
     void setLaneSoloed (Edit& edit, const Lane& lane, bool soloed)
     {
         Lane (lane).state.setProperty (soloedProp, soloed, nullptr);
-        applyLaneMutes (edit);
+        applyMutes (edit);
     }
 
     void muteOthers (Edit& edit, const Lane& lane)
@@ -303,7 +358,7 @@ namespace carthage::editing
         for (const auto& l : all)
             Lane (l).state.setProperty (mutedProp, alreadyAlone ? false : ! (l == lane), nullptr);
 
-        applyLaneMutes (edit);
+        applyMutes (edit);
     }
 
     void soloAlone (Edit& edit, const Lane& lane)
@@ -318,7 +373,7 @@ namespace carthage::editing
         for (const auto& l : all)
             Lane (l).state.setProperty (soloedProp, alreadyAlone ? false : l == lane, nullptr);
 
-        applyLaneMutes (edit);
+        applyMutes (edit);
     }
 
     //==============================================================================================
@@ -367,7 +422,7 @@ namespace carthage::editing
         if (channel != nullptr)
             carrier->getOutput().setOutputToTrack (channel);
 
-        applyLaneMutes (edit);
+        applyMutes (edit);
         return carrier;
     }
 
@@ -445,6 +500,16 @@ namespace carthage::editing
 
         channel->state.setProperty (roleProp, channelRole, undoOf (edit));
         channel->setName (name);
+
+        // The fader's meter reads peaks; Carthage adds one for RMS beside it (brief, feature 3).
+        for (auto* p : channel->pluginList)
+            if (dynamic_cast<LevelMeterPlugin*> (p) != nullptr && ! p->state.hasProperty (meterProp))
+            {
+                p->state.setProperty (meterProp, "peak", undoOf (edit));
+                break;
+            }
+
+        addMeters (channel->pluginList, true);   // adds the peak one too if Tracktion made none
         return channel;
     }
 
@@ -499,6 +564,56 @@ namespace carthage::editing
         }
 
         edit.moveTrack (&channel, TrackInsertPoint (nullptr, preceding));
+    }
+
+    bool isChannelMuted (const AudioTrack& t)    { return flag (t, channelMutedProp); }
+    bool isChannelSoloed (const AudioTrack& t)   { return flag (t, channelSoloedProp); }
+
+    void setChannelMuted (AudioTrack& t, bool on)
+    {
+        t.state.setProperty (channelMutedProp, on, nullptr);
+        applyMutes (t.edit);
+    }
+
+    void setChannelSoloed (AudioTrack& t, bool on)
+    {
+        t.state.setProperty (channelSoloedProp, on, nullptr);
+        applyMutes (t.edit);
+    }
+
+    LevelMeterPlugin* peakMeterOf (AudioTrack& t)   { return meterIn (t.pluginList, "peak"); }
+
+    LevelMeterPlugin* rmsMeterOf (AudioTrack& t)
+    {
+        auto* m = meterIn (t.pluginList, "rms");
+
+        if (m != nullptr && m->measurer.getMode() != LevelMeasurer::RMSMode)
+            m->measurer.setMode (LevelMeasurer::RMSMode);   // the mode is not saved with the plugin
+
+        return m;
+    }
+
+    LevelMeterPlugin* masterPeakMeter (Edit& edit)   { return meterIn (edit.getMasterPluginList(), "peak"); }
+
+    LevelMeterPlugin* masterRMSMeter (Edit& edit)
+    {
+        auto* m = meterIn (edit.getMasterPluginList(), "rms");
+
+        if (m != nullptr && m->measurer.getMode() != LevelMeasurer::RMSMode)
+            m->measurer.setMode (LevelMeasurer::RMSMode);
+
+        return m;
+    }
+
+    juce::Array<Plugin*> insertsOf (AudioTrack& t)
+    {
+        juce::Array<Plugin*> out;
+
+        for (auto* p : t.pluginList)
+            if (dynamic_cast<VolumeAndPanPlugin*> (p) == nullptr && dynamic_cast<LevelMeterPlugin*> (p) == nullptr)
+                out.add (p);
+
+        return out;
     }
 
     //==============================================================================================
@@ -570,11 +685,13 @@ namespace carthage::editing
         // Carriers after the channels, so the channels come first among the tracks.
         for (auto* t : oldTracks)
             edit.moveTrack (t, TrackInsertPoint (nullptr, getAllTracks (edit).getLast()));
+
+        addMeters (edit.getMasterPluginList(), true);
     }
 
     void syncMix (Edit& edit, const AudioTrack* inputChannel)
     {
-        applyLaneMutes (edit);
+        applyMutes (edit);
 
         // Only what could sound stays in the graph: carriers with clips; channels with something
         // playing into them, plugins of their own, or the live input (W49).

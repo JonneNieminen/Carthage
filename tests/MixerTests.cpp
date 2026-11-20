@@ -175,6 +175,49 @@ public:
             expect (! carrierOf (onOne)->isMuted (false), "no solo: all play");
         }
 
+        beginTest ("Channel mute and solo: a soloed channel plays with what feeds it and what it feeds (W50)");
+        {
+            const auto chs = editing::channels (*edit);
+            const auto carrierOf = [] (tracktion::Clip* c) { return dynamic_cast<tracktion::AudioTrack*> (c->getTrack()); };
+            auto* toMaster = editing::insertFile (*edit, lanes[6], snare, 96.0);
+            auto* routed = editing::clipsOn (*edit, lanes[1]).getFirst();   // into channel 3
+
+            editing::setChannelMuted (*chs[2], true);
+            expect (chs[2]->isMuted (false), "a muted channel is silent");
+            expect (! carrierOf (routed)->isMuted (false), "its carriers are not touched: the channel silences them");
+            editing::setChannelMuted (*chs[2], false);
+            expect (! chs[2]->isMuted (false));
+
+            expect (editing::setOutput (*chs[2], chs[7]).wasOk());   // channel 3 into channel 8
+            expect (editing::setOutput (*chs[9], chs[2]).wasOk());   // channel 10 into channel 3
+            editing::setChannelSoloed (*chs[2], true);
+            expect (! chs[2]->isMuted (false), "the soloed channel plays");
+            expect (! chs[7]->isMuted (false), "and what it plays into");
+            expect (! chs[9]->isMuted (false), "and what plays into it");
+            expect (chs[4]->isMuted (false), "others are silent");
+            expect (! carrierOf (routed)->isMuted (false), "its lanes' clips play");
+            expect (carrierOf (toMaster)->isMuted (false), "clips straight to master are silent");
+            expect (! chs[2]->isSolo (false), "Tracktion's own solo is not used");
+
+            editing::setChannelSoloed (*chs[2], false);
+            for (auto* ch : chs)
+                expect (! ch->isMuted (false), "no solo: every channel plays");
+            expect (! carrierOf (toMaster)->isMuted (false));
+            editing::setOutput (*chs[2], nullptr);
+            editing::setOutput (*chs[9], nullptr);
+        }
+
+        beginTest ("Every channel and master have a peak and an RMS meter; none counts as an insert");
+        {
+            auto* ch = editing::channels (*edit)[5];
+            expect (editing::peakMeterOf (*ch) != nullptr, "the fader's peak meter");
+            expect (editing::rmsMeterOf (*ch) != nullptr, "an RMS meter: " + juce::String (ch->pluginList.size()) + " plugins");
+            expect (editing::rmsMeterOf (*ch)->measurer.getMode() == tracktion::LevelMeasurer::RMSMode);
+            expect (editing::peakMeterOf (*ch) != editing::rmsMeterOf (*ch));
+            expect (editing::masterPeakMeter (*edit) != nullptr && editing::masterRMSMeter (*edit) != nullptr);
+            expect (editing::insertsOf (*ch).isEmpty(), "a channel's own fader and meters are not inserts");
+        }
+
         beginTest ("A project from before 5a keeps its sound: lane n plays through channel n");
         {
             auto old = tracktion::createEmptyEdit (engine, folder.getChildFile ("Old.tracktionedit"));

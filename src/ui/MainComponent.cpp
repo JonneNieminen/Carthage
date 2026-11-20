@@ -581,7 +581,7 @@ namespace carthage::ui
         : sampleEditor (s),
           sampleEditorHeight (jlimit (SampleEditor::minHeight, SampleEditor::maxHeight,
                                       s.getEngine().getPropertyStorage().getPropertiesFile().getIntValue ("sampleEditorHeight", SampleEditor::defaultHeight))),
-          session (s), commands (c), timeline (s), settings (s, c, cmd::inMenuOrder()), browser (s), samples (s)
+          session (s), commands (c), timeline (s), mixer (s), settings (s, c, cmd::inMenuOrder()), browser (s), samples (s)
     {
         signalRow = std::make_unique<SignalRow> (session, commands);
         signalRow->onRemove = [this] { closePluginWindow(); session.removePlugin(); signalRow->setMessage ({}, false); };
@@ -592,6 +592,12 @@ namespace carthage::ui
         toStartButton.onClick = [this] { commands.invokeDirectly (cmd::returnToStart, false); };
         metronomeButton.onClick = [this] { commands.invokeDirectly (cmd::toggleMetronome, false); };
         loopButton.onClick = [this] { commands.invokeDirectly (cmd::toggleLoop, false); };
+        mixerButton.onClick = [this] { commands.invokeDirectly (cmd::toggleMixer, false); };
+        mixer.onStatus = [this] (const String& text) { setStatus (text); };
+        addChildComponent (mixer);
+        popMixer.setTooltip ("The mixer in a window of its own");
+        popMixer.onClick = [this] { setDetached (View::mixer, true); };
+        addChildComponent (popMixer);
         settingsButton.onClick = [this] { commands.invokeDirectly (cmd::audioSettings, false); };
 
         styleFigure (timeLabel, theme::textXl);
@@ -606,7 +612,7 @@ namespace carthage::ui
         loadMeter.setTooltip ("Audio-thread load: the bar is the average, the figure the worst recent block");
 
         for (auto* comp : std::initializer_list<Component*> { &recordButton, &playButton, &toStartButton, &metronomeButton, &loopButton, &timeLabel,
-                                                              &loadMeter, &latencyLabel, &latencyWords, &settingsButton,
+                                                              &loadMeter, &latencyLabel, &latencyWords, &settingsButton, &mixerButton,
                                                               signalRow.get(), &timeline, &statusLabel })
             addAndMakeVisible (comp);
 
@@ -819,12 +825,13 @@ namespace carthage::ui
         // Projects: the view is saved with the project; a new project replaces the edit.
         session.getViewState = [this] { return timeline.getViewState(); };
         session.takePicture = [this] { return pictureOfWindows(); };
-        session.onProjectClosing = [this] { closePluginWindow(); };
+        session.onProjectClosing = [this] { closePluginWindow(); mixer.projectClosing(); };
         session.onProjectChanged = [this]
         {
             showStartScreen (false);   // a project came forward: that is what the start screen was for
             tabs.refresh();
             timeline.projectChanged();
+            mixer.projectChanged();
             refreshToolbar();
             refreshMasterVolume();
             tempoBefore.reset();   // a change in progress belonged to the other project
@@ -880,6 +887,7 @@ namespace carthage::ui
         metronomeButton.setTooltip (cmd::tooltip (commands, cmd::toggleMetronome) + ". Its sound and level are in Settings.");
         loopButton.setTooltip (cmd::tooltip (commands, cmd::toggleLoop) + ". Drag on the ruler to set the region; double-click it to clear it.");
         settingsButton.setTooltip (cmd::tooltip (commands, cmd::audioSettings));
+        mixerButton.setTooltip (cmd::tooltip (commands, cmd::toggleMixer));
         snapButton.setTooltip (cmd::tooltip (commands, cmd::toggleGrid));
         signalRow->refreshTooltips();
 
@@ -928,6 +936,8 @@ namespace carthage::ui
             case cmd::windowSamples:     info.setTicked (isDetached (View::samples)); break;
             case cmd::windowPlugins:     info.setTicked (isDetached (View::plugins)); break;
             case cmd::windowTimeline:    info.setTicked (isDetached (View::timeline)); break;
+            case cmd::windowMixer:       info.setTicked (isDetached (View::mixer)); break;
+            case cmd::toggleMixer:       info.setTicked (mixerShown || isDetached (View::mixer)); break;
             case cmd::windowSignal:      info.setTicked (isDetached (View::signal)); break;
             case cmd::windowSettings:    info.setTicked (isDetached (View::settings)); break;
             case cmd::keepPluginOnTop:   info.setTicked (keepPluginOnTop()); break;
@@ -1344,6 +1354,17 @@ namespace carthage::ui
             case cmd::windowSamples:    toggleDetached (View::samples); return true;
             case cmd::windowPlugins:    toggleDetached (View::plugins); return true;
             case cmd::windowTimeline:   toggleDetached (View::timeline); return true;
+            case cmd::windowMixer:      toggleDetached (View::mixer); return true;
+            case cmd::toggleMixer:
+                if (isDetached (View::mixer))
+                    setDetached (View::mixer, true);   // in its own window: bring it forward
+                else
+                    mixerShown = ! mixerShown;
+
+                mixerButton.setLit (theme::accent, mixerShown || isDetached (View::mixer));
+                resized();
+                commands.commandStatusChanged();
+                return true;
             case cmd::windowSignal:     toggleDetached (View::signal); return true;
             case cmd::windowSettings:   toggleDetached (View::settings); return true;
             case cmd::defaultLayout:    defaultLayout(); setStatus ("Back to the default layout"); return true;
@@ -2044,7 +2065,7 @@ namespace carthage::ui
                                { false, false, false, false, false, 100, 92,  narrow } };
         const auto widthOf = [this] (const Fold& f)
         {
-            return 5 * 36 + 4 * theme::space1 + theme::space2 + f.time + theme::space2 + 80
+            return 5 * 36 + 4 * theme::space1 + 36 + theme::space1 + theme::space2 + f.time + theme::space2 + 80
                    + (f.tap ? theme::space1 + 40 : 0) + theme::space3
                    + (f.master ? (f.masterLabel ? 46 : 0) + 100 + theme::space3 : 0)
                    + toolButtons.size() * (f.tool + 1) + theme::space3 + f.grid + theme::space1 + 56
@@ -2099,6 +2120,8 @@ namespace carthage::ui
         snapButton.setBounds (top.removeFromLeft (56).withSizeKeepingCentre (56, 28));
 
         settingsButton.setBounds (top.removeFromRight (36));
+        top.removeFromRight (theme::space1);
+        mixerButton.setBounds (top.removeFromRight (36));
         top.removeFromRight (theme::space4);
         latencyWords.setVisible (fold.words);
         if (fold.words)
@@ -2182,7 +2205,25 @@ namespace carthage::ui
             sampleEditorEdge.toFront (false);
         }
 
+        // The mixer in place of the lanes (W48), when shown and not in its own window.
+        const auto mixerHere = mixerShown && ! isDetached (View::mixer);
+
+        if (! isDetached (View::mixer))
+            mixer.setVisible (mixerHere);
+
+        popMixer.setVisible (mixerHere);
+
         if (timelineHere)
+            timeline.setVisible (! mixerHere);
+
+        if (mixerHere)
+        {
+            mixer.setBounds (r);
+            popMixer.setBounds (r.getRight() - 30, r.getY() + 4, 24, 24);
+            popMixer.toFront (false);
+            popTimeline.setVisible (false);
+        }
+        else if (timelineHere)
         {
             timeline.setBounds (r);
             popTimeline.setBounds (r.getX() + 4, r.getY() + 4, 24, 24);
@@ -2230,6 +2271,7 @@ namespace carthage::ui
             case View::timeline: return "Timeline";
             case View::signal:   return "Signal path";
             case View::settings: return "Settings";
+            case View::mixer:    return "Mixer";
         }
 
         return {};
@@ -2244,6 +2286,7 @@ namespace carthage::ui
             case View::timeline: return timeline;
             case View::signal:   return *signalRow;
             case View::settings: return settings;
+            case View::mixer:    return mixer;
         }
 
         return timeline;
@@ -2285,6 +2328,7 @@ namespace carthage::ui
 
             // Its own size, beside the main window, on the same display, unless a layout says.
             const auto size = v == View::timeline ? Rectangle<int> (0, 0, 1100, 520)
+                            : v == View::mixer    ? Rectangle<int> (0, 0, 1200, 480)
                             : v == View::signal   ? Rectangle<int> (0, 0, 900, 160)
                             : v == View::settings ? Rectangle<int> (0, 0, SettingsPanel::preferredWidth, 720)
                                                   : Rectangle<int> (0, 0, 320, 720);

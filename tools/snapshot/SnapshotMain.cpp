@@ -239,6 +239,45 @@ namespace
             capture (outDir.getChildFile ("views-away.png"));
             onMessageThreadVoid ([this] { content->defaultLayout(); });
 
+            // Phase 5a: the mixer in place of the lanes (F9), with sounds routed to a few channels,
+            // a bus, a muted and a soloed channel, and the third channel selected.
+            onMessageThreadVoid ([this, temp]
+            {
+                auto& edit = session->getEdit();
+                const auto tone = temp.getChildFile ("Kick.wav");
+                {
+                    WavAudioFormat wav;
+                    std::unique_ptr<OutputStream> out = std::make_unique<FileOutputStream> (tone);
+                    auto writer = wav.createWriterFor (out, AudioFormatWriterOptions{}.withSampleRate (48000.0).withNumChannels (1).withBitsPerSample (16));
+                    AudioBuffer<float> b (1, 24000);
+                    for (int i = 0; i < b.getNumSamples(); ++i)
+                        b.setSample (0, i, 0.5f * std::sin (static_cast<float> (i) * 0.01f) * std::exp (-static_cast<float> (i) / 6000.0f));
+                    writer->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
+                }
+
+                const auto lanes = carthage::editing::lanes (edit);
+                const auto channels = carthage::editing::channels (edit);
+                carthage::editing::begin (edit, "Mixer shot");
+
+                if (auto* kick = carthage::editing::insertFile (edit, lanes[1], tone, 0.0))
+                    carthage::editing::routeSample (*kick, channels[2]);
+
+                channels[2]->setName ("Kick");
+                channels[3]->setName ("Snare");
+                channels[4]->setName ("Drum bus");
+                [[maybe_unused]] auto r1 = carthage::editing::setOutput (*channels[2], channels[4]);
+                [[maybe_unused]] auto r2 = carthage::editing::setOutput (*channels[3], channels[4]);
+                channels[2]->getVolumePlugin()->setVolumeDb (-4.5f);
+                channels[3]->getVolumePlugin()->setVolumeDb (-9.0f);
+                channels[3]->getVolumePlugin()->setPan (-0.4f);
+                carthage::editing::setChannelMuted (*channels[6], true);
+                commands.invokeDirectly (app::commands::toggleMixer, false);
+                content->getMixer().select (channels[2]);
+            });
+            Thread::sleep (400);
+            capture (outDir.getChildFile ("mixer.png"));
+            onMessageThreadVoid ([this] { commands.invokeDirectly (app::commands::toggleMixer, false); });
+
             onMessageThreadVoid ([this] { content->toggleSettings(); });
             Thread::sleep (300);
             capture (outDir.getChildFile ("settings.png"));

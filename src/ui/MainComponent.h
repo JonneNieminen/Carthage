@@ -9,6 +9,7 @@
 #include "ProjectTabs.h"
 #include "SampleEditor.h"
 #include "SettingsPanel.h"
+#include "MixerView.h"
 #include "Timeline.h"
 #include "UpdateBanner.h"
 
@@ -79,6 +80,7 @@ namespace carthage::ui
         /** The start screen over the window, below the tabs (F20). */
         void showStartScreen (bool);
         bool isStartScreenShowing() const noexcept  { return startScreen.isVisible(); }
+        MixerView& getMixer() noexcept               { return mixer; }
 
         /** Shows the left panel on samples or plugins; with `toggle`, the same view again hides it. */
         void showPanel (bool samplesView, bool toggle);
@@ -86,8 +88,8 @@ namespace carthage::ui
         //==========================================================================================
         // Views in their own windows (F21). Each view is docked in this window or shown in a
         // window of its own; a layout is where every view and window is.
-        enum class View { samples, plugins, timeline, signal, settings };
-        static constexpr std::array<View, 5> views { View::samples, View::plugins, View::timeline, View::signal, View::settings };
+        enum class View { samples, plugins, timeline, signal, settings, mixer };
+        static constexpr std::array<View, 6> views { View::samples, View::plugins, View::timeline, View::signal, View::settings, View::mixer };
         static juce::String nameOf (View);
 
         bool isDetached (View view) const   { return viewWindows.count (static_cast<int> (view)) > 0; }
@@ -165,11 +167,15 @@ namespace carthage::ui
         IconButton metronomeButton { IconButton::Glyph::metronome };
         IconButton loopButton { IconButton::Glyph::loop };
         IconButton settingsButton { IconButton::Glyph::settings };
+        IconButton mixerButton { IconButton::Glyph::mixer };
         juce::Label timeLabel, latencyLabel, latencyWords, statusLabel;
         LoadMeter loadMeter;
 
         std::unique_ptr<SignalRow> signalRow;
         Timeline timeline;
+        MixerView mixer;
+        bool mixerShown = false;   // in place of the lanes (W48)
+        IconButton popMixer { IconButton::Glyph::popOut };
         SettingsPanel settings;
         bool settingsOpen = false;
         UpdateBanner updateBanner;

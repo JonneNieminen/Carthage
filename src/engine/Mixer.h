@@ -119,6 +119,26 @@ namespace carthage::editing
     /** Moves a channel to `newIndex` among the channels. */
     void moveChannel (tracktion::AudioTrack&, int newIndex);
 
+    /** Channel mute and solo (W50): Carthage's own, outside undo as lane mute is. A soloed
+        channel plays, with what plays into it and what it plays into; everything else is silent,
+        clips playing straight to master too. (Tracktion's own solo would silence the carriers
+        feeding a soloed channel.) */
+    bool isChannelMuted (const tracktion::AudioTrack&);
+    bool isChannelSoloed (const tracktion::AudioTrack&);
+    void setChannelMuted (tracktion::AudioTrack&, bool);
+    void setChannelSoloed (tracktion::AudioTrack&, bool);
+
+    /** A channel's meters: the fader's peak meter, and the RMS meter Carthage adds beside it
+        (Tracktion's measurer reports one or the other). Null on a channel without them. For
+        master: the master's pair, added by prepareMix. */
+    tracktion::LevelMeterPlugin* peakMeterOf (tracktion::AudioTrack&);
+    tracktion::LevelMeterPlugin* rmsMeterOf (tracktion::AudioTrack&);
+    tracktion::LevelMeterPlugin* masterPeakMeter (tracktion::Edit&);
+    tracktion::LevelMeterPlugin* masterRMSMeter (tracktion::Edit&);
+
+    /** The plugins a person put on a channel: not its fader or meters. */
+    juce::Array<tracktion::Plugin*> insertsOf (tracktion::AudioTrack&);
+
     //==============================================================================================
     /** Sets up a project's lanes and channels: a new one gets 8 lanes and 50 channels; one saved
         before 5a keeps its sound, lane n's clips playing through channel n (W47). No undo step. */

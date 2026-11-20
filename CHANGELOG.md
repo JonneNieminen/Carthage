@@ -11,6 +11,11 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- The mixer: F9, or the new mixer button, shows it in place of the lanes; it can move to its own
+  window (Cmd+Option+X). Master on the left, 50 channels, each with fader, pan, mute, solo and a
+  peak and RMS meter; add, rename, colour, move and delete channels; send a channel into another
+  (a loop back is refused). Right-click a clip > Route to sends every clip of its sample to a
+  channel. Lanes are now only where clips are drawn; projects saved before open sounding the same.
 - A loop region: drag on the ruler to set it, drag its edges to change it, double-click it to
   clear it; it snaps to the grid. L or the new loop button turns looping on and off. Each change
   is one undo step.
