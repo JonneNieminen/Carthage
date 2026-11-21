@@ -408,6 +408,22 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   third) decide lydian/mixolydian or phrygian/dorian when one leads by 1.8x and is above half the
   mean (tuned on SampleTests' sounds: the E minor bass has overtone energy on F at 1.6x). Stored
   analyses carry `method` 2; older ones are redone.
+
+### 2026-11-21 (Routing section, the mixer lag, W61 W62)
+
+- The owner chose D from the five options (design/routing-options.html, published as an artifact)
+  and asked for the rest in Settings with pictures. `ui::routing` (RoutingView.h/.cpp): one model,
+  five painters, `Section` under the strips (replaces CableBand), `Preview` cards in Settings >
+  Mixer. Snapshots: mixer-routing-*.png, settings-mixer.png.
+- Lag (W62): 300 ms per channel change, found with the snapshot tool's timing and `sample`;
+  `inputName` asked CoreAudio per call. Cached: 0.4 ms. AGENTS.md rule; the snapshot prints SLOW.
+- Mixer zoom by its scroll bar's ends (`ZoomViewport`); the rule is now in AGENTS.md for every
+  scrolling view (piano roll listed in phase 6). Meters at 30 fps noted in phase 9.
+- Asked for, not started: per-channel reset routing (column and right-click), the plugin
+  browser's manufacturer list sometimes needing several clicks, mixer chain presets (load button
+  and right-click; save), copy a channel's whole state to the next, next empty or a chosen channel.
+- Not yet looked into: the stuck lane and dropout after switching windows (asked the owner for
+  details). The owner's general dropouts are phase 8.
 - Still asked for, not started: 5 Routing section designs, then UAT. The owner's dropouts are
   phase 8's first task; not looked into yet.
 

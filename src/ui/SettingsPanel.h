@@ -1,5 +1,9 @@
 #pragma once
 
+#include "RoutingView.h"
+
+#include <array>
+
 #include "Controls.h"
 #include "ShortcutEditor.h"
 
@@ -56,6 +60,9 @@ namespace carthage::ui
 
         /** "Mark bus channels" or its interval changed: the mixer draws them again. */
         std::function<void()> onBusChannelsChanged;
+
+        /** Settings > Mixer chose how the Routing section draws the mix (W61). */
+        std::function<void (routing::Style)> onRoutingStyleChanged;
 
         /** "Check now", beside the version: the same as "Check for updates…" in the menu. */
         std::function<void()> onCheckForUpdates;
@@ -130,7 +137,9 @@ namespace carthage::ui
         juce::ComboBox countIn;
         Switch lowLatency { "Low-latency monitoring" };
         juce::ComboBox exportFormat, exportRate;
-        juce::Label busEveryLabel;
+        juce::Label busEveryLabel, routingHeading, routingHint;
+        std::array<std::unique_ptr<routing::Preview>, std::size (routing::styles)> routingPreviews;
+        void chooseRoutingStyle (routing::Style);
         juce::ComboBox busEvery;
         Switch checkPlugins { "Check for new plugins at every launch" };
         ShortcutEditor shortcuts;

@@ -5,7 +5,7 @@
 //   carthage-snapshot OUTPUT_FOLDER [--device NAME] [--output-device NAME]
 //                     [--plugin-format VST3 --plugin FILE_OR_ID] [--record-seconds 3] [--scan]
 //
-// Writes main.png, samples*.png (with --samples FOLDER), start*.png (start.png with --project FILE), tabs.png, settings.png, settings-updates.png, settings-shortcuts.png, mixer.png, mixer-in.png, mixer-buses.png, export.png, update*.png (the update banner with sample text), plugin.png
+// Writes main.png, samples*.png (with --samples FOLDER), start*.png (start.png with --project FILE), tabs.png, settings.png, settings-updates.png, settings-shortcuts.png, mixer.png, mixer-in.png, mixer-routing-*.png (each Routing style), mixer-buses.png, settings-mixer.png, export.png, update*.png (the update banner with sample text), plugin.png
 // (with --plugin) and take.png (after recording).
 
 #include <app/Commands.h>
@@ -304,6 +304,36 @@ namespace
             Thread::sleep (200);
             capture (outDir.getChildFile ("mixer-in.png"));
 
+            // The Routing section in each of its styles, the Drum bus still selected (W61).
+            for (auto style : carthage::ui::routing::styles)
+            {
+                onMessageThreadVoid ([this, style] { content->getMixer().setRoutingStyle (style); });
+                Thread::sleep (150);
+                capture (outDir.getChildFile ("mixer-routing-" + carthage::ui::routing::idOf (style) + ".png"));
+            }
+
+            onMessageThreadVoid ([this] { content->getMixer().setRoutingStyle (carthage::ui::routing::Style::story); });
+
+            // How long moving between channels takes on the message thread (owner: the UI lagged
+            // while moving through channels and routing during playback). Printed, not judged.
+            {
+                const auto ms = onMessageThread ([this]
+                {
+                    const auto all = carthage::editing::channels (session->getEdit());
+                    const auto start = Time::getMillisecondCounterHiRes();
+                    constexpr int rounds = 5;
+
+                    for (int r = 0; r < rounds; ++r)
+                        for (auto* c : all)
+                            content->getMixer().select (c);
+
+                    return (Time::getMillisecondCounterHiRes() - start) / (rounds * std::max (1, all.size()));
+                });
+                // Within a frame at 120 Hz; it was 300 ms when every strip asked the driver for
+                // its input names (W62). SLOW in the output is a regression to look into.
+                std::cout << "mixer: selecting a channel takes " << String (ms, 2) << " ms" << (ms > 8.0 ? "  SLOW (over 8 ms, W62)" : "") << "\n" << std::flush;
+            }
+
             // Bus channels on, every 4th (Settings > Mixer): Snare and Reverb are buses.
             onMessageThreadVoid ([this]
             {
@@ -378,6 +408,8 @@ namespace
             capture (outDir.getChildFile ("settings-updates.png"));
             onMessageThreadVoid ([this] { content->getSettings().showShortcutsSection(); });
             capture (outDir.getChildFile ("settings-shortcuts.png"));
+            onMessageThreadVoid ([this] { content->getSettings().showPage (ui::SettingsPanel::Page::mixer); });
+            capture (outDir.getChildFile ("settings-mixer.png"));
             onMessageThreadVoid ([this] { content->toggleSettings(); });
 
             // The update banner in its states, with sample text (no release is fetched).

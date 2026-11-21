@@ -163,6 +163,18 @@ namespace carthage::ui
         int downAt = 0;
     };
 
+    /** A Viewport whose scroll bars are ZoomScrollBars (W61): the owner sets their onZoom. */
+    class ZoomViewport final : public juce::Viewport
+    {
+    public:
+        ZoomViewport()   { recreateScrollbars(); }   // the base made plain ones before this existed
+
+        ZoomScrollBar& horizontalBar()   { return dynamic_cast<ZoomScrollBar&> (getHorizontalScrollBar()); }
+
+    private:
+        juce::ScrollBar* createScrollBarComponent (bool vertical) override   { return new ZoomScrollBar (vertical); }   // the Viewport owns it
+    };
+
     class ValueSlider final : public juce::Slider
     {
     public:

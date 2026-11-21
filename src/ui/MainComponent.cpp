@@ -324,6 +324,7 @@ namespace carthage::ui
         settings.onShowLoadChanged = [this] (bool) { resized(); };
         settings.onBeatShadingChanged = [this] { timeline.gridChanged(); };
         settings.onBusChannelsChanged = [this] { mixer.busesChanged(); };
+        settings.onRoutingStyleChanged = [this] (ui::routing::Style style) { mixer.setRoutingStyle (style); };
         settings.onRunSettingsTest = [this] { runSettingsTest (false); };
 
         addChildComponent (sampleEditor);

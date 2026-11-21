@@ -726,6 +726,7 @@ Report: _not written yet_
 Brief feature: 7.
 
 Deliver:
+- [ ] Zoom by dragging the ends of both scroll bars, as the main grid and mixer do (W61, AGENTS.md: required in every scrolling view)
 - [ ] FL-style piano roll on the shared grid and snap system
 - [ ] Draw, paint, slice and delete tools; velocity lane; quantize; note length presets; scale highlighting; ghost notes from other patterns
 - [ ] **Owner's list (F22):** scales to pick and snap notes to; swing for the project, the piano roll and each piano-roll channel
@@ -801,6 +802,8 @@ Deliver:
 - [ ] Each one smooth at display refresh rate, consistent with the others, and quiet: nothing
       animates during playback except the playhead and the meters (AGENTS.md)
 - [ ] Reduced motion (the system setting) respected everywhere
+- [ ] **Owner (2026-11-21):** the mixer's meters look like 30 fps on a 120 Hz display while the rest
+      of Carthage is smooth: draw them on the display's refresh (VBlank), not the mixer's 30 Hz timer
 
 Exit checks:
 - [ ] Frame log (`CARTHAGE_FRAME_LOG`) shows no dropped frames on any animation on the owner's Mac

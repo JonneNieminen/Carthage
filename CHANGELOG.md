@@ -11,6 +11,12 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- A Routing section under the mixer's strips, with its own heading, shows where sound goes. By
+  default it tells the selected channel's story: a sentence, what plays into it, the channel's
+  input, plugins and level, and its way on to master. Settings > Mixer offers four other ways to
+  draw it (lines per destination, signal flow, a patch grid you can click to route, a tree from
+  master), each with a picture. Hover it to have the routing said in words; a tall one scrolls.
+- Zoom the mixer by dragging either end of its scroll bar, as on the main grid.
 - Keys name their mode: "D major", "D minor", "D dorian", "D mixolydian", "E phrygian", "F lydian",
   shown whole on the main grid's clips and in the sample editor; a short one-shot shows its note
   ("Note D"). Sounds analysed before are analysed again in the background.
@@ -189,6 +195,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 
 
 ### Fixed
+- The mixer no longer lags: moving between channels took about a third of a second, and the UI
+  stuttered during playback, because every strip asked the audio interface for its input names
+  each time it was drawn. They are now read once.
 - The sample editor no longer opens empty after it was closed and opened again while playing
   (or with reduced motion on).
 - The plugin browser's manufacturer filter could not be opened again after choosing one.

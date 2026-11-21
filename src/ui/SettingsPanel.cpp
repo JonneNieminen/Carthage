@@ -272,6 +272,17 @@ namespace carthage::ui
         bool live = false;
     };
 
+    void SettingsPanel::chooseRoutingStyle (routing::Style style)
+    {
+        session.getEngine().getPropertyStorage().getPropertiesFile().setValue ("routingStyle", routing::idOf (style));
+
+        for (auto& p : routingPreviews)
+            p->setToggleState (p->getStyleShown() == style, dontSendNotification);
+
+        if (onRoutingStyleChanged)
+            onRoutingStyleChanged (style);
+    }
+
     bool SettingsPanel::keyPressed (const KeyPress& key)
     {
         // Escape anywhere in Settings closes it, back to the view it covered (owner). The search
@@ -331,7 +342,7 @@ namespace carthage::ui
         body.addChildComponent (noMatch);
 
         for (auto [label, text] : { std::pair { &interfaceHeading, "Interface" }, { &recordingHeading, "Recording" },
-                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" }, { &timelineHeading, "Timeline" }, { &mixerHeading, "Mixer" }, { &metronomeHeading, "Metronome" }, { &windowsHeading, "Windows" },
+                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" }, { &timelineHeading, "Timeline" }, { &mixerHeading, "Mixer" }, { &routingHeading, "Routing" }, { &metronomeHeading, "Metronome" }, { &windowsHeading, "Windows" },
                                     { &updatesHeading, "Updates" },
                                     { &shortcutsHeading, "Keyboard shortcuts" } })
         {
@@ -519,6 +530,23 @@ namespace carthage::ui
             busEvery.setEnabled (busChannels.getToggleState());
             if (onBusChannelsChanged) onBusChannelsChanged();
         };
+        // How the Routing section under the mixer draws the mix: five ways, each shown as it looks (owner).
+        styleLabel (routingHint, theme::textSm, theme::muted);
+        routingHint.setText ("How the Routing section under the mixer draws where sound goes. Each picture is the same project "
+                             "with the Drum bus selected. The selected channel's story is the default.", dontSendNotification);
+        routingHint.setJustificationType (Justification::topLeft);
+        body.addAndMakeVisible (routingHint);
+        const auto currentRouting = routing::styleFromId (props.getValue ("routingStyle", "story"));
+
+        for (size_t i = 0; i < routingPreviews.size(); ++i)
+        {
+            const auto style = routing::styles[i];
+            routingPreviews[i] = std::make_unique<routing::Preview> (style);
+            routingPreviews[i]->setToggleState (style == currentRouting, dontSendNotification);
+            routingPreviews[i]->onClick = [this, style] { chooseRoutingStyle (style); };
+            body.addAndMakeVisible (*routingPreviews[i]);
+        }
+
         busChannels.onClick = busChanged;
         busEvery.onChange = busChanged;
 
@@ -1124,6 +1152,26 @@ namespace carthage::ui
                                                    whole (clickAccent, rowHeight), whole (clickWhileRecording, rowHeight) } });
         sections.push_back ({ Page::timeline, &timelineHeading, { row (beatShadingLabel, beatShading), whole (clickPlaces, rowHeight), whole (rightClickDeletes, rowHeight) } });
         sections.push_back ({ Page::mixer, &mixerHeading, { whole (preMaster, rowHeight), whole (busChannels, rowHeight), row (busEveryLabel, busEvery) } });
+
+        // Routing: the hint, then the five pictures two to a row.
+        {
+            std::vector<Component*> parts { &routingHint };
+            for (auto& p : routingPreviews) parts.push_back (p.get());
+            constexpr int hintHeight = 40, card = 150, gap = 12;
+            const auto rows = static_cast<int> ((routingPreviews.size() + 1) / 2);
+
+            sections.push_back ({ Page::mixer, &routingHeading, { Line { parts, hintHeight + rows * card + (rows - 1) * gap, [this] (Rectangle<int> b)
+                                  {
+                                      routingHint.setBounds (b.removeFromTop (hintHeight));
+                                      const auto w = (b.getWidth() - gap) / 2;
+
+                                      for (size_t i = 0; i < routingPreviews.size(); ++i)
+                                      {
+                                          const auto col = static_cast<int> (i % 2), row = static_cast<int> (i / 2);
+                                          routingPreviews[i]->setBounds (b.getX() + col * (w + gap), b.getY() + row * (card + gap), w, card);
+                                      }
+                                  } } } });
+        }
         const auto hintHeight = updatesHint.getText().isEmpty() ? 0 : 36;
         sections.push_back ({ Page::updates, &updatesHeading, { Line { { &versionLabel, &versionValue, &checkNow }, rowHeight + theme::space1, [this] (Rectangle<int> line)
                                                         {

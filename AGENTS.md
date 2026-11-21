@@ -161,6 +161,16 @@ build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench takes 
   Give each one its default. Switches and menus are not, and ignore the wheel (DECISIONS W37).
 - Draw at display refresh rate. Cull to the viewport, paint from cached thumbnails, never decode audio or touch disk while painting. Nothing animates during playback except the playhead and the meters.
 - Heavy work never runs on the message thread: scanning, decoding, thumbnails, export, saving and update checks go to workers.
+- **Nothing slow in a paint, a per-item loop or a timer tick** (W62). Never ask the audio device or
+  driver (channel names, device lists), the disk, a plugin or the whole edit (all clips, all
+  tracks) from `paint`, from a function called per strip, row or menu item, or from a 30–60 Hz
+  timer. Read it once into a member and refresh it on a change or every few seconds. The mixer
+  once asked CoreAudio for its input names per strip per paint: moving between channels took
+  300 ms and the UI lagged during playback. The snapshot tool times a channel change and prints
+  SLOW over 8 ms; add a timing like it for any new view that redraws often.
+- **Every view that scrolls zooms by its scroll bars' ends** (owner, W61): dragging an end of the
+  thumb shows more or less (`ui::ZoomScrollBar`). The main grid has it on both axes and the mixer
+  across; the piano roll and any later view must have it too.
 - Text: sentence case, plain verbs, no all-caps labels. Name things the way a musician would, not the way the engine does.
 - The mark is fixed (64 grid: ring radius 17, stroke 5, 84° opening east, dot radius 6). Do not redraw, rotate or recolour it. The wordmark is lowercase `carthage`; Futura is for the wordmark artwork only and is not shipped in the app.
 

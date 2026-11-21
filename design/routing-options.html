@@ -1,0 +1,348 @@
+<title>Routing section options</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one column of five mock-ups of the mixer's foot, each with its own "Routing" section,
+     drawn in Carthage's own dark theme so they read as the app, not as a document. */
+  :root {
+    --well: #14181c; --bg: #1c2127; --bg2: #232a31; --card: #2b333b; --hover: #353e47;
+    --line: rgba(255,255,255,0.08); --line-strong: rgba(255,255,255,0.16);
+    --text: #eef2f5; --muted: #9aa5b0; --faint: #5d6873; --accent: #8fd0f5; --on-accent: #10242f;
+    --font-ui: "Barlow", system-ui, sans-serif;
+    --font-dense: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
+    --font-time: "IBM Plex Mono", ui-monospace, monospace;
+    color-scheme: dark;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 15px; line-height: 1.5; }
+  main { max-width: 1080px; margin: 0 auto; padding-block: 32px 64px;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+         display: flex; flex-direction: column; gap: 40px; }
+  header h1 { font-size: 28px; font-weight: 600; margin: 0 0 8px; text-wrap: balance; }
+  header p { color: var(--muted); margin: 0; max-width: 68ch; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 16px; color: var(--muted); font-size: 13px; }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .legend svg { flex: none; }
+  section.option { display: flex; flex-direction: column; gap: 12px; }
+  .option-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .letter { font-family: var(--font-time); font-size: 14px; color: var(--on-accent); background: var(--accent);
+            border-radius: 6px; padding: 1px 8px; }
+  .option-head h2 { font-size: 20px; font-weight: 600; margin: 0; }
+  .option > p { margin: 0; color: var(--muted); max-width: 72ch; }
+  .mock { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+  .mock svg { display: block; min-width: 960px; width: 100%; height: auto; }
+  .tradeoffs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; font-size: 14px; }
+  .tradeoffs div { min-width: 0; }
+  .tradeoffs b { font-weight: 600; color: var(--text); margin-right: 6px; }
+  .tradeoffs span { color: var(--muted); }
+  @media (max-width: 640px) { .tradeoffs { grid-template-columns: minmax(0, 1fr); } }
+</style>
+
+<main>
+  <header>
+    <h1>The Routing section: five options</h1>
+    <p>Each one is a section of its own under the mixer's strips, with the heading Routing. All five show the same
+       project with the Drum bus selected: Kick and Snare play into it, it plays into the Pre-Master and on to Master,
+       and Kick and Snare also send to Reverb. Pick one by its letter, or mix parts of two.</p>
+    <div class="legend">
+      <span><svg width="34" height="8"><line x1="1" y1="4" x2="33" y2="4" stroke="#eef2f5" stroke-width="2.5" stroke-linecap="round"/></svg>Main output</span>
+      <span><svg width="34" height="8"><line x1="1" y1="4" x2="33" y2="4" stroke="#eef2f5" stroke-width="1.6" stroke-dasharray="5 4" stroke-linecap="round"/></svg>Send, with its level</span>
+      <span><svg width="34" height="8"><line x1="1" y1="4" x2="33" y2="4" stroke="#8fd0f5" stroke-width="2.5" stroke-linecap="round"/></svg>The selected channel's own routes</span>
+      <span><svg width="34" height="8"><line x1="1" y1="4" x2="33" y2="4" stroke="#5d6873" stroke-width="2" stroke-linecap="round"/></svg>Everything else, quieter</span>
+    </div>
+  </header>
+
+  <section class="option" id="a">
+    <div class="option-head"><span class="letter">A</span><h2>Lines per destination</h2></div>
+    <p>Every destination gets its own labelled line across the section. Each channel drops straight down from its strip
+       onto the line of where it plays, in its own colour, and the line rises back into the destination's strip.
+       It is the current schema, laid out with room to breathe.</p>
+    <div class="mock" id="mock-a"></div>
+    <div class="tradeoffs"><div><b>Good for</b><span>Reading by strip: look under a channel, follow it down.</span></div>
+      <div><b>Costs</b><span>One line per destination; a big session needs the section to grow or scroll.</span></div></div>
+  </section>
+
+  <section class="option" id="b">
+    <div class="option-head"><span class="letter">B</span><h2>Signal flow, left to right</h2></div>
+    <p>The sound's journey in columns: channels, then buses, then the Pre-Master, then Master. Curves link them in each
+       channel's colour; the selected channel's whole path lights up from where its sound comes from to where it leaves.</p>
+    <div class="mock" id="mock-b"></div>
+    <div class="tradeoffs"><div><b>Good for</b><span>Seeing the order sound passes through, buses within buses included.</span></div>
+      <div><b>Costs</b><span>Not lined up with the strips above; the eye moves between two layouts.</span></div></div>
+  </section>
+
+  <section class="option" id="c">
+    <div class="option-head"><span class="letter">C</span><h2>Patch grid</h2></div>
+    <p>A grid with channels down the side and destinations across the top. A filled dot is a main output, a ring with a
+       figure is a send at that level. The selected channel's row and column are lit, and a click on a cell routes or
+       unroutes, as the route buttons do.</p>
+    <div class="mock" id="mock-c"></div>
+    <div class="tradeoffs"><div><b>Good for</b><span>Exact answers at a glance, and the densest view of a big session.</span></div>
+      <div><b>Costs</b><span>A table rather than a picture; flow through buses is read, not seen.</span></div></div>
+  </section>
+
+  <section class="option" id="d">
+    <div class="option-head"><span class="letter">D</span><h2>The selected channel's story</h2></div>
+    <p>Only the selected channel, told plainly: one sentence, then what plays into it, the channel itself with its input,
+       plugins and level, and every place it plays into, on to Master. Other channels appear as a quiet count.</p>
+    <div class="mock" id="mock-d"></div>
+    <div class="tradeoffs"><div><b>Good for</b><span>Clarity: no crossing lines, and words a musician would say.</span></div>
+      <div><b>Costs</b><span>Shows one channel at a time; the whole mix is not in view.</span></div></div>
+  </section>
+
+  <section class="option" id="e">
+    <div class="option-head"><span class="letter">E</span><h2>Tree from Master</h2></div>
+    <p>An outline with Master at the top and everything that feeds it nested below: the Pre-Master, then the buses with
+       the channels inside them. Sends hang off the channel they go to, marked with their level. The selected branch is lit.</p>
+    <div class="mock" id="mock-e"></div>
+    <div class="tradeoffs"><div><b>Good for</b><span>Groups at a glance: what is inside the Drum bus is literally inside it.</span></div>
+      <div><b>Costs</b><span>Sends do not fit a tree well; they appear twice, once as a branch and once as a mark.</span></div></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const C = { well: '#14181c', bg: '#1c2127', bg2: '#232a31', card: '#2b333b', hover: '#353e47',
+              line: 'rgba(255,255,255,0.08)', lineStrong: 'rgba(255,255,255,0.16)', text: '#eef2f5',
+              muted: '#9aa5b0', faint: '#5d6873', accent: '#8fd0f5', onAccent: '#10242f' };
+  const lane = { sky: '#8fd0f5', tide: '#7fcfc2', kelp: '#a8cf8c', sand: '#e0c27e', coral: '#ec9c8b',
+                 murex: '#b9a0ea', rose: '#e597b8', slate: '#8b96a1' };
+  const UI = "Barlow, system-ui, sans-serif", DENSE = "'Barlow Semi Condensed', Barlow, sans-serif", TIME = "'IBM Plex Mono', monospace";
+
+  // The example project: as the mixer snapshot, with the Drum bus selected.
+  const ch = [
+    { id: 'master', name: 'Master', pinned: true, colour: C.text },
+    { id: 'pre', name: 'Pre-Master', pinned: true, colour: C.text, out: 'master' },
+    { id: 'c1', name: '1', colour: lane.sky, out: 'pre', input: 'Analogue 1' },
+    { id: 'c2', name: '2', colour: lane.tide, out: 'pre' },
+    { id: 'kick', name: 'Kick', colour: lane.kelp, out: 'bus', sends: [{ to: 'rev', db: -12 }] },
+    { id: 'snare', name: 'Snare', colour: lane.sand, out: 'bus', sends: [{ to: 'rev', db: -8 }] },
+    { id: 'bus', name: 'Drum bus', colour: lane.coral, out: 'pre', isBus: true },
+    { id: 'c6', name: '6', colour: lane.murex, out: 'pre' },
+    { id: 'c7', name: '7', colour: lane.rose, out: 'pre', muted: true },
+    { id: 'rev', name: 'Reverb', colour: lane.slate, out: 'pre' },
+  ];
+  const byId = Object.fromEntries(ch.map(c => [c.id, c]));
+  const selected = 'bus';
+  const W = 1000;
+
+  // Strip positions, as the mixer lays them out: master and the Pre-Master pinned, then the channels.
+  const place = {};
+  { let x = 14;
+    for (const c of ch) {
+      const w = c.pinned ? 78 : c.isBus ? 108 : 72;
+      place[c.id] = { x, w, cx: x + w / 2 };
+      x += w + (c.id === 'pre' ? 18 : c.id === 'master' ? 6 : 4);
+    } }
+
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const text = (x, y, s, o = {}) =>
+    `<text x="${x}" y="${y}" fill="${o.fill || C.muted}" font-family="${o.font || UI}" font-size="${o.size || 12}" font-weight="${o.weight || 400}" text-anchor="${o.anchor || 'start'}"${o.extra || ''}>${esc(s)}</text>`;
+  const touches = (c, id) => c.id === id || c.out === id || (c.sends || []).some(s => s.to === id);
+  const isSelectedRoute = (from, to) => from === selected || to === selected;
+
+  // The strips' feet, to place the section under the mixer.
+  function feet(height = 46) {
+    let s = `<rect x="0" y="0" width="${W}" height="${height}" fill="${C.bg}"/>`;
+    for (const c of ch) {
+      const p = place[c.id], sel = c.id === selected;
+      s += `<rect x="${p.x}" y="4" width="${p.w}" height="${height - 8}" rx="6" fill="${C.bg2}" stroke="${sel ? C.accent : C.line}" stroke-width="${sel ? 1.5 : 1}"/>`;
+      s += `<rect x="${p.x + 6}" y="7" width="${p.w - 12}" height="3" rx="1.5" fill="${c.colour}"/>`;
+      s += text(p.cx, 28, c.name, { anchor: 'middle', fill: C.text, font: DENSE, weight: 600, size: 13 });
+      if (c.isBus) s += text(p.cx, 40, 'Bus', { anchor: 'middle', fill: C.muted, font: DENSE, size: 10 });
+    }
+    return s;
+  }
+
+  function sectionHead(y, extra = '') {
+    return `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="${C.line}"/>` +
+           text(16, y + 26, 'Routing', { fill: C.text, weight: 600, size: 15 }) +
+           (extra ? text(W - 16, y + 26, extra, { anchor: 'end', size: 12 }) : '');
+  }
+
+  const arrowUp = (x, y, colour) => `<path d="M${x - 5} ${y + 7} L${x} ${y} L${x + 5} ${y + 7} Z" fill="${colour}"/>`;
+  const arrowRight = (x, y, colour) => `<path d="M${x - 7} ${y - 5} L${x} ${y} L${x - 7} ${y + 5} Z" fill="${colour}"/>`;
+  const tag = (x, y, s, colour, filled = false) => {
+    const w = s.length * 6.6 + 12;
+    return `<rect x="${x - w / 2}" y="${y - 9}" width="${w}" height="18" rx="4" fill="${filled ? colour : C.bg2}" stroke="${colour}"/>` +
+           text(x, y + 4, s, { anchor: 'middle', fill: filled ? C.onAccent : colour, font: TIME, size: 11 });
+  };
+
+  // A: a labelled line per destination; drops from each strip, rises into the destination.
+  function optionA() {
+    const top = 46, head = 40;
+    const dests = ['bus', 'rev', 'pre', 'master'];
+    const label = { bus: 'into Drum bus', rev: 'sends to Reverb', pre: 'into Pre-Master', master: 'into Master' };
+    const rowY = {}; dests.forEach((d, i) => rowY[d] = top + head + 34 + i * 40);
+    const H = top + head + 34 + dests.length * 40 + 10;
+    let s = feet(top) + `<rect x="0" y="${top}" width="${W}" height="${H - top}" fill="${C.bg2}"/>` + sectionHead(top, 'Lit: the Drum bus, what plays into it and where it goes');
+
+    for (const d of dests) {
+      const y = rowY[d], lit = d === selected || ch.some(c => c.id === selected && touches(c, d));
+      const users = ch.filter(c => c.out === d || (c.sends || []).some(x => x.to === d));
+      const xs = users.map(u => place[u.id].cx).concat([place[d].cx]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs);
+      s += text(W - 16, y + 4, label[d], { anchor: 'end', fill: lit ? C.text : C.muted, size: 12, weight: lit ? 600 : 400 });
+      s += `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="${lit ? C.accent : C.faint}" stroke-width="${lit ? 2.5 : 2}" stroke-linecap="round"${d === 'rev' ? ' stroke-dasharray="6 5"' : ''}/>`;
+      // the rise back up into the destination's strip
+      s += `<line x1="${place[d].cx}" y1="${y}" x2="${place[d].cx}" y2="${top + 2}" stroke="${lit ? C.accent : C.faint}" stroke-width="${lit ? 2.5 : 2}" stroke-linecap="round"/>` + arrowUp(place[d].cx, top + 1, lit ? C.accent : C.faint);
+      for (const u of users) {
+        const send = (u.sends || []).find(x => x.to === d), mine = isSelectedRoute(u.id, d);
+        const colour = mine ? u.colour : C.faint, x = place[u.id].cx + (send ? 10 : 0);
+        s += `<line x1="${x}" y1="${top + 2}" x2="${x}" y2="${y}" stroke="${colour}" stroke-width="${send ? 1.6 : (mine ? 2.5 : 2)}" stroke-linecap="round"${send ? ' stroke-dasharray="5 4"' : ''} opacity="${mine ? 1 : 0.55}"/>`;
+        s += `<circle cx="${x}" cy="${y}" r="3.5" fill="${colour}"/>`;
+        if (send) s += tag(x + 26, y - 14, `${send.db} dB`, mine ? u.colour : C.faint);
+      }
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Option A: a line per destination">${s}</svg>`;
+  }
+
+  // B: signal flow in columns.
+  function optionB() {
+    const top = 46, head = 40, H = 420;
+    let s = feet(top) + `<rect x="0" y="${top}" width="${W}" height="${H - top}" fill="${C.bg2}"/>` + sectionHead(top, 'Sound flows left to right');
+    const cols = { src: 150, bus: 470, pre: 720, master: 900 };
+    ['Channels', 'Buses', 'Pre-Master', 'Master'].forEach((t, i) =>
+      s += text([cols.src, cols.bus, cols.pre, cols.master][i], top + 62, t, { anchor: 'middle', size: 11, fill: C.faint }));
+    const sources = ch.filter(c => !c.pinned && !c.isBus && c.id !== 'rev');
+    const node = {};
+    sources.forEach((c, i) => node[c.id] = { x: cols.src, y: top + 90 + i * 40 });
+    node.bus = { x: cols.bus, y: top + 150 }; node.rev = { x: cols.bus, y: top + 290 };
+    node.pre = { x: cols.pre, y: top + 210 }; node.master = { x: cols.master, y: top + 210 };
+    const nodeW = id => (id === 'bus' || id === 'rev' || id === 'pre') ? 120 : id === 'master' ? 100 : 96;
+    const links = [];
+    for (const c of ch) {
+      if (c.out && node[c.id]) links.push({ from: c.id, to: c.out });
+      for (const x of c.sends || []) links.push({ from: c.id, to: x.to, db: x.db });
+    }
+    const lit = id => id === selected || ['kick', 'snare', 'pre', 'master'].includes(id); // the Drum bus's path
+    for (const l of links) {
+      const a = node[l.from], b = node[l.to];
+      if (!a || !b) continue;
+      const x0 = a.x + nodeW(l.from) / 2, x1 = b.x - nodeW(l.to) / 2 - 8, mid = (x0 + x1) / 2;
+      const mine = (l.from === selected || l.to === selected) || (l.from === 'pre' && l.to === 'master') || (l.from === 'bus');
+      const colour = mine ? (l.from === 'pre' ? C.text : byId[l.from].colour) : C.faint;
+      s += `<path d="M${x0} ${a.y} C${mid} ${a.y}, ${mid} ${b.y}, ${x1} ${b.y}" fill="none" stroke="${colour}" stroke-width="${l.db ? 1.6 : (mine ? 2.5 : 2)}"${l.db ? ' stroke-dasharray="5 4"' : ''} opacity="${mine ? 1 : 0.5}"/>`;
+      s += arrowRight(x1 + 7, b.y, colour);
+      if (l.db) s += tag(mid, (a.y + b.y) / 2 - 2, `${l.db} dB`, colour);
+    }
+    for (const [id, n] of Object.entries(node)) {
+      const c = byId[id], w = nodeW(id), sel = id === selected;
+      s += `<rect x="${n.x - w / 2}" y="${n.y - 14}" width="${w}" height="28" rx="14" fill="${sel ? C.accent : C.card}" stroke="${lit(id) ? c.colour : C.line}" stroke-width="${lit(id) ? 1.5 : 1}"/>`;
+      if (!c.pinned) s += `<circle cx="${n.x - w / 2 + 14}" cy="${n.y}" r="4" fill="${sel ? C.onAccent : c.colour}"/>`;
+      s += text(n.x + (c.pinned ? 0 : 6), n.y + 4.5, c.name + (c.muted ? ' (muted)' : ''), { anchor: 'middle', fill: sel ? C.onAccent : (lit(id) ? C.text : C.muted), font: DENSE, weight: 600, size: 13 });
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Option B: signal flow left to right">${s}</svg>`;
+  }
+
+  // C: a patch grid.
+  function optionC() {
+    const top = 46, head = 40;
+    const rows = ch.filter(c => !c.pinned);
+    const dests = ['bus', 'rev', 'pre', 'master'];
+    const colX = { bus: 360, rev: 500, pre: 640, master: 780 };
+    const rowH = 30, y0 = top + head + 50;
+    const H = y0 + rows.length * rowH + 16;
+    let s = feet(top) + `<rect x="0" y="${top}" width="${W}" height="${H - top}" fill="${C.bg2}"/>` + sectionHead(top, 'Click a cell to route or unroute');
+    // lit column and row
+    s += `<rect x="${colX[selected] - 50}" y="${y0 - 34}" width="100" height="${rows.length * rowH + 34}" rx="6" fill="${C.accent}" opacity="0.07"/>`;
+    const selRow = rows.findIndex(r => r.id === selected);
+    s += `<rect x="16" y="${y0 + selRow * rowH}" width="${W - 32}" height="${rowH}" rx="6" fill="${C.accent}" opacity="0.07"/>`;
+    for (const d of dests)
+      s += text(colX[d], y0 - 14, byId[d].name, { anchor: 'middle', fill: d === selected ? C.accent : C.muted, font: DENSE, weight: 600, size: 13 });
+    rows.forEach((r, i) => {
+      const y = y0 + i * rowH + rowH / 2;
+      s += `<line x1="16" y1="${y0 + (i + 1) * rowH}" x2="${W - 16}" y2="${y0 + (i + 1) * rowH}" stroke="${C.line}"/>`;
+      s += `<circle cx="36" cy="${y}" r="5" fill="${r.colour}"/>`;
+      s += text(52, y + 4.5, r.name + (r.isBus ? '  bus' : '') + (r.muted ? '  muted' : ''), { fill: r.id === selected ? C.text : C.muted, font: DENSE, weight: r.id === selected ? 600 : 500, size: 13 });
+      if (r.input) s += text(200, y + 4, '← ' + r.input, { fill: C.faint, size: 11 });
+      for (const d of dests) {
+        const x = colX[d], send = (r.sends || []).find(z => z.to === d), main = r.out === d || (d === 'master' && false);
+        const mine = isSelectedRoute(r.id, d), colour = mine ? r.colour : C.muted;
+        if (r.id === d) { s += `<line x1="${x - 8}" y1="${y}" x2="${x + 8}" y2="${y}" stroke="${C.faint}"/>`; continue; }
+        if (main) s += `<circle cx="${x}" cy="${y}" r="7" fill="${colour}"/>`;
+        else if (send) s += `<circle cx="${x - 22}" cy="${y}" r="6" fill="none" stroke="${colour}" stroke-width="1.6"/>` + text(x + 4, y + 4, `${send.db} dB`, { fill: colour, font: TIME, size: 11 });
+        else s += `<circle cx="${x}" cy="${y}" r="3" fill="${C.hover}"/>`;
+      }
+    });
+    s += text(W - 16, H - 4, 'Pre-Master plays into Master', { anchor: 'end', fill: C.faint, size: 11 });
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Option C: patch grid">${s}</svg>`;
+  }
+
+  // D: the selected channel's story.
+  function optionD() {
+    const top = 46, head = 40, H = 330;
+    let s = feet(top) + `<rect x="0" y="${top}" width="${W}" height="${H - top}" fill="${C.bg2}"/>` + sectionHead(top, 'Drum bus');
+    s += text(16, top + 66, 'Kick and Snare play into the Drum bus, which plays into the Pre-Master and on to Master.', { fill: C.text, size: 16 });
+    const y = top + 170;
+    // what plays into it
+    s += text(60, top + 104, 'Plays into it', { size: 12, fill: C.faint });
+    [['kick', -30], ['snare', 30]].forEach(([id, dy]) => {
+      const c = byId[id];
+      s += `<rect x="60" y="${y + dy - 16}" width="150" height="32" rx="8" fill="${C.card}" stroke="${c.colour}"/>`;
+      s += `<circle cx="78" cy="${y + dy}" r="5" fill="${c.colour}"/>` + text(92, y + dy + 5, c.name, { fill: C.text, font: DENSE, weight: 600, size: 14 });
+      s += text(198, y + dy + 5, 'main', { anchor: 'end', size: 11, fill: C.muted });
+      s += `<path d="M212 ${y + dy} C260 ${y + dy}, 270 ${y}, 318 ${y}" fill="none" stroke="${c.colour}" stroke-width="2.5"/>` + arrowRight(326, y, c.colour);
+    });
+    // the channel itself
+    s += `<rect x="330" y="${y - 70}" width="270" height="140" rx="10" fill="${C.card}" stroke="${C.accent}" stroke-width="1.5"/>`;
+    s += `<rect x="342" y="${y - 62}" width="246" height="3" rx="1.5" fill="${lane.coral}"/>`;
+    s += text(346, y - 34, 'Drum bus', { fill: C.text, weight: 600, size: 17 });
+    s += text(346, y - 10, 'Input', { size: 12 }) + text(584, y - 10, 'none', { anchor: 'end', fill: C.text, size: 12 });
+    s += text(346, y + 14, 'Plugins', { size: 12 }) + text(584, y + 14, 'none yet', { anchor: 'end', fill: C.text, size: 12 });
+    s += text(346, y + 38, 'Level', { size: 12 }) + text(584, y + 38, '0.0 dB', { anchor: 'end', fill: C.text, font: TIME, size: 12 });
+    // where it goes
+    s += text(660, top + 104, 'It plays into', { size: 12, fill: C.faint });
+    s += `<line x1="602" y1="${y}" x2="652" y2="${y}" stroke="${C.accent}" stroke-width="2.5"/>` + arrowRight(660, y, C.accent);
+    s += `<rect x="662" y="${y - 16}" width="130" height="32" rx="8" fill="${C.card}" stroke="${C.lineStrong}"/>` + text(727, y + 5, 'Pre-Master', { anchor: 'middle', fill: C.text, font: DENSE, weight: 600, size: 14 });
+    s += `<line x1="794" y1="${y}" x2="836" y2="${y}" stroke="${C.text}" stroke-width="2"/>` + arrowRight(844, y, C.text);
+    s += `<rect x="846" y="${y - 16}" width="110" height="32" rx="8" fill="${C.card}" stroke="${C.lineStrong}"/>` + text(901, y + 5, 'Master', { anchor: 'middle', fill: C.text, font: DENSE, weight: 600, size: 14 });
+    s += text(901, y + 36, '→ Analogue 1 + 2', { anchor: 'middle', size: 11, fill: C.muted });
+    s += text(16, H - 14, 'Elsewhere: 5 channels play into the Pre-Master; Kick and Snare also send to Reverb.', { size: 12, fill: C.faint });
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Option D: the selected channel's story">${s}</svg>`;
+  }
+
+  // E: a tree from Master.
+  function optionE() {
+    const top = 46, head = 40;
+    const tree = [
+      { id: 'master', depth: 0 }, { id: 'pre', depth: 1 },
+      { id: 'c1', depth: 2 }, { id: 'c2', depth: 2 },
+      { id: 'bus', depth: 2 }, { id: 'kick', depth: 3, sends: true }, { id: 'snare', depth: 3, sends: true },
+      { id: 'c6', depth: 2 }, { id: 'c7', depth: 2 },
+      { id: 'rev', depth: 2 }, { id: 'kick', depth: 3, send: -12 }, { id: 'snare', depth: 3, send: -8 },
+    ];
+    const rowH = 26, y0 = top + head + 26, indent = 34, x0 = 40;
+    const H = y0 + tree.length * rowH + 14;
+    let s = feet(top) + `<rect x="0" y="${top}" width="${W}" height="${H - top}" fill="${C.bg2}"/>` + sectionHead(top, 'Everything that reaches Master, nested');
+    const litRows = new Set([0, 1, 4, 5, 6]);
+    // connectors: from each row to its parent above
+    tree.forEach((r, i) => {
+      if (r.depth === 0) return;
+      let p = i - 1; while (p >= 0 && tree[p].depth >= r.depth) p--;
+      const px = x0 + tree[p].depth * indent + 6, y = y0 + i * rowH, py = y0 + p * rowH + 8;
+      const lit = litRows.has(i) && litRows.has(p);
+      s += `<path d="M${px} ${py} V${y} H${x0 + r.depth * indent - 6}" fill="none" stroke="${lit ? C.accent : C.faint}" stroke-width="${lit ? 2 : 1.4}"${r.send ? ' stroke-dasharray="4 4"' : ''}/>`;
+    });
+    tree.forEach((r, i) => {
+      const c = byId[r.id], y = y0 + i * rowH, x = x0 + r.depth * indent, sel = r.id === selected;
+      if (sel) s += `<rect x="${x - 4}" y="${y - 12}" width="180" height="24" rx="6" fill="${C.accent}"/>`;
+      if (!c.pinned) s += `<circle cx="${x + 6}" cy="${y}" r="4.5" fill="${sel ? C.onAccent : c.colour}"/>`;
+      s += text(x + (c.pinned ? 0 : 18), y + 4.5, c.name + (c.isBus ? '  bus' : ''), { fill: sel ? C.onAccent : (litRows.has(i) ? C.text : C.muted), font: DENSE, weight: 600, size: 13 });
+      const after = x + (c.pinned ? 0 : 18) + (c.name.length + (c.isBus ? 5 : 0)) * 7.4 + 14;
+      if (r.send) s += tag(after + 30, y, `send ${r.send} dB`, C.muted);
+      if (r.sends) s += text(after, y + 4, 'also sends to Reverb', { size: 11, fill: C.faint });
+      if (c.muted) s += text(after, y + 4, 'muted', { size: 11, fill: C.faint });
+      if (c.input) s += text(after, y + 4, '← ' + c.input, { size: 11, fill: C.faint });
+      if (r.id === 'master') s += text(after, y + 4, '→ Analogue 1 + 2', { size: 11, fill: C.faint });
+    });
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Option E: tree from Master">${s}</svg>`;
+  }
+
+  document.getElementById('mock-a').innerHTML = optionA();
+  document.getElementById('mock-b').innerHTML = optionB();
+  document.getElementById('mock-c').innerHTML = optionC();
+  document.getElementById('mock-d').innerHTML = optionD();
+  document.getElementById('mock-e').innerHTML = optionE();
+})();
+</script>

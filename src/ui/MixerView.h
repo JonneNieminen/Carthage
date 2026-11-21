@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RoutingView.h"
+
 #include "Controls.h"
 #include "PluginWindows.h"
 
@@ -24,6 +26,9 @@ namespace carthage::ui
         /** The front project changed: strips for its channels. Before it closes: let go. */
         void projectChanged();
         void projectClosing();
+
+        /** How the Routing section draws the mix (Settings > Mixer). */
+        void setRoutingStyle (routing::Style);
 
         /** Selects a channel's strip and shows it in the column. */
         void select (tracktion::AudioTrack*);
@@ -58,6 +63,10 @@ namespace carthage::ui
         static editing::ChannelInput inputForId (int id);
         static int idForInput (editing::ChannelInput);
         juce::String inputName (editing::ChannelInput) const;
+        const juce::StringArray& deviceInputs() const;   // the device's input names, read now and then
+        mutable juce::StringArray inputNames;
+        mutable juce::AudioIODevice* inputNamesDevice = nullptr;
+        mutable double inputNamesReadAt = -1.0e9;
 
         /** How the selected channel reaches `to` (null: master): what the route buttons and cables show. */
         enum class Route { none, output, send, sidechain };
@@ -95,11 +104,13 @@ namespace carthage::ui
         PluginWindows& windows;
         juce::ValueTree editState;
         juce::OwnedArray<Strip> strips;   // master first
-        juce::Viewport viewport;
+        ZoomViewport viewport;   // its bar's ends zoom the strips (W61)
+        float zoomAtGrab = 1.0f;
         class StripHolder;
         std::unique_ptr<StripHolder> stripHolder;
-        class CableBand;
-        std::unique_ptr<CableBand> cableLayer;
+        routing::Section routingSection;
+        std::vector<tracktion::AudioTrack*> routingTargets;   // the section's nodes as tracks (null: master)
+        float shownLevel = 0.0f;                              // the level the section last drew
         /** "Add channel"; a right-click offers several at once (owner). */
         struct AddButton final : public juce::TextButton
         {
