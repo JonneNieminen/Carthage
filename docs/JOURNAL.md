@@ -375,3 +375,12 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Not tried with an interface yet: the new build waits for macOS microphone access. Next: the
   owner's checklist with the iD44 (two armed channels, loop takes, punch, count-in).
 
+### 2026-11-21 (owner's list after trying recording, W58)
+
+- CI green for 1dd4f12. Owner's findings fixed: see W58 (ruler, loudness, plugin solo, plugin
+  volume name, multi-route clicks, toolbar, samples at start, settings search, manufacturer box).
+- F9: works when sent to Carthage (checked by computer use); on the owner's keyboard it does not
+  arrive (fn or not). Likely macOS or Wootility takes F9. Asked the owner; a second default key is
+  an option.
+- Not tried in the app: the owner's Carthage was running the previous build with their takes.
+

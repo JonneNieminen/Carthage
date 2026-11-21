@@ -230,7 +230,7 @@ namespace carthage::editing
     bool isBypassed (const tracktion::Plugin&);
     void setBypassed (tracktion::Plugin&, bool);
 
-    /** Wet/dry, 0 (dry) to 1 (wet, the default), for plugins that offer it: hosted plugins that
+    /** The plugin volume knob (owner's name for wet/dry): 0 (the sound before it) to 1 (all plugin, the default), for plugins that offer it: hosted plugins that
         report no latency. Tracktion mixes a plugin's dry sound in undelayed, so with a plugin that
         delays its sound (a lookahead) part-dry would comb-filter: such a plugin stays fully wet
         (syncMix puts it back if it starts reporting latency later), and its own mix control is
@@ -239,6 +239,13 @@ namespace carthage::editing
     bool hasMix (const tracktion::Plugin&);
     float mixOf (const tracktion::Plugin&);
     void setMix (tracktion::Plugin&, float);
+
+    /** Project loudness (owner): the master level a project starts at and its master fader returns
+        to on a double-click, 0 dB unless the person chose -3 or -6 dB (Settings > Projects) to mix
+        with that much room. Channels start at 0 dB. Kept with the project; 0 dB for projects made
+        before it existed. */
+    float projectLoudness (const tracktion::Edit&);
+    void setProjectLoudness (tracktion::Edit&, float db);
 
     /** The Pre-Master (W51): a channel between everything that plays to master and master
         itself, on unless the setting turns it off. Routes still name master; while it is on they

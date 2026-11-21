@@ -75,7 +75,7 @@ namespace carthage::ui
             fader.setTextBoxStyle (Slider::NoTextBox, true, 0, 0);
             fader.setRange (minDb, maxDb, 0.1);
             fader.setSkewFactorFromMidPoint (-12.0);
-            fader.setDefault (0.0);
+            fader.setDefault (track == nullptr ? editing::projectLoudness (edit) : 0.0);   // master: the project's loudness
             fader.setTooltip ("Volume. Drag the cap; double-click it for 0 dB. Scroll anywhere over the selected channel, Shift for fine steps.");
             fader.onlyThumbGrabs = true;   // a click on the strip selects it; only the cap moves the fader (owner)
             fader.onDragStart = [this]
@@ -486,14 +486,14 @@ namespace carthage::ui
 
                 switch (route)
                 {
-                    case Route::output:    return fromName + " plays into " + here + ". Click to send it back to master.";
-                    case Route::send:      return fromName + " sends a copy to " + here + ". Click to stop the send.";
+                    case Route::output:    return fromName + " plays into " + here + ". Click to stop that.";
+                    case Route::send:      return fromName + " also plays into " + here + " (its level is the knob beside this). Click to stop that.";
                     case Route::sidechain: return fromName + " drives a sidechain here. Click to play into " + here + " instead; right-click to change the sidechain.";
                     case Route::none:      break;
                 }
 
                 return track == nullptr ? fromName + " is not heard through master. Click to play into master again."
-                                        : "Click to play " + fromName + " into " + here + ". " + opt + "-click: send a copy instead. Right-click: sidechain and more.";
+                                        : "Click to play " + fromName + " into " + here + " (as well as anywhere else it plays). " + opt + "-click: a send you set the level of. Right-click: sidechain and more.";
             }
 
             if (channelStrip())
@@ -937,14 +937,14 @@ namespace carthage::ui
     //==============================================================================================
     /** The selected channel's Line (5b, W51): every plugin on it in order and one empty slot
         after them, so it grows as plugins are added. A click on a plugin opens its window; its
-        dot bypasses it; its knob mixes wet and dry; drag to reorder, or onto another channel's
+        dot bypasses it (Ctrl- or Cmd-click: only it plays); its knob is its plugin volume; drag to reorder, or onto another channel's
         strip. Double-click the empty slot to choose a plugin; drop one from the browser anywhere. */
     class MixerView::InsertLine final : public Component, public DragAndDropTarget, public TooltipClient
     {
     public:
         explicit InsertLine (MixerView& v) : view (v) {}
 
-        /** A plugin that delays its sound says by how much, and why it has no wet/dry knob (W56). */
+        /** A plugin that delays its sound says by how much, and why it has no plugin volume knob (W56). */
         String getTooltip() override
         {
             const auto i = rowAt (getMouseXYRelative());
@@ -962,7 +962,7 @@ namespace carthage::ui
                 return {};
 
             return plugins[i]->getName() + " delays its sound by " + String (ms, 1) + " ms (it looks ahead). Carthage delays everything else "
-                   "by the same, so the mix stays in time. Its wet and dry are mixed inside the plugin: use its own mix control.";
+                   "by the same, so the mix stays in time. It has no plugin volume knob, as Carthage would mix the sound before it in early: use its own mix control.";
         }
 
         void setChannel (tracktion::AudioTrack* channel)   { track = channel; refresh(); }
@@ -981,9 +981,9 @@ namespace carthage::ui
                 knob->setRange (0.0, 1.0, 0.01);
                 knob->setValue (editing::mixOf (*p), dontSendNotification);
                 knob->setVisible (editing::hasMix (*p));
-                knob->setTooltip ("Wet and dry: how much of " + p->getName() + " you hear. Double-click: all wet.");
+                knob->setTooltip ("Plugin volume: how much of " + p->getName() + "'s sound you hear, against the sound before it. Double-click: full.");
                 tracktion::Plugin::Ptr held (p);
-                knob->onDragStart = [&edit, held] { editing::begin (edit, held->getName() + " mix"); };
+                knob->onDragStart = [&edit, held] { editing::begin (edit, held->getName() + " volume"); };
                 knob->onValueChange = [k = knob, held] { editing::setMix (*held, static_cast<float> (k->getValue())); };
                 addAndMakeVisible (knob);
             }
@@ -1063,6 +1063,16 @@ namespace carthage::ui
             auto& plugin = *plugins[i];
             auto& edit = view.session.getEdit();
 
+            // FL-style (owner): Ctrl- or Cmd-click on a plugin's dot or name leaves only it on; again,
+            // every plugin on the Line plays. Before the menu: on a Mac Ctrl-click is a right-click.
+            const auto onRow = dotBounds (i).expanded (4).contains (e.getPosition()) || nameBounds (i).contains (e.getPosition());
+
+            if (onRow && (e.mods.isCtrlDown() || e.mods.isCommandDown()) && ! e.mods.isRightButtonDown())
+            {
+                soloPlugin (plugin);
+                return;
+            }
+
             if (e.mods.isPopupMenu())
             {
                 showMenu (plugin);
@@ -1078,6 +1088,23 @@ namespace carthage::ui
             }
 
             dragging = i;   // a drag moves it; a click without one opens it
+        }
+
+        void soloPlugin (tracktion::Plugin& chosen)
+        {
+            auto& edit = view.session.getEdit();
+            const auto alone = ! editing::isBypassed (chosen)
+                               && std::all_of (plugins.begin(), plugins.end(), [&chosen] (tracktion::Plugin* p) { return p == &chosen || editing::isBypassed (*p); });
+
+            editing::begin (edit, alone ? String ("Turn on every plugin") : "Only " + chosen.getName());
+
+            for (auto* p : plugins)
+                editing::setBypassed (*p, alone ? false : p != &chosen);
+
+            if (view.onStatus)
+                view.onStatus (alone ? String ("Every plugin on this Line plays again")
+                                     : "Only " + chosen.getName() + " plays on this Line; Ctrl-click it again for all");
+            repaint();
         }
 
         void mouseDrag (const MouseEvent& e) override
@@ -1658,16 +1685,40 @@ namespace carthage::ui
         }
         else
         {
-            // A click (owner): the main output goes here; again, it goes back to master. A send
-            // here is taken away instead.
+            // A click (owner): the selected channel plays into this one too, at full level. The
+            // first such route is its main output (master no longer hears it directly); more are
+            // sends at 0 dB, after its fader, as the main output is. A click on one it already
+            // plays into takes that route away; taking away the main one hands it to another
+            // route, or back to master when none is left.
+            const auto sends = editing::sendsOf (*from);
+
             switch (routeTo (to))
             {
-                case Route::output:    result = editing::setOutput (*from, nullptr); break;
+                case Route::output:
+                    if (const auto it = std::find_if (sends.begin(), sends.end(), [] (const editing::Send& sd) { return std::abs (sd.gainDb) < 0.05f; });
+                        it != sends.end())
+                    {
+                        auto* next = it->to;
+                        editing::removeSend (*from, *next);
+                        result = editing::setOutput (*from, next);
+                    }
+                    else
+                    {
+                        result = editing::setOutput (*from, nullptr);
+                    }
+                    break;
                 case Route::send:      editing::removeSend (*from, *to); break;
                 case Route::sidechain:
                 case Route::none:
-                    result = editing::setOutput (*from, to);
-                    if (result.wasOk()) editing::setPlaysToOutput (*from, true);
+                    if (editing::playsToOutput (*from) && editing::outputOf (*from) != nullptr)
+                    {
+                        result = editing::addSend (*from, *to, 0.0f);   // a second, third... destination
+                    }
+                    else
+                    {
+                        result = editing::setOutput (*from, to);
+                        if (result.wasOk()) editing::setPlaysToOutput (*from, true);
+                    }
                     break;
             }
         }

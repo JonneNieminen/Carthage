@@ -275,6 +275,17 @@ public:
             expectEquals (editing::lanes (*edit).size(), lanesBefore, "the new lane is part of the same undo step");
         }
 
+        beginTest ("Project loudness: master starts there and remembers it; channels start at 0 dB");
+        {
+            expectWithinAbsoluteError (editing::projectLoudness (*edit), 0.0f, 1.0e-6f, "0 dB unless chosen");
+            editing::setProjectLoudness (*edit, -6.0f);
+            expectWithinAbsoluteError (editing::projectLoudness (*edit), -6.0f, 1.0e-6f);
+            expectWithinAbsoluteError (edit->getMasterVolumePlugin()->getVolumeDb(), -6.0f, 0.05f, "master at the project's loudness");
+            for (auto* ch : editing::channels (*edit))
+                expectWithinAbsoluteError (editing::faderOf (*ch)->getVolumeDb(), 0.0f, 0.05f, "channels at 0 dB");
+            editing::setProjectLoudness (*edit, 0.0f);
+        }
+
         beginTest ("Every channel and master have a peak and an RMS meter; none counts as an insert");
         {
             auto* ch = editing::channels (*edit)[5];

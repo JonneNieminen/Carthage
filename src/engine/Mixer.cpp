@@ -1081,6 +1081,19 @@ namespace carthage::editing
         }
     }
 
+    float projectLoudness (const Edit& edit)
+    {
+        return static_cast<float> (edit.state.getProperty ("carthageLoudness", 0.0));
+    }
+
+    void setProjectLoudness (Edit& edit, float db)
+    {
+        edit.state.setProperty ("carthageLoudness", db, nullptr);   // set once, when the project begins
+
+        if (auto master = edit.getMasterVolumePlugin())
+            master->setVolumeDb (db);
+    }
+
     AudioTrack* preMaster (const Edit& edit)
     {
         for (auto* t : getAudioTracks (const_cast<Edit&> (edit)))

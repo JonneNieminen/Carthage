@@ -294,7 +294,6 @@ namespace carthage::ui
         // The left panel: samples or plugins, chosen at its top (F19). The choice and the
         // width are remembered.
         auto& props = session.getEngine().getPropertyStorage().getPropertiesFile();
-        panelShowsSamples = props.getBoolValue ("panelShowsSamples", false);
         panelWidth = jlimit (240, 520, props.getIntValue ("panelWidth", PluginBrowser::preferredWidth));
         panelEdge.getCurrentWidth = [this] { return panelWidth; };
         panelEdge.onResize = [this] (int w) { setPanelWidth (w); settings.showPanelWidth (panelWidth); };
@@ -449,14 +448,14 @@ namespace carthage::ui
         refreshTempo();
 
         styleLabel (masterLabel, theme::textSm, theme::muted);
-        masterLabel.setText ("Master", dontSendNotification);
+        masterLabel.setText ("App loudness", dontSendNotification);
         masterVolume.setSliderStyle (Slider::LinearHorizontal);
         masterVolume.setTextBoxStyle (Slider::TextBoxRight, false, 50, 22);   // click the figure to type one
         masterVolume.setRange (-60.0, 6.0, 0.1);
         masterVolume.setTextValueSuffix (" dB");
         masterVolume.setNumDecimalPlacesToDisplay (1);
         masterVolume.setTooltip ("The project's master level. Drag, scroll, or click the figure and type one; "
-                                 "double-click returns to " + String (newProjectMasterDb, 1) + " dB.");
+                                 "double-click returns to the project's loudness.");
         masterVolume.onValueChange = [this]
         {
             if (auto master = session.getEdit().getMasterVolumePlugin())
@@ -561,7 +560,7 @@ namespace carthage::ui
         playButton.setTooltip (cmd::tooltip (commands, cmd::playStop));
         toStartButton.setTooltip (cmd::tooltip (commands, cmd::returnToStart));
         metronomeButton.setTooltip (cmd::tooltip (commands, cmd::toggleMetronome) + ". Its sound and level are in Settings.");
-        loopButton.setTooltip (cmd::tooltip (commands, cmd::toggleLoop) + ". Drag on the ruler to set the region; double-click it to clear it.");
+        loopButton.setTooltip (cmd::tooltip (commands, cmd::toggleLoop) + ". Right-drag on the ruler to set the region; double-click it to clear it.");
         punchButton.setTooltip (cmd::tooltip (commands, cmd::togglePunch) + ". Needs a loop region.");
         settingsButton.setTooltip (cmd::tooltip (commands, cmd::audioSettings));
         mixerButton.setTooltip (cmd::tooltip (commands, cmd::toggleMixer));
@@ -1400,6 +1399,11 @@ namespace carthage::ui
     {
         if (auto master = session.getEdit().getMasterVolumePlugin())
             masterVolume.setValue (master->getVolumeDb(), dontSendNotification);
+
+        const auto loudness = editing::projectLoudness (session.getEdit());
+        masterVolume.setDefault (loudness);
+        masterVolume.setTooltip ("App loudness: how loud everything from this project is (master's fader). Drag, scroll, or click the figure "
+                                 "and type one; double-click returns to the project's loudness, " + String (loudness, 1) + " dB.");
     }
 
     void MainComponent::refreshToolbar()
@@ -1755,15 +1759,16 @@ namespace carthage::ui
         const Fold folds[] = { { true,  true,  true,  true,  true,  100, 104, wide },
                                { false, false, true,  true,  true,  100, 104, wide },
                                { false, false, false, true,  true,  100, 92,  wide },
+                               { false, false, false, true,  true,  100, 92,  narrow },   // narrower tools before the loudness goes
                                { false, false, false, false, false, 100, 92,  wide },
                                { false, false, false, false, false, 100, 92,  narrow } };
         const auto widthOf = [this] (const Fold& f)
         {
             return 6 * 36 + 5 * theme::space1 + 36 + theme::space1 + theme::space2 + f.time + theme::space2 + 80
                    + (f.tap ? theme::space1 + 40 : 0) + theme::space3
-                   + (f.master ? (f.masterLabel ? 46 : 0) + 100 + theme::space3 : 0)
+                   + (f.master ? (f.masterLabel ? 84 : 0) + 100 + theme::space3 : 0)
                    + toolButtons.size() * (f.tool + 1) + theme::space3 + f.grid + theme::space1 + 56
-                   + 36 + theme::space4 + (f.words ? 64 + theme::space1 : 0) + 64 + theme::space2
+                   + theme::space3 + 36 + theme::space1 + 36 + theme::space4 + (f.words ? 64 + theme::space1 : 0) + 64 + theme::space2
                    + (f.load && showsLoad() ? 140 : 0);
         };
         auto fold = folds[std::size (folds) - 1];
@@ -1798,7 +1803,7 @@ namespace carthage::ui
         if (fold.master)
         {
             if (fold.masterLabel)
-                masterLabel.setBounds (top.removeFromLeft (46));
+                masterLabel.setBounds (top.removeFromLeft (84));
             masterVolume.setBounds (top.removeFromLeft (100).withSizeKeepingCentre (100, 24));
             top.removeFromLeft (theme::space3);
         }
@@ -1815,10 +1820,11 @@ namespace carthage::ui
         top.removeFromLeft (theme::space1);
         snapButton.setBounds (top.removeFromLeft (56).withSizeKeepingCentre (56, 28));
 
-        settingsButton.setBounds (top.removeFromRight (36));
-        top.removeFromRight (theme::space1);
-        mixerButton.setBounds (top.removeFromRight (36));
-        top.removeFromRight (theme::space4);
+        // The mixer and Settings beside Snap, within easy reach (owner), not at the far right.
+        top.removeFromLeft (theme::space3);
+        mixerButton.setBounds (top.removeFromLeft (36));
+        top.removeFromLeft (theme::space1);
+        settingsButton.setBounds (top.removeFromLeft (36));
         latencyWords.setVisible (fold.words);
         if (fold.words)
         {
@@ -2081,7 +2087,7 @@ namespace carthage::ui
             setDetached (v, false);
 
         browserOpen = true;
-        panelShowsSamples = false;
+        panelShowsSamples = true;
         settingsOpen = false;
         setPanelWidth (PluginBrowser::preferredWidth);
 
@@ -2151,7 +2157,7 @@ namespace carthage::ui
             settingsOpen = static_cast<bool> (t.getProperty ("settingsOpen", false));
 
 
-        showPanel (static_cast<bool> (t.getProperty ("panelShowsSamples", false)), false);
+        showPanel (static_cast<bool> (t.getProperty ("panelShowsSamples", true)), false);
         browserOpen = static_cast<bool> (t.getProperty ("panelOpen", true));
         viewsChanged();
     }

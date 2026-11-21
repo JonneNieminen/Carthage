@@ -11,6 +11,13 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Project loudness (Settings > Projects): new projects start with master at 0 dB, or at -3, -6,
+  -9 or -12 dB if you like to mix with room above; double-clicking the master fader returns there.
+  Channels always start at 0 dB.
+- Ctrl- or Cmd-click a plugin on a mixer channel's Line to hear only it (every other plugin there
+  bypassed); again, and they all play.
+- Route a channel into several channels by clicking their route buttons one after another; click
+  one again to stop routing there.
 - Recording, part two:
   - Arm channels with the R on their mixer strip (or Arm in the mixer's column); R then records
     every armed channel at once, each its own input to its own take. Nothing records unless armed.
@@ -109,6 +116,12 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   its name. Settings > Browser can fit a dropped loop to the project's tempo.
 
 ### Changed
+- On the ruler, a left click or drag moves the playhead; a right-drag sets the loop region.
+- The plugin wet/dry knob is now called plugin volume; the toolbar's Master slider is App loudness.
+- The mixer and Settings buttons sit beside Snap.
+- Carthage opens with the sample browser showing.
+- The Settings search finds "recording set count": words like "set" or "change" need not match,
+  and a page's or group's name counts.
 - A plugin that delays its sound to look ahead (a lookahead limiter, some amp sims) shows by how
   much on its Line, and plays fully wet: its own mix control is the one to use, because the
   mixer's wet/dry would bring its dry sound in early. Everything else is delayed to match, so the
@@ -142,6 +155,7 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 
 
 ### Fixed
+- The plugin browser's manufacturer filter could not be opened again after choosing one.
 - An export no longer loses the first moment of its first sound when a plugin in the mix looks ahead.
 
 ## 0.1.2-beta.4 - 2026-11-18

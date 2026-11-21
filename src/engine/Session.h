@@ -274,6 +274,11 @@ namespace carthage::engine
         /** Count-in before recording from a stop (5d): 0 (the default), 1 or 2 bars, in the app's
             settings. The click sounds through it whether the metronome is on or not. */
         int getCountInBars() const;
+
+        /** The loudness new projects start at (Settings > Projects): 0 dB by default. */
+        float getNewProjectLoudness() const;
+        void setNewProjectLoudness (float db);
+
         void setCountInBars (int);
 
         /** Low-latency monitoring (brief, feature 8; W57). Off by default. While on and an armed

@@ -186,7 +186,7 @@ namespace carthage::ui
         StartScreen startScreen { session };
         CommandPalette palette { commands };
         CommandPalette viewsPalette { commands };   // Cmd/Ctrl+J (W41)
-        bool browserOpen = true, panelShowsSamples = false;
+        bool browserOpen = true, panelShowsSamples = true;   // Carthage opens on the samples (owner)
         juce::TextButton samplesTab { "Samples" }, pluginsTab { "Plugins" };
         int panelWidth = PluginBrowser::preferredWidth;
         juce::Rectangle<int> panelArea;
@@ -198,8 +198,7 @@ namespace carthage::ui
         // The project's master level, beside the transport (owner's list F22): a drag, the wheel or
         // a typed figure; double-click returns to a new project's level. Phase 5 makes it the
         // master fader's twin.
-        static constexpr double newProjectMasterDb = -3.0;   // Tracktion's level for a new edit
-        ValueSlider masterVolume { newProjectMasterDb };
+        ValueSlider masterVolume { 0.0 };   // double-click: the project's loudness (refreshMasterVolume)
         juce::Label masterLabel;
         void refreshMasterVolume();
 

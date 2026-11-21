@@ -409,6 +409,20 @@ namespace carthage::ui
         for (auto* c : std::initializer_list<Component*> { &browserHeading, &panelWidthLabel, &panelWidth, &textSizeLabel, &textSize, &playWhileHeld, &fitLoops, &preMaster, &busChannels, &busEveryLabel, &busEvery })
             body.addAndMakeVisible (c);
 
+        // Project loudness (owner): where a new project's master starts; channels start at 0 dB.
+        styleLabel (loudnessLabel, theme::textMd, theme::muted);
+        loudnessLabel.setText ("New projects at", dontSendNotification);
+        for (const auto db : { 0, -3, -6, -9, -12 })
+            loudness.addItem (db == 0 ? String ("0 dB (full level)") : String::fromUTF8 ("\xe2\x88\x92") + String (-db) + " dB", 100 + db);
+        loudness.setSelectedId (100 + roundToInt (session.getNewProjectLoudness()), dontSendNotification);
+        if (loudness.getSelectedId() == 0)
+            loudness.setSelectedId (100, dontSendNotification);
+        loudness.setTooltip ("The project loudness: where a new project's master fader starts, and where a double-click on it returns. "
+                             "Mix at -3 or -6 dB to keep room above. Channels always start at 0 dB.");
+        loudness.onChange = [this] { session.setNewProjectLoudness (static_cast<float> (loudness.getSelectedId() - 100)); };
+        body.addAndMakeVisible (loudnessLabel);
+        body.addAndMakeVisible (loudness);
+
         styleLabel (atLaunchLabel, theme::textMd, theme::muted);
         atLaunchLabel.setText ("When it opens", dontSendNotification);
         atLaunch.addItem ("Show the start screen", 1);
@@ -886,16 +900,21 @@ namespace carthage::ui
             return words;
         };
 
-        const auto lineMatches = [&] (const Line& line)
+        // Every word of the search must be somewhere: in the setting's own words, or in its page's
+        // or group's name ("recording count" finds Count-in). Words that only ask for a change
+        // ("set", "change", "turn"...) are not needed to match (owner: "recording set count").
+        const auto lineMatches = [&] (const Line& line, const String& context)
         {
             if (query.isEmpty())
                 return true;
 
-            String words;
+            static const StringArray filler { "set", "sets", "setting", "settings", "change", "changes", "turn", "on", "off", "the", "a", "an",
+                                              "to", "of", "for", "my", "how", "do", "i", "can", "where", "is", "make", "use", "choose", "pick" };
+            String words (context + " ");
             for (auto* c : line.parts) words << wordsOf (c);
 
             for (const auto& word : StringArray::fromTokens (query, true))
-                if (! words.containsIgnoreCase (word))
+                if (! filler.contains (word, true) && ! words.containsIgnoreCase (word))
                     return false;
 
             return true;
@@ -950,7 +969,7 @@ namespace carthage::ui
                                                          dropoutsValue.setBounds (line);
                                                      } },
                                               whole (showLoad, rowHeight) } });
-        sections.push_back ({ Page::projects, &projectsHeading, { row (atLaunchLabel, atLaunch), row (tempoFollowLabel, tempoFollow),
+        sections.push_back ({ Page::projects, &projectsHeading, { row (atLaunchLabel, atLaunch), row (loudnessLabel, loudness), row (tempoFollowLabel, tempoFollow),
                                                   Line { { &copySamples, &copySamplesHint }, rowHeight + 50, [this] (Rectangle<int> b)
                                                          {
                                                              copySamples.setBounds (b.removeFromTop (rowHeight));
@@ -1016,7 +1035,7 @@ namespace carthage::ui
 
                 for (const auto& line : section->lines)
                 {
-                    const auto keep = pageShown && (headingMatches || lineMatches (line));
+                    const auto keep = pageShown && (headingMatches || lineMatches (line, nameOf (p) + " " + section->heading->getText()));
 
                     for (auto* c : line.parts)
                         c->setVisible (keep);

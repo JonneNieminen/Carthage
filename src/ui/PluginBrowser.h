@@ -12,7 +12,15 @@ namespace carthage::ui
     {
     public:
         std::function<void()> onPopup;
-        void showPopup() override   { if (onPopup) onPopup(); }
+        void showPopup() override
+        {
+            if (onPopup)
+                onPopup();
+
+            // JUCE marks the box open until its own menu closes; this one shows no JUCE menu, so
+            // clear the mark at once or later clicks are ignored (owner: the filter "locked").
+            hidePopup();
+        }
     };
 
     /** The plugin browser (brief, feature 6): a panel on the left of the window. The scan's state

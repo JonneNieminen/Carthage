@@ -25,7 +25,7 @@ namespace carthage::ui
     public:
         explicit Ruler (Timeline& t) : timeline (t)
         {
-            setTooltip ("Click to move the playhead. Drag to set the loop region; drag its edges to change it; double-click it to clear it.");
+            setTooltip ("Click or drag to move the playhead. Right-drag to set the loop region; drag its edges to change it; double-click it to clear it.");
         }
 
         void paint (Graphics& g) override
@@ -100,6 +100,7 @@ namespace carthage::ui
         {
             dragged = false;
             grab = Grab::none;
+            makesRegion = e.mods.isPopupMenu();   // a right-drag makes the loop region (owner); a left one moves the playhead
             // The end that stays put while the other moves; a new region grows from the click.
             fixed = snapped (beatAt (e.x), e.mods);
 
@@ -110,10 +111,19 @@ namespace carthage::ui
                 if (grab == Grab::from)    fixed = region->to;
                 else if (grab == Grab::to) fixed = region->from;
             }
+
+            if (grab == Grab::none && ! makesRegion)
+                moveTo (e);
         }
 
         void mouseDrag (const MouseEvent& e) override
         {
+            if (grab == Grab::none && ! makesRegion)
+            {
+                moveTo (e);   // the playhead follows the mouse
+                return;
+            }
+
             if (! dragged)
             {
                 if (e.getDistanceFromDragStart() < 4)
@@ -130,8 +140,8 @@ namespace carthage::ui
 
         void mouseUp (const MouseEvent& e) override
         {
-            if (! dragged)
-                moveTo (e);
+            if (! dragged && grab != Grab::none)
+                moveTo (e);   // a click on an edge that did not drag
 
             dragged = false;
             grab = Grab::none;
@@ -154,7 +164,7 @@ namespace carthage::ui
         Timeline& timeline;
         enum class Grab { none, from, to } grab = Grab::none;
         double fixed = 0.0;
-        bool dragged = false;
+        bool dragged = false, makesRegion = false;
 
         double beatAt (int x) const   { return std::max (0.0, timeline.beatAtX (static_cast<float> (x + getX()))); }
 

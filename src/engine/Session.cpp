@@ -271,6 +271,16 @@ namespace carthage::engine
         applyInputRouting();
     }
 
+    float Session::getNewProjectLoudness() const
+    {
+        return static_cast<float> (std::clamp (engine->getPropertyStorage().getPropertiesFile().getDoubleValue ("newProjectLoudness", 0.0), -24.0, 0.0));
+    }
+
+    void Session::setNewProjectLoudness (float db)
+    {
+        engine->getPropertyStorage().getPropertiesFile().setValue ("newProjectLoudness", static_cast<double> (std::clamp (db, -24.0f, 0.0f)));
+    }
+
     int Session::getCountInBars() const
     {
         return std::clamp (engine->getPropertyStorage().getPropertiesFile().getIntValue ("countInBars", 0), 0, 2);
@@ -972,7 +982,10 @@ namespace carthage::engine
 
         // A new project's metronome marks the first beat of the bar (the tick-tock's deeper tock).
         if (fresh)
+        {
             edit.clickTrackEmphasiseBars = true;
+            editing::setProjectLoudness (edit, getNewProjectLoudness());   // master at the chosen loudness, channels at 0 dB
+        }
 
         // An untouched untitled tab gives its place to this one.
         int index = static_cast<int> (projects.size());

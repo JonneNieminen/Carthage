@@ -98,7 +98,8 @@ namespace carthage::ui
         juce::Label title, interfaceHeading, recordingHeading, latencyHeading, loadHeading, updatesHeading, updatesHint, shortcutsHeading,
                     projectsHeading, copySamplesHint;
         Switch copySamples { "Copy samples into the project" };
-        juce::Label atLaunchLabel, tempoFollowLabel, timelineHeading, mixerHeading;
+        juce::Label atLaunchLabel, tempoFollowLabel, timelineHeading, mixerHeading, loudnessLabel;
+        juce::ComboBox loudness;
 
         juce::Label metronomeHeading, clickSoundLabel, clickLevelLabel;
         juce::ComboBox clickSound;
