@@ -404,6 +404,10 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   "BPM: 120" (or "none found") beside the key.
 - Fixed: the sample editor reopened see-through (a finished fade-out leaves alpha 0 and the rise
   was skipped while playing); `motion::showAgain`, MotionTests.
+- Keys with modes: KK still picks tonic and third; then the 4th/7th (major third) or 2nd/6th (minor
+  third) decide lydian/mixolydian or phrygian/dorian when one leads by 1.8x and is above half the
+  mean (tuned on SampleTests' sounds: the E minor bass has overtone energy on F at 1.6x). Stored
+  analyses carry `method` 2; older ones are redone.
 - Still asked for, not started: 5 Routing section designs, then UAT. The owner's dropouts are
   phase 8's first task; not looked into yet.
 

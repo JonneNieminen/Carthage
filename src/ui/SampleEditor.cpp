@@ -24,7 +24,11 @@ namespace carthage::ui
 
         String factsText (const engine::SampleLibrary::Analysis& a)
         {
-            return "Key: " + (a.key.isNotEmpty() ? a.key : String ("none found")) + "   " + bpmText (a.bpm);
+            // A one-shot has a note, not a key ("D#"); a key names its mode ("D mixolydian").
+            const auto keyPart = a.key.isEmpty()           ? String ("Key: none found")
+                               : a.key.containsChar (' ')  ? "Key: " + a.key
+                                                           : "Note: " + a.key;
+            return keyPart + "   " + bpmText (a.bpm);
         }
     }
 

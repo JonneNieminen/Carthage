@@ -267,6 +267,9 @@ namespace carthage::engine
 
         for (auto* e : xml->getChildWithTagNameIterator ("ANALYSIS"))
         {
+            if (e->getIntAttribute ("method", 1) < analysisMethod)
+                continue;   // found the older way: the analyser does it again
+
             Stored s;
             s.size = e->getStringAttribute ("size").getLargeIntValue();
             s.modified = e->getStringAttribute ("modified").getLargeIntValue();
@@ -295,6 +298,7 @@ namespace carthage::engine
         {
             auto* e = xml.createNewChildElement ("ANALYSIS");
             e->setAttribute ("path", path);
+            e->setAttribute ("method", analysisMethod);
             e->setAttribute ("size", juce::String (s.size));
             e->setAttribute ("modified", juce::String (s.modified));
             e->setAttribute ("seconds", s.analysis.seconds);

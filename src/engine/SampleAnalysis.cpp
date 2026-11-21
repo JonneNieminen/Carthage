@@ -236,7 +236,8 @@ namespace carthage::engine
             }
 
             double best = -2.0, second = -2.0;
-            juce::String name;
+            int keyTonic = 0;
+            bool keyMinor = false;
 
             for (int tonic = 0; tonic < 12; ++tonic)
             {
@@ -248,7 +249,8 @@ namespace carthage::engine
                     {
                         second = best;
                         best = r;
-                        name = juce::String (noteNames[static_cast<size_t> (tonic)]) + (minor ? " minor" : " major");
+                        keyTonic = tonic;
+                        keyMinor = minor;
                     }
                     else if (r > second)
                     {
@@ -257,7 +259,30 @@ namespace carthage::engine
                 }
             }
 
-            return best >= 0.6 && best - second >= 0.01 ? name : juce::String();
+            if (best < 0.6 || best - second < 0.01)
+                return {};
+
+            // The mode (owner): the tonic and its third stay as found; the notes that tell the
+            // modes apart decide the rest, and only when one clearly leads the other. With a major
+            // third, the fourth and seventh: raised fourth = lydian, flat seventh = mixolydian.
+            // With a minor third, the second and sixth: flat second = phrygian, major sixth = dorian.
+            const auto at = [&chroma, keyTonic] (int semitones) { return chroma[static_cast<size_t> ((keyTonic + semitones) % 12)]; };
+            const auto mean = total / 12.0;
+            const auto leads = [mean] (double note, double instead) { return note > mean * 0.5 && note > instead * 1.8; };   // played, not an overtone
+            juce::String mode;
+
+            if (! keyMinor)
+            {
+                const auto raisedFourth = leads (at (6), at (5)), flatSeventh = leads (at (10), at (11));
+                mode = raisedFourth && ! flatSeventh ? "lydian" : flatSeventh && ! raisedFourth ? "mixolydian" : "major";
+            }
+            else
+            {
+                const auto flatSecond = leads (at (1), at (2)), majorSixth = leads (at (9), at (8));
+                mode = flatSecond && ! majorSixth ? "phrygian" : majorSixth && ! flatSecond ? "dorian" : "minor";
+            }
+
+            return juce::String (noteNames[static_cast<size_t> (keyTonic)]) + " " + mode;
         }
     }
 

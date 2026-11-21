@@ -21,8 +21,14 @@ namespace carthage::ui
             if (key.isEmpty())
                 return {};
 
-            const auto note = key.upToFirstOccurrenceOf (" ", false, false);
-            return key.endsWith ("minor") ? note + "m" : note;
+            // The column is narrow: "Am", "C", and a mode by its first letters ("D mix"); the
+            // tooltip has the whole name.
+            auto note = key.upToFirstOccurrenceOf (" ", false, false);
+            const auto mode = key.fromFirstOccurrenceOf (" ", false, false);
+
+            if (mode == "minor")           return note + "m";
+            if (mode.isEmpty() || mode == "major") return note;
+            return note + " " + mode.substring (0, 3);
         }
 
         PropertiesFile& settingsOf (engine::Session& s)   { return s.getEngine().getPropertyStorage().getPropertiesFile(); }

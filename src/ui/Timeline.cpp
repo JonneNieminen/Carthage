@@ -1799,10 +1799,12 @@ namespace carthage::ui
 
     String Timeline::shortFacts (const engine::SampleLibrary::Analysis& a)
     {
-        String key = a.key;
+        // The whole key, mode and all (owner): "D major", "D mixolydian". A one-shot has a note,
+        // not a key, and says so.
+        auto key = a.key;
 
-        if (key.endsWith (" minor"))       key = key.dropLastCharacters (6) + "m";
-        else if (key.endsWith (" major"))  key = key.dropLastCharacters (6);
+        if (key.isNotEmpty() && ! key.containsChar (' '))
+            key = "Note " + key;
 
         const auto bpm = a.bpm ? String (roundToInt (*a.bpm)) : String();
         return key.isNotEmpty() && bpm.isNotEmpty() ? key + "  " + bpm : key + bpm;

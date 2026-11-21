@@ -23,6 +23,10 @@ namespace carthage::engine
     public:
         static constexpr int fileVersion = 1;
 
+        /** How sounds are analysed; a stored analysis from an older method is done again (2: keys
+            name their mode, "D mixolydian", owner 2026-11-21). */
+        static constexpr int analysisMethod = 2;
+
         struct Folder
         {
             juce::File file;

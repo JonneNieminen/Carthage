@@ -11,6 +11,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Keys name their mode: "D major", "D minor", "D dorian", "D mixolydian", "E phrygian", "F lydian",
+  shown whole on the main grid's clips and in the sample editor; a short one-shot shows its note
+  ("Note D"). Sounds analysed before are analysed again in the background.
 - Zoom the main grid by its scroll bars: drag either end of the bottom bar's thumb to show more
   or less time, or of the side bar's to make lanes taller or shorter. The middle still scrolls.
 - The sample editor shows the tempo beside the key, "BPM: 120", or that none was found.

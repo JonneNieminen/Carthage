@@ -202,6 +202,31 @@ public:
             expect (! samples.getAnalysis (loop).has_value(), "a changed file is analysed again");
         }
 
+        beginTest ("An analysis found by an older method is done again (keys now name their mode)");
+        {
+            const auto loop = library.getChildFile ("Loops/Bass loop 120.wav");
+            {
+                engine::SampleLibrary samples (settings);
+                samples.setAnalysis (loop, { 120.0, "A minor", 0.3 });
+            }
+
+            // The store as an older Carthage wrote it: no method on the analysis.
+            const auto store = settings.getChildFile ("Samples.xml");
+            auto xml = juce::parseXML (store);
+            expect (xml != nullptr, "the store was written");
+
+            if (xml != nullptr)
+            {
+                for (auto* e : xml->getChildWithTagNameIterator ("ANALYSIS"))
+                    e->removeAttribute ("method");
+
+                expect (xml->writeTo (store));
+            }
+
+            engine::SampleLibrary samples (settings);
+            expect (! samples.getAnalysis (loop).has_value(), "analysed again, to find its mode");
+        }
+
         beginTest ("Key and tempo of sounds whose key and tempo are known");
         {
             const auto run = [] (const std::vector<float>& v) { return engine::analysis::analyse (v.data(), static_cast<int> (v.size()), synth::rate); };
@@ -211,6 +236,13 @@ public:
             expectEquals (aMinor.key, juce::String ("A minor"));
             const auto cMajor = run (synth::chords ({ { 48, 52, 55 }, { 53, 57, 60 }, { 55, 59, 62 }, { 48, 52, 55 } }, 2.0));
             expectEquals (cMajor.key, juce::String ("C major"));
+
+            // Modes (owner): D mixolydian (D C G D: the flat seventh, C) and D dorian (Dm Dm G Dm: the
+            // major sixth, B), next to the major and minor above, which stay major and minor.
+            const auto mixolydian = run (synth::chords ({ { 50, 54, 57 }, { 48, 52, 55 }, { 55, 59, 62 }, { 50, 54, 57 } }, 2.0));
+            expectEquals (mixolydian.key, juce::String ("D mixolydian"));
+            const auto dorian = run (synth::chords ({ { 50, 53, 57 }, { 50, 53, 57 }, { 55, 59, 62 }, { 50, 53, 57 } }, 2.0));
+            expectEquals (dorian.key, juce::String ("D dorian"));
             expect (! aMinor.bpm.has_value() && ! cMajor.bpm.has_value(), "held chords have no beat, so no tempo");
 
             // A bass line in E minor at 90 bpm, 16 beats.
