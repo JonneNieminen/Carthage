@@ -619,6 +619,7 @@ namespace carthage::ui
         g.fillAll (theme::bg2);
         g.setColour (theme::line);
         g.fillRect (0, 0, getWidth(), 1);
+        drawViewName (g, viewNameArea, "Sample editor", theme::bg2);
 
         if (factsDividerX >= 0 && facts.getText().isNotEmpty())
             g.fillRect (factsDividerX, facts.getY() + 4, 1, facts.getHeight() - 8);
@@ -751,6 +752,8 @@ namespace carthage::ui
 
         auto top = r.removeFromTop (rowHeight);
         closeButton.setBounds (top.removeFromRight (rowHeight));
+        top.removeFromRight (theme::space1);
+        viewNameArea = top.removeFromRight (viewNameWidth ("Sample editor"));   // which view this is (owner)
         top.removeFromRight (theme::space2);
         name.setBounds (top);
 

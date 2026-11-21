@@ -27,6 +27,10 @@ namespace carthage::engine
         Everything here runs on the device's own I/O thread, which is already in the device's audio
         workgroup. The engine's worker threads join it through EditPlaybackContext (see Session).
     */
+    /** Scales `numChannels` output channels (null ones skipped) by a gain that moves from `from`
+        to `to` across the block, reaching `to` on its last sample: App loudness, without clicks. */
+    void applyOutputGain (float* const* channels, int numChannels, int numSamples, float from, float to) noexcept;
+
     class AudioCallback final : public juce::AudioIODeviceCallback
     {
     public:
@@ -49,6 +53,11 @@ namespace carthage::engine
         /** Message thread. The device output channel the preview's left side goes to; the right
             side goes to the next one. */
         void setPreviewOutput (int firstDeviceChannel);
+
+        /** Any thread. App loudness (owner): one gain on everything Carthage sends to the
+            interface, the mix and the preview, after master. Not part of any project, never in
+            an export, and the latency probe is not scaled by it. Changes glide over one block. */
+        void setOutputGain (float gain) noexcept   { outputGain.store (gain, std::memory_order_relaxed); }
 
         struct Load
         {
@@ -94,6 +103,8 @@ namespace carthage::engine
         bool attached = false;
         int previewDeviceOutput = 0;
         std::atomic<int> previewLeft { -1 }, previewRight { -1 };   // indices into the active outputs
+        std::atomic<float> outputGain { 1.0f };
+        float appliedGain = 1.0f;   // audio thread only: where the last block's gain ended
 
         // The recorded channels as device channel numbers (message thread), and as indices into the
         // callback's input array, which only holds the device's active channels (audio thread).

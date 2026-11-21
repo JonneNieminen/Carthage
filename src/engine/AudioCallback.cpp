@@ -1,5 +1,7 @@
 #include "AudioCallback.h"
 
+#include <algorithm>
+
 namespace carthage::engine
 {
     namespace
@@ -158,6 +160,16 @@ namespace carthage::engine
         engineCallback.audioDeviceError (message);
     }
 
+    void applyOutputGain (float* const* channels, int numChannels, int numSamples, float from, float to) noexcept
+    {
+        const auto step = (to - from) / static_cast<float> (std::max (1, numSamples));
+
+        for (int ch = 0; ch < numChannels; ++ch)
+            if (auto* out = channels[ch])
+                for (int i = 0; i < numSamples; ++i)
+                    out[i] *= from + step * static_cast<float> (i + 1);
+    }
+
     void AudioCallback::audioDeviceIOCallbackWithContext (const float* const* inputChannelData, int numInputChannels,
                                                           float* const* outputChannelData, int numOutputChannels,
                                                           int numSamples,
@@ -206,6 +218,13 @@ namespace carthage::engine
         const auto right = previewRight.load (std::memory_order_relaxed);
         preview.render (left >= 0 && left < numOutputChannels ? outputChannelData[left] : nullptr,
                         right >= 0 && right < numOutputChannels ? outputChannelData[right] : nullptr, numSamples);
+
+        // App loudness, on everything heard; it ramps from the last block's gain to the new one.
+        if (const auto target = outputGain.load (std::memory_order_relaxed); target != 1.0f || appliedGain != 1.0f)
+        {
+            applyOutputGain (outputChannelData, numOutputChannels, numSamples, appliedGain, target);
+            appliedGain = target;
+        }
 
         // 4. The latency probe silences everything else while it runs.
         probe.process (inputChannelData, numInputChannels, outputChannelData, numOutputChannels, numSamples);

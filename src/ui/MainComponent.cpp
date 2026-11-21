@@ -454,14 +454,12 @@ namespace carthage::ui
         masterVolume.setRange (-60.0, 6.0, 0.1);
         masterVolume.setTextValueSuffix (" dB");
         masterVolume.setNumDecimalPlacesToDisplay (1);
-        masterVolume.setTooltip ("The project's master level. Drag, scroll, or click the figure and type one; "
-                                 "double-click returns to the project's loudness.");
-        masterVolume.onValueChange = [this]
-        {
-            if (auto master = session.getEdit().getMasterVolumePlugin())
-                master->setVolumeDb (static_cast<float> (masterVolume.getValue()));
-        };
-        masterVolume.onDragStart = [this] { session.getEdit().getUndoManager().beginNewTransaction ("Master level"); };
+        // App loudness (owner): the app's own volume, apart from master's fader and every project.
+        masterVolume.setDefault (0.0);
+        masterVolume.setTooltip ("App loudness: how loud Carthage plays through your interface, whatever the project. Master's "
+                                 "fader and exports are not changed by it. Drag, scroll, or click the figure and type one; "
+                                 "double-click returns to 0 dB.");
+        masterVolume.onValueChange = [this] { session.setAppLoudness (static_cast<float> (masterVolume.getValue())); };
         for (auto* comp : std::initializer_list<Component*> { &masterLabel, &masterVolume })
             addAndMakeVisible (comp);
         refreshMasterVolume();
@@ -1397,13 +1395,7 @@ namespace carthage::ui
 
     void MainComponent::refreshMasterVolume()
     {
-        if (auto master = session.getEdit().getMasterVolumePlugin())
-            masterVolume.setValue (master->getVolumeDb(), dontSendNotification);
-
-        const auto loudness = editing::projectLoudness (session.getEdit());
-        masterVolume.setDefault (loudness);
-        masterVolume.setTooltip ("App loudness: how loud everything from this project is (master's fader). Drag, scroll, or click the figure "
-                                 "and type one; double-click returns to the project's loudness, " + String (loudness, 1) + " dB.");
+        masterVolume.setValue (session.getAppLoudness(), dontSendNotification);   // the app's, not the project's
     }
 
     void MainComponent::refreshToolbar()
@@ -1413,8 +1405,10 @@ namespace carthage::ui
             toolButtons[i]->setChosen (static_cast<int> (timeline.getTool()) == i);
         }
 
-        snapButton.setColour (TextButton::buttonColourId, timeline.getGrid().enabled ? theme::hover : theme::bg);
-        snapButton.setColour (TextButton::textColourOffId, timeline.getGrid().enabled ? theme::text : theme::faint);
+        // Snap reads like the tools (owner): the accent while it is on, plain while it is off.
+        const auto snapping = timeline.getGrid().enabled;
+        snapButton.setColour (TextButton::buttonColourId, snapping ? theme::accent : theme::hover.withAlpha (0.0f));
+        snapButton.setColour (TextButton::textColourOffId, snapping ? theme::onAccent : theme::mist);
 
         // The grid menu: divisions, then the feel, then adaptive; the current choice first.
         const auto& g = timeline.getGrid();
@@ -1598,6 +1592,9 @@ namespace carthage::ui
         settingsButton.setLit (theme::accent, settingsOpen);
         resized();
         commands.commandStatusChanged();
+
+        if (settingsOpen && settings.isShowing())
+            settings.grabKeyboardFocus();   // so Escape reaches it, wherever the focus was
     }
 
     void MainComponent::layoutSettings (bool)
@@ -1931,7 +1928,7 @@ namespace carthage::ui
         else if (timelineHere)
         {
             timeline.setBounds (r);
-            popTimeline.setBounds (r.getX() + 4, r.getY() + 4, 24, 24);
+            popTimeline.setBounds (r.getX() + 4, r.getY() + (Timeline::rulerHeight - 24) / 2, 24, 24);   // centred on the ruler row
             popTimeline.toFront (false);
         }
         else
@@ -1973,7 +1970,7 @@ namespace carthage::ui
         {
             case View::samples:  return "Samples";
             case View::plugins:  return "Plugins";
-            case View::timeline: return "Timeline";
+            case View::timeline: return "Main grid";   // the owner's name for it, as on its ruler
             case View::signal:   return "Signal path (gone)";
             case View::settings: return "Settings";
             case View::mixer:    return "Mixer";

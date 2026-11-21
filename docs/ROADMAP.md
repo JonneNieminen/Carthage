@@ -748,6 +748,8 @@ Deliver:
 - [ ] (Export moved to phase 5, with Cmd+R and the loop-region or whole-project choice)
 - [ ] README updated with real screenshots, install steps and the shortcut table; feature cards added to the README art
 - [ ] A pass over every feature in the brief, 1–12, with anything missing listed
+- [ ] **Owner (2026-11-21):** more colours to choose from everywhere a colour is chosen (lanes,
+      mixer channels, clips): new tokens in `design/tokens.css` first
 - [ ] **Owner's ideas (F20):** illustrated getting-started help (wiring an interface and microphone, what plugins do, starting with guitar), input level help, and troubleshooting that finds and fixes the actual problem
 
 Exit checks:
@@ -759,7 +761,27 @@ Report: _not written yet_
 
 ---
 
-## After phase 7
+## Phase 8 — Refine animations
+
+Owner (2026-11-21). A pass over every animation in the app once the features stand.
+
+Deliver:
+- [ ] A list of every animated change (view switches, panels opening and closing, tool changes,
+      selection, drag ghosts, meters, the playhead) with its duration and easing from
+      `design/tokens.css`
+- [ ] Each one smooth at display refresh rate, consistent with the others, and quiet: nothing
+      animates during playback except the playhead and the meters (AGENTS.md)
+- [ ] Reduced motion (the system setting) respected everywhere
+
+Exit checks:
+- [ ] Frame log (`CARTHAGE_FRAME_LOG`) shows no dropped frames on any animation on the owner's Mac
+- [ ] The owner has tried each and agrees
+
+Report: _not written yet_
+
+---
+
+## After phase 8
 
 - [ ] **Owner's list (F22, W38):** a help assistant that knows Carthage: on-device (Apple's model on
       macOS 26+, an optional downloaded model elsewhere), reading Carthage's own measurements (levels,

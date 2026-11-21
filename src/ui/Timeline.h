@@ -113,7 +113,7 @@ namespace carthage::ui
         void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
         void mouseMagnify (const juce::MouseEvent&, float scale) override;
 
-        static constexpr int rulerHeight = 28;
+        static constexpr int rulerHeight = 42;   // 1.5 times the old 28 (owner)
 
         /** The lane names' column (owner's list): drag its border, double-click fits the names. */
         static constexpr int defaultHeaderWidth = 168, minHeaderWidth = 120, maxHeaderWidth = 400;

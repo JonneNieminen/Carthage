@@ -89,6 +89,9 @@ namespace carthage::ui
                         g.fillRect (x + static_cast<float> (beat * ppb), r.getHeight() * 0.8f, 1.0f, r.getHeight());
                     }
             }
+
+            // Which part of Carthage this is, at the ruler's far end (owner).
+            drawViewName (g, getLocalBounds().withTrimmedBottom (1), "Main grid", theme::bg2);
         }
 
         void mouseMove (const MouseEvent& e) override
@@ -1295,14 +1298,18 @@ namespace carthage::ui
         //==========================================================================================
         // Dropping sounds: from the sample browser, or audio files from the Finder/Explorer (W30).
         // A ghost shows where the sound lands, snapped like any edit; the drop is one undo step.
-        static std::optional<File> sampleIn (const var& description)
+        /** The sounds a drag from the sample browser carries: one path per line. */
+        static Array<File> samplesIn (const var& description)
         {
             const auto text = description.toString();
+            Array<File> files;
 
-            if (! text.startsWith (SampleBrowser::dragPrefix))
-                return std::nullopt;
+            if (text.startsWith (SampleBrowser::dragPrefix))
+                for (const auto& path : StringArray::fromLines (text.fromFirstOccurrenceOf (SampleBrowser::dragPrefix, false, false)))
+                    if (path.isNotEmpty())
+                        files.add (File (path));
 
-            return File (text.fromFirstOccurrenceOf (SampleBrowser::dragPrefix, false, false));
+            return files;
         }
 
         static bool isSound (const String& path)
@@ -1310,8 +1317,8 @@ namespace carthage::ui
             return engine::SamplePreview::extensions().contains (File (path).getFileExtension().toLowerCase());
         }
 
-        bool isInterestedInDragSource (const SourceDetails& d) override   { return sampleIn (d.description).has_value(); }
-        void itemDragEnter (const SourceDetails& d) override              { if (auto f = sampleIn (d.description)) startGhost ({ *f }); itemDragMove (d); }
+        bool isInterestedInDragSource (const SourceDetails& d) override   { return ! samplesIn (d.description).isEmpty(); }
+        void itemDragEnter (const SourceDetails& d) override              { startGhost (samplesIn (d.description)); itemDragMove (d); }
         void itemDragMove (const SourceDetails& d) override               { moveGhost (d.localPosition); }
         void itemDragExit (const SourceDetails&) override                 { endGhost(); }
         void itemDropped (const SourceDetails& d) override                { moveGhost (d.localPosition); drop(); }
@@ -1339,6 +1346,7 @@ namespace carthage::ui
 
         Array<File> dropping;
         std::vector<double> droppingSeconds;
+        StringArray droppingInto;   // several sounds: the channel each will play into, for the ghost
         double dropBeat = 0.0;
         int dropLane = -1;
 
@@ -1358,6 +1366,18 @@ namespace carthage::ui
                     seconds = static_cast<double> (r->lengthInSamples) / r->sampleRate;
 
                 droppingSeconds.push_back (seconds);
+            }
+
+            // Several at once go each to its own lane and channel (owner): name those channels now,
+            // as insertFilesOnOwnLanes will choose them, so the ghost says where each will play.
+            droppingInto.clear();
+
+            if (files.size() > 1)
+            {
+                const auto free = editing::freeChannels (timeline.session.getEdit());
+
+                for (int i = 0; i < files.size(); ++i)
+                    droppingInto.add (i < free.size() ? free[i]->getName() : String ("a new channel"));
             }
         }
 
@@ -1382,7 +1402,8 @@ namespace carthage::ui
             repaint();
         }
 
-        /** The sounds one after another on the lane, from the drop point. */
+        /** One sound: on the lane at the drop point, to master until routed (W47). Several: each on
+            its own lane from there down, each into its own free channel (owner). */
         void drop()
         {
             const auto tracks = timeline.laneTracks();
@@ -1395,32 +1416,40 @@ namespace carthage::ui
 
             auto& edit = timeline.session.getEdit();
             editing::begin (edit, dropping.size() == 1 ? String ("Add sample") : "Add " + String (dropping.size()) + " samples");
+            // A loop of known tempo can follow the project's: always with Settings > Browser, or
+            // this once with Option held while dropping (4e).
+            const auto fitThisOnce = ModifierKeys::currentModifiers.isAltDown();
+            const auto fit = [this, fitThisOnce] (tracktion::Clip& c, const File& f)
+            {
+                if (! timeline.session.getFitLoopsToTempo() && ! fitThisOnce)
+                    return;
+
+                auto a = timeline.session.getSampleLibrary().getAnalysis (f);
+
+                if (! a && fitThisOnce)
+                    a = engine::analysis::analyseFile (f);   // asked for: worth the moment it takes
+
+                if (a && a->bpm)
+                    editing::fitToTempo (c, *a->bpm);
+                else if (fitThisOnce && timeline.onStatus)
+                    timeline.onStatus (f.getFileNameWithoutExtension() + " has no tempo Carthage could find, so it was not fitted");
+            };
+
             editing::Clips added;
-            auto beat = dropBeat;
 
-            for (const auto& f : dropping)
-                if (auto* c = editing::insertFile (edit, tracks[dropLane], f, beat))
-                {
-                    // A loop of known tempo can follow the project's: always with Settings > Browser,
-                    // or this once with Option held while dropping (4e).
-                    const auto fitThisOnce = ModifierKeys::currentModifiers.isAltDown();
+            if (dropping.size() > 1)
+            {
+                added = editing::insertFilesOnOwnLanes (edit, tracks[dropLane], dropping, dropBeat);
 
-                    if (timeline.session.getFitLoopsToTempo() || fitThisOnce)
-                    {
-                        auto a = timeline.session.getSampleLibrary().getAnalysis (f);
-
-                        if (! a && fitThisOnce)
-                            a = engine::analysis::analyseFile (f);   // asked for: worth the moment it takes
-
-                        if (a && a->bpm)
-                            editing::fitToTempo (*c, *a->bpm);
-                        else if (fitThisOnce && timeline.onStatus)
-                            timeline.onStatus (f.getFileNameWithoutExtension() + " has no tempo Carthage could find, so it was not fitted");
-                    }
-
-                    added.add (c);
-                    beat = editing::endBeat (*c);
-                }
+                for (auto* c : added)
+                    if (auto* wave = dynamic_cast<tracktion::WaveAudioClip*> (c))
+                        fit (*c, wave->getOriginalFile());
+            }
+            else if (auto* c = editing::insertFile (edit, tracks[dropLane], dropping[0], dropBeat))
+            {
+                fit (*c, dropping[0]);
+                added.add (c);
+            }
 
             endGhost();
             timeline.selectOnly (added);
@@ -1451,29 +1480,37 @@ namespace carthage::ui
                 g.drawRect (marquee, 1);
             }
 
-            // The sound being dragged in: where it lands and how long it is.
+            // The sounds being dragged in: where each lands, how long it is, and with several, the
+            // lane and channel each gets (owner).
             if (! dropping.isEmpty() && dropLane >= 0)
             {
-                auto start = dropBeat;
-                const auto y = static_cast<float> (timeline.laneTop (dropLane) - timeline.scrollY + 3);
+                const auto startSeconds = timeline.session.getEdit().tempoSequence.toTime (tracktion::BeatPosition::fromBeats (dropBeat)).inSeconds();
+                const auto laneCount = timeline.laneTracks().size();
+                const auto x0 = timeline.xAtBeat (dropBeat) - static_cast<float> (getX());
 
-                for (size_t i = 0; i < static_cast<size_t> (dropping.size()); ++i)
+                for (int i = 0; i < dropping.size(); ++i)
                 {
-                    const auto seconds = std::max (0.25, droppingSeconds[i]);
-                    const auto startSeconds = timeline.session.getEdit().tempoSequence.toTime (tracktion::BeatPosition::fromBeats (start)).inSeconds();
-                    const auto end = timeline.secondsToBeats (startSeconds + seconds);
-                    const auto x0 = timeline.xAtBeat (start) - static_cast<float> (getX());
-                    const auto x1 = timeline.xAtBeat (end) - static_cast<float> (getX());
-                    const Rectangle<float> ghost (x0, y, std::max (4.0f, x1 - x0), static_cast<float> (timeline.heightOfLane (dropLane) - 7));
+                    const auto lane = dropLane + i;
+                    const auto seconds = std::max (0.25, droppingSeconds[static_cast<size_t> (i)]);
+                    const auto x1 = timeline.xAtBeat (timeline.secondsToBeats (startSeconds + seconds)) - static_cast<float> (getX());
+                    const auto height = lane < laneCount ? timeline.heightOfLane (lane) : timeline.laneHeight;
+                    const Rectangle<float> ghost (x0, static_cast<float> (timeline.laneTop (lane) - timeline.scrollY + 3),
+                                                  std::max (4.0f, x1 - x0), static_cast<float> (height - 7));
 
                     g.setColour (theme::accent.withAlpha (0.10f));
                     g.fillRoundedRectangle (ghost, theme::radiusXs);
                     g.setColour (theme::accent);
                     g.drawRoundedRectangle (ghost.reduced (0.5f), theme::radiusXs, 1.5f);
                     g.setFont (theme::denseFont (theme::textXs, true));
-                    g.drawText (dropping[static_cast<int> (i)].getFileNameWithoutExtension(), ghost.reduced (6.0f, 2.0f).withHeight (14.0f),
-                                Justification::centredLeft, true);
-                    start = end;
+                    auto text = ghost.reduced (6.0f, 2.0f);
+                    g.drawText (dropping[i].getFileNameWithoutExtension(), text.removeFromTop (14.0f), Justification::centredLeft, true);
+
+                    if (i < droppingInto.size())
+                    {
+                        g.setFont (theme::denseFont (theme::textXs));
+                        g.drawText (String::fromUTF8 ("\xe2\x86\x92 ") + droppingInto[i] + (lane < laneCount ? String() : String (", on a new lane")),
+                                    text.removeFromTop (14.0f), Justification::centredLeft, true);
+                    }
                 }
             }
         }
@@ -2243,7 +2280,7 @@ namespace carthage::ui
         headers->setBounds (0, area.getY(), headerWidth, area.getHeight());
         headerEdge.setBounds (headerWidth - PanelEdge::thickness / 2, area.getY(), PanelEdge::thickness, area.getHeight());
         headerEdge.toFront (false);
-        addLaneButton.setBounds (Rectangle<int> (0, 0, headerWidth, rulerHeight).reduced (theme::space2, 3).removeFromRight (88));   // the pop-out button sits on the left
+        addLaneButton.setBounds (Rectangle<int> (0, 0, headerWidth, rulerHeight).reduced (theme::space2, 0).removeFromRight (88).withSizeKeepingCentre (88, 22));   // the pop-out button sits on the left
         lanes->setBounds (area);
         hScroll.setBounds (area.getX(), area.getBottom(), area.getWidth(), getHeight() - area.getBottom());
         vScroll.setBounds (area.getRight(), area.getY(), getWidth() - area.getRight(), area.getHeight());

@@ -47,6 +47,9 @@ namespace carthage::editing
         undo step. */
     Lane freeLaneFor (tracktion::Edit&, tracktion::TimeRange time, const Lane& from);
 
+    /** A new lane below `after` (or at the end), inside the caller's undo step. */
+    Lane insertLaneAfter (tracktion::Edit&, const Lane& after);
+
     /** A clip's lane, and its index among the lanes (-1 if it has none). */
     Lane laneOfClip (const tracktion::Clip&);
     int laneOf (const tracktion::Clip&);
@@ -149,6 +152,10 @@ namespace carthage::editing
 
     /** A new channel after `after` (or at the end); inside the caller's undo step. */
     tracktion::AudioTrack* addChannel (tracktion::Edit&, tracktion::AudioTrack* after = nullptr);
+
+    /** The channels nothing plays into yet, in mixer order: no clip routed there, no channel's
+        output or send into it, no input, not the Pre-Master. Where dropped sounds go (owner). */
+    juce::Array<tracktion::AudioTrack*> freeChannels (tracktion::Edit&);
 
     /** Deletes a channel: its clips play to master, channels that went into it go to master. */
     void deleteChannel (tracktion::AudioTrack&);

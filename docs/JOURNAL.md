@@ -389,3 +389,15 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   foot of a strip routes and never selects while another channel is selected. Level row (typed
   dB) in the column. Owner asked for 5 design options for a Routing section next.
 
+### 2026-11-21 (owner's list while waiting for CI, W60)
+
+- Pushed 7f3cabf (route buttons, typed level) once CI for 639ea8e was green.
+- Column: stacked sections, 8 px heading-to-field, 24 px between sections; "Sound from" as tall
+  as its lines. Snap in the accent when on. Escape closes Settings (focus moves into it on open).
+- Loopback drawing in Settings > Audio (`SettingsPanel::LoopbackPicture`); typed bus interval.
+- W60: App loudness as an output gain in AudioCallback (OutputGainTests); several dropped sounds
+  each on its own lane and free channel (EditingTests); view names; ruler 42 px; "→ Pre-Master".
+- Roadmap: more colours (phase 7), a new phase 8 to refine animations.
+- Still asked for, not started: zoom by dragging the ends of the main grid's scrollbars (both
+  axes), BPM in the sample editor beside the key, 5 Routing section designs, then UAT.
+

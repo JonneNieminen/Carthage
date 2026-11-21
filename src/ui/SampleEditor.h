@@ -82,7 +82,7 @@ namespace carthage::ui
         IconButton closeButton { IconButton::Glyph::close };
         std::optional<double> bpm;   // the sample's own tempo, when known
 
-        juce::Rectangle<int> waveArea;
+        juce::Rectangle<int> waveArea, viewNameArea;
         int factsDividerX = -1;   // the line between the clip count and the key
         enum class Grab { none, start, end } grab = Grab::none;
         double grabStart = 0.0, grabLength = 0.0;

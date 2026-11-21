@@ -243,7 +243,7 @@ namespace carthage::app
                     break;
                 case windowSamples:   info.setInfo ("Samples in its own window", "Move the sample browser to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('s', primary | juce::ModifierKeys::altModifier); break;
                 case windowPlugins:   info.setInfo ("Plugins in its own window", "Move the plugin browser to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('p', primary | juce::ModifierKeys::altModifier); break;
-                case windowTimeline:  info.setInfo ("Timeline in its own window", "Move the timeline to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('t', primary | juce::ModifierKeys::altModifier); break;
+                case windowTimeline:  info.setInfo ("Main grid in its own window", "Move the main grid (the lanes and their clips) to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('t', primary | juce::ModifierKeys::altModifier); break;
                 case windowMixer:     info.setInfo ("Mixer in its own window", "Move the mixer to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('x', primary | juce::ModifierKeys::altModifier); break;
                 case windowSignal:    info.setInfo ("Signal path in its own window", "Move the input, plugin and output row to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress ('i', primary | juce::ModifierKeys::altModifier); break;
                 case windowSettings:  info.setInfo ("Settings in its own window", "Move Settings to a window of its own, or back", "Layouts", 0); info.addDefaultKeypress (',', primary | juce::ModifierKeys::altModifier); break;

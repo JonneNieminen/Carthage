@@ -117,6 +117,7 @@ namespace carthage::ui
         int pinned = 1;
         float zoom = 1.0f;   // strips left of the scrolling channels: master, and the Pre-Master while on
         bool rebuildPending = false;
+        juce::Rectangle<int> viewNameArea;   // "Mixer", at the end of the row with Add channel (owner)
 
         // The selected channel's column.
         class Swatch;

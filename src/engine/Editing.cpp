@@ -454,11 +454,11 @@ namespace carthage::editing
         return copy.get();
     }
 
-    Clip* insertFile (Edit& edit, const Lane& lane, const juce::File& file, double beat)
+    Clip* insertFile (Edit& edit, const Lane& lane, const juce::File& file, double beat, AudioTrack* channel)
     {
         const AudioFile audio (edit.engine, file);
         const auto seconds = audio.getLength();
-        auto* carrier = carrierFor (edit, lane, nullptr);   // to master until routed (W47)
+        auto* carrier = carrierFor (edit, lane, channel);   // to master until routed (W47), unless given one
 
         if (! audio.isValid() || seconds <= 0.0 || carrier == nullptr)
             return nullptr;
@@ -472,6 +472,34 @@ namespace carthage::editing
 
         crossfade (*clip);
         return clip.get();
+    }
+
+    Clips insertFilesOnOwnLanes (Edit& edit, const Lane& firstLane, const juce::Array<juce::File>& files, double beat)
+    {
+        Clips added;
+        auto free = freeChannels (edit);
+        auto lane = firstLane;
+
+        for (const auto& file : files)
+        {
+            if (! AudioFile (edit.engine, file).isValid())
+                continue;
+
+            if (! lane.isValid())
+                lane = insertLaneAfter (edit, lanes (edit).getLast());   // past the last lane: a new one
+
+            auto* channel = free.isEmpty() ? addChannel (edit) : free.removeAndReturn (0);
+
+            if (auto* c = insertFile (edit, lane, file, beat, channel))
+                added.add (c);
+
+            // The next lane down, or none (a new one next time).
+            const auto all = lanes (edit);
+            const auto next = indexOf (edit, lane) + 1;
+            lane = next < all.size() ? all.getReference (next) : Lane {};
+        }
+
+        return added;
     }
 
     void remove (const Clips& clips)

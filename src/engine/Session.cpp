@@ -129,6 +129,7 @@ namespace carthage::engine
 
         callback = std::make_unique<AudioCallback> (*engine, std::span<TakeRecorder, AudioCallback::maxTakes> (recorders), probe, preview);
         callback->attach();
+        setAppLoudness (getAppLoudness());   // as it was left
 
         dm.addChangeListener (this);
         prepareForDevice();
@@ -269,6 +270,18 @@ namespace carthage::engine
         editing::setMonitoring (channel, true);
         editing::setArmed (channel, true);
         applyInputRouting();
+    }
+
+    float Session::getAppLoudness() const
+    {
+        return static_cast<float> (std::clamp (engine->getPropertyStorage().getPropertiesFile().getDoubleValue ("appLoudness", 0.0), -60.0, 6.0));
+    }
+
+    void Session::setAppLoudness (float db)
+    {
+        const auto clamped = std::clamp (db, -60.0f, 6.0f);
+        engine->getPropertyStorage().getPropertiesFile().setValue ("appLoudness", static_cast<double> (clamped));
+        callback->setOutputGain (clamped <= -60.0f ? 0.0f : juce::Decibels::decibelsToGain (clamped));
     }
 
     float Session::getNewProjectLoudness() const

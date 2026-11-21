@@ -1,5 +1,7 @@
 #include <engine/Editing.h>
 
+#include <set>
+
 using namespace carthage;
 
 namespace
@@ -291,6 +293,36 @@ public:
             near (dropped->getPosition().getLength().inSeconds(), 4.0, "the whole 4-second file");
             expectEquals (editing::laneOf (*dropped), 1);
             expect (editing::insertFile (*edit, lanes[1], folder.getChildFile ("missing.wav"), 0.0) == nullptr, "a missing file adds nothing");
+        }
+
+        beginTest ("Several sounds dropped at once: each on its own lane and into its own free channel (owner)");
+        {
+            const auto lanesBefore = editing::lanes (*edit);
+            const auto channelsBefore = editing::channels (*edit).size();
+            const auto free = editing::freeChannels (*edit);
+            const auto last = lanesBefore.getLast();
+            editing::begin (*edit, "Add 3 samples");
+            const auto added = editing::insertFilesOnOwnLanes (*edit, last, { audio, folder.getChildFile ("missing.wav"), audio, audio }, 2.0);
+
+            expectEquals (added.size(), 3, "the unreadable file is skipped");
+            expectEquals (editing::lanes (*edit).size(), lanesBefore.size() + 2, "two lanes added below the last");
+            std::set<tracktion::AudioTrack*> into;
+
+            for (int i = 0; i < added.size(); ++i)
+            {
+                expectEquals (editing::laneOf (*added[i]), lanesBefore.size() - 1 + i, "one lane each, from the drop lane down");
+                near (editing::startBeat (*added[i]), 2.0, "all at the drop beat");
+                expect (editing::routeOf (*added[i]) != nullptr, "each plays into a channel, not master");
+                into.insert (editing::routeOf (*added[i]));
+            }
+
+            expectEquals (static_cast<int> (into.size()), 3, "a channel each");
+            expect (free.isEmpty() || editing::routeOf (*added[0]) == free[0], "the first free channel first");
+            expect (! editing::freeChannels (*edit).contains (editing::routeOf (*added[0])), "and it is free no longer");
+
+            edit->getUndoManager().undo();
+            expectEquals (editing::lanes (*edit).size(), lanesBefore.size(), "one undo takes the lanes away");
+            expectEquals (editing::channels (*edit).size(), channelsBefore, "and any channels it added");
         }
 
         beginTest ("A tempo change: clips stay in time, move with the beat, or stretch with it (W38)");

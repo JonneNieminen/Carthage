@@ -73,7 +73,14 @@ namespace carthage::editing
 
     /** A sound file as a new clip on `lane` starting at `beat`, as long as the file (a dropped
         sample, W30), playing to master until routed (W47). Null if the file can not be read. */
-    tracktion::Clip* insertFile (tracktion::Edit&, const Lane& lane, const juce::File&, double beat);
+    tracktion::Clip* insertFile (tracktion::Edit&, const Lane& lane, const juce::File&, double beat,
+                                 tracktion::AudioTrack* channel = nullptr);
+
+    /** Several sounds dropped at once (owner): each on its own lane, from `firstLane` down, all
+        starting at `beat`, each playing into its own free channel (freeChannels, in order; new
+        channels are added when they run out). Lanes are added below the last as needed. Inside
+        the caller's undo step. A file that can not be read is skipped and takes no lane. */
+    Clips insertFilesOnOwnLanes (tracktion::Edit&, const Lane& firstLane, const juce::Array<juce::File>&, double beat);
 
     void remove (const Clips&);
 

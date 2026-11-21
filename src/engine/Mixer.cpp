@@ -557,6 +557,11 @@ namespace carthage::editing
         return first;
     }
 
+    Lane insertLaneAfter (Edit& edit, const Lane& after)
+    {
+        return insertLane (edit, after);
+    }
+
     Lane freeLaneFor (Edit& edit, TimeRange time, const Lane& from)
     {
         const auto all = lanes (edit);
@@ -753,6 +758,37 @@ namespace carthage::editing
             ++n;
 
         return "Channel " + juce::String (n);
+    }
+
+    juce::Array<AudioTrack*> freeChannels (Edit& edit)
+    {
+        const auto all = channels (edit);
+        std::set<const AudioTrack*> used;
+
+        for (auto* c : allClips (edit))
+            if (auto* to = routeOf (*c))
+                used.insert (to);
+
+        for (auto* ch : all)
+        {
+            if (auto* into = outputOf (*ch))
+                used.insert (into);
+
+            for (const auto& send : sendsOf (*ch))
+                if (send.to != nullptr)
+                    used.insert (send.to);
+
+            if (inputOf (*ch).isSet())
+                used.insert (ch);
+        }
+
+        juce::Array<AudioTrack*> free;
+
+        for (auto* ch : all)
+            if (! used.contains (ch) && ch != preMaster (edit))
+                free.add (ch);
+
+        return free;
     }
 
     AudioTrack* addChannel (Edit& edit, AudioTrack* after)

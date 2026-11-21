@@ -118,6 +118,26 @@ namespace carthage::ui
         l.setMinimumHorizontalScale (1.0f);
     }
 
+    namespace
+    {
+        Font viewNameFont()   { return theme::uiFont (theme::textXs, true); }
+    }
+
+    int viewNameWidth (const String& name)
+    {
+        return GlyphArrangement::getStringWidthInt (viewNameFont(), name) + 2 * theme::space2;
+    }
+
+    void drawViewName (Graphics& g, Rectangle<int> area, const String& name, Colour behind)
+    {
+        const auto box = area.removeFromRight (std::min (area.getWidth(), viewNameWidth (name)));
+        g.setColour (behind);
+        g.fillRect (box);
+        g.setColour (theme::muted);
+        g.setFont (viewNameFont());
+        g.drawText (name, box.withTrimmedRight (theme::space2), Justification::centredRight, true);
+    }
+
     void styleFigure (Label& l, float size, Colour c)
     {
         l.setFont (theme::timeFont (size));

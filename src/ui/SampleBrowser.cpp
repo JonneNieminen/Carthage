@@ -57,6 +57,7 @@ namespace carthage::ui
         }
 
         list.setModel (this);
+        list.setMultipleSelectionEnabled (true);   // Cmd- or Shift-click several, drag them all (owner)
         list.setColour (ListBox::backgroundColourId, theme::bg2);
         list.setOutlineThickness (0);
         list.addMouseListener (this, true);   // presses and releases on rows: play, hold, star, open
@@ -475,11 +476,14 @@ namespace carthage::ui
 
     var SampleBrowser::getDragSourceDescription (const SparseSet<int>& selected)
     {
-        if (selected.size() == 1)
-            if (const auto* s = sampleAt (selected[0]))
-                return String (dragPrefix) + s->file.getFullPathName();
+        // One path per line after the prefix: several sounds land each on its own lane (owner).
+        StringArray paths;
 
-        return {};
+        for (int i = 0; i < selected.size(); ++i)
+            if (const auto* s = sampleAt (selected[i]))
+                paths.add (s->file.getFullPathName());
+
+        return paths.isEmpty() ? var() : var (String (dragPrefix) + paths.joinIntoString ("\n"));
     }
 
     String SampleBrowser::getTooltipForRow (int row)

@@ -5,6 +5,7 @@
 #include <app/Commands.h>
 
 #include <numeric>
+#include <utility>
 
 namespace carthage::ui
 {
@@ -21,6 +22,8 @@ namespace carthage::ui
         String msText (double ms)  { return String (ms, 1) + " ms"; }
 
         constexpr int rowHeight = 28, labelWidth = 168, contentWidth = 600, pageRow = 32;
+        constexpr int pictureWidth = 280, pictureHeight = 104;   // the loopback drawing
+        constexpr int minBusEvery = 2, maxBusEvery = 64;          // as the mixer reads it
     }
 
     //==============================================================================================
@@ -165,6 +168,121 @@ namespace carthage::ui
         pageList->repaint();
     }
 
+    /** How to measure latency, drawn (owner): a generic audio interface with a cable from one of
+        its outputs back into one of its inputs. The cable takes the accent while a measurement runs. */
+    class SettingsPanel::LoopbackPicture final : public Component
+    {
+    public:
+        LoopbackPicture()
+        {
+            setInterceptsMouseClicks (false, false);
+        }
+
+        void setLive (bool on)
+        {
+            if (std::exchange (live, on) != on)
+                repaint();
+        }
+
+        void paint (Graphics& g) override
+        {
+            const auto area = getLocalBounds().toFloat().reduced (1.0f);
+            const auto box = area.withTrimmedTop (area.getHeight() * 0.42f);
+
+            // The interface: a flat box with its jacks, a big knob and two meters.
+            g.setColour (theme::card);
+            g.fillRoundedRectangle (box, theme::radiusSm);
+            g.setColour (theme::lineStrong);
+            g.drawRoundedRectangle (box, theme::radiusSm, theme::stroke);
+
+            const auto jackY = box.getCentreY();
+            const auto jackRadius = box.getHeight() * 0.17f;
+            const float inX[] = { box.getX() + box.getWidth() * 0.10f, box.getX() + box.getWidth() * 0.22f };
+            const float outX[] = { box.getRight() - box.getWidth() * 0.22f, box.getRight() - box.getWidth() * 0.10f };
+            const auto knobX = box.getX() + box.getWidth() * 0.44f;
+
+            const auto jack = [&] (float x)
+            {
+                g.setColour (theme::well);
+                g.fillEllipse (x - jackRadius, jackY - jackRadius, jackRadius * 2.0f, jackRadius * 2.0f);
+                g.setColour (theme::mist);
+                g.drawEllipse (x - jackRadius, jackY - jackRadius, jackRadius * 2.0f, jackRadius * 2.0f, 1.2f);
+            };
+
+            for (auto x : inX)  jack (x);
+            for (auto x : outX) jack (x);
+
+            const auto knobRadius = box.getHeight() * 0.28f;
+            const auto knob = Point<float> (knobX, jackY);
+            g.setColour (theme::hover);
+            g.fillEllipse (Rectangle<float> (knobRadius * 2.0f, knobRadius * 2.0f).withCentre (knob));
+            g.setColour (theme::mist);
+            g.drawEllipse (Rectangle<float> (knobRadius * 2.0f, knobRadius * 2.0f).withCentre (knob), 1.2f);
+            g.drawLine (Line<float> (knob, knob.getPointOnCircumference (knobRadius * 0.75f, -0.8f)), 1.6f);
+
+            for (int i = 0; i < 2; ++i)
+            {
+                const auto x = knob.x + knobRadius + 12.0f + static_cast<float> (i) * 6.0f;
+                const auto meter = Rectangle<float> (x, jackY - knobRadius, 2.5f, knobRadius * 2.0f);
+                g.setColour (theme::well);
+                g.fillRoundedRectangle (meter, 1.0f);
+                g.setColour (theme::ok);
+                g.fillRoundedRectangle (meter.withTrimmedTop (meter.getHeight() * (i == 0 ? 0.45f : 0.6f)), 1.0f);
+            }
+
+            g.setFont (theme::uiFont (theme::textXs));
+            g.setColour (theme::muted);
+            const auto captionY = box.getBottom() - box.getHeight() * 0.30f;
+            g.drawText ("In", Rectangle<float> (inX[0] - 12.0f, captionY, inX[1] - inX[0] + 24.0f, box.getHeight() * 0.28f), Justification::centred);
+            g.drawText ("Out", Rectangle<float> (outX[0] - 12.0f, captionY, outX[1] - outX[0] + 24.0f, box.getHeight() * 0.28f), Justification::centred);
+
+            // The cable (owner): straight up out of the first output, across, and down into the
+            // second input, with arrows along it for the way the sound goes.
+            const auto from = Point<float> (outX[0], jackY);
+            const auto to = Point<float> (inX[1], jackY);
+            const auto top = area.getY() + 6.0f;
+            Path cable;
+            cable.startNewSubPath (from);
+            cable.lineTo (from.x, top);
+            cable.lineTo (to.x, top);
+            cable.lineTo (to);
+            cable = cable.createPathWithRoundedCorners (6.0f);
+            const auto ink = live ? theme::accent : theme::mist;
+            g.setColour (ink);
+            g.strokePath (cable, PathStrokeType (2.2f, PathStrokeType::curved, PathStrokeType::rounded));
+
+            // Its plugs.
+            for (auto p : { from, to })
+                g.fillRoundedRectangle (Rectangle<float> (jackRadius * 1.2f, jackRadius * 2.6f).withCentre (p.translated (0.0f, -jackRadius * 1.2f)), 1.5f);
+
+            // Arrows: up out of the output, across to the left, down into the input.
+            const auto arrow = [&g] (Point<float> tip, float angle)
+            {
+                Path head;
+                head.addTriangle (0.0f, -5.0f, -4.5f, 3.0f, 4.5f, 3.0f);   // pointing up
+                g.fillPath (head, AffineTransform::rotation (angle).translated (tip));
+            };
+            const auto riseMid = (top + jackY - jackRadius * 2.4f) * 0.5f;
+            arrow ({ from.x, riseMid }, 0.0f);
+            arrow ({ (from.x + to.x) * 0.5f, top }, -MathConstants<float>::halfPi);
+            arrow ({ to.x, riseMid }, MathConstants<float>::pi);
+        }
+
+    private:
+        bool live = false;
+    };
+
+    bool SettingsPanel::keyPressed (const KeyPress& key)
+    {
+        // Escape anywhere in Settings closes it, back to the view it covered (owner). The search
+        // box takes Escape first, to clear what was typed.
+        if (key != KeyPress::escapeKey || ! onClose)
+            return false;
+
+        onClose();
+        return true;
+    }
+
     SettingsPanel::SettingsPanel (engine::Session& s, ApplicationCommandManager& commands, Array<CommandID> shortcutCommands)
         : session (s),
           page (static_cast<Page> (jlimit (0, pageCount - 1, s.getEngine().getPropertyStorage().getPropertiesFile().getIntValue ("settingsPage", 0)))),
@@ -245,6 +363,9 @@ namespace carthage::ui
         loopHint.setText ("Connect a cable from an output to an input, choose them here, then measure. "
                           "Everything else goes quiet while the probe plays.", dontSendNotification);
         loopHint.setJustificationType (Justification::topLeft);
+        loopPicture = std::make_unique<LoopbackPicture>();
+        loopPicture->setTitle ("A cable from an output of the interface back into one of its inputs");
+        body.addAndMakeVisible (*loopPicture);
 
         closeButton.setTooltip ("Close Settings and go back to the lanes (" + String (app::commands::commandName) + "+W or Escape)");
         closeButton.onClick = [this] { if (onClose) onClose(); };
@@ -362,21 +483,39 @@ namespace carthage::ui
         styleLabel (busEveryLabel, theme::textMd, theme::muted);
         busEveryLabel.setText ("Bus every", dontSendNotification);
 
+        // A few common intervals to pick, or any number typed in (owner).
+        const auto ordinal = [] (int n)
+        {
+            const auto teen = n % 100 >= 11 && n % 100 <= 13;
+            const auto suffix = teen ? "th" : n % 10 == 1 ? "st" : n % 10 == 2 ? "nd" : n % 10 == 3 ? "rd" : "th";
+            return String (n) + suffix + " channel";
+        };
+        const auto showBusEvery = [this, ordinal] (int n)
+        {
+            if (busEvery.indexOfItemId (n) >= 0)
+                busEvery.setSelectedId (n, dontSendNotification);
+            else
+                busEvery.setText (ordinal (n), dontSendNotification);
+        };
+
         for (const auto n : { 4, 5, 8, 10, 12, 16 })
-            busEvery.addItem (String (n) + "th channel", n);
+            busEvery.addItem (ordinal (n), n);
 
-        busEvery.setSelectedId (props.getIntValue ("busEvery", 10), dontSendNotification);
-        if (busEvery.getSelectedId() == 0)
-            busEvery.setSelectedId (10, dontSendNotification);
-
-        busEvery.setTooltip ("Which channels are buses: with every 10th, channels 10, 20, 30 and so on");
+        busEvery.setEditableText (true);
+        showBusEvery (std::clamp (props.getIntValue ("busEvery", 10), minBusEvery, maxBusEvery));
+        busEvery.setTooltip ("Which channels are buses: with every 10th, channels 10, 20, 30 and so on. Pick one, or click "
+                             "and type any number from " + String (minBusEvery) + " to " + String (maxBusEvery) + ".");
         busEvery.setEnabled (busChannels.getToggleState());
 
-        const auto busChanged = [this]
+        const auto busChanged = [this, showBusEvery]
         {
+            // A typed figure ("7", "7th") counts by its number; anything else goes back to what it was.
             auto& p = session.getEngine().getPropertyStorage().getPropertiesFile();
+            const auto typed = busEvery.getText().trim().getIntValue();
+            const auto n = typed > 0 ? std::clamp (typed, minBusEvery, maxBusEvery) : p.getIntValue ("busEvery", 10);
+            showBusEvery (n);
             p.setValue ("busChannels", busChannels.getToggleState());
-            p.setValue ("busEvery", busEvery.getSelectedId());
+            p.setValue ("busEvery", n);
             busEvery.setEnabled (busChannels.getToggleState());
             if (onBusChannelsChanged) onBusChannelsChanged();
         };
@@ -792,6 +931,7 @@ namespace carthage::ui
         dropoutsValue.setColour (Label::textColourId, dropouts > 0 ? theme::warn : theme::text);
         dropoutsValue.setTooltip ("Times the interface ran out of audio since this count started");
 
+        loopPicture->setLive (isMeasuring());   // the cable lights while the probe plays
         if (measureButton.isEnabled() == (isMeasuring() || session.isRecording()))
             updateLatency();
 
@@ -946,10 +1086,12 @@ namespace carthage::ui
         sections.push_back ({ Page::recording, &recordingHeading, { row (formatLabel, format), row (countInLabel, countIn), whole (lowLatency, rowHeight) } });
         sections.push_back ({ Page::recording, &exportHeading, { row (exportFormatLabel, exportFormat), row (exportRateLabel, exportRate) } });
         sections.push_back ({ Page::audio, &latencyHeading, { row (reportedLabel, reportedValue), row (measuredLabel, measuredValue),
-                                                 Line { { &loopHint, &loopOutLabel, &loopOut, &loopInLabel, &loopIn, &measureButton },
-                                                        48 + 2 * (rowHeight + theme::space1) + rowHeight + theme::space2,
+                                                 Line { { loopPicture.get(), &loopHint, &loopOutLabel, &loopOut, &loopInLabel, &loopIn, &measureButton },
+                                                        pictureHeight + theme::space2 + 48 + 2 * (rowHeight + theme::space1) + rowHeight + theme::space2,
                                                         [this] (Rectangle<int> b)
                                                         {
+                                                            loopPicture->setBounds (b.removeFromTop (pictureHeight).removeFromLeft (pictureWidth));
+                                                            b.removeFromTop (theme::space2);
                                                             loopHint.setBounds (b.removeFromTop (48));
                                                             for (auto [l, c] : { std::pair<Label*, Component*> { &loopOutLabel, &loopOut }, { &loopInLabel, &loopIn } })
                                                             {

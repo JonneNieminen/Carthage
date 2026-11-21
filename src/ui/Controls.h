@@ -246,6 +246,12 @@ namespace carthage::ui
     void styleLabel (juce::Label&, float size = theme::textMd, juce::Colour = theme::text, bool medium = false);
     void styleFigure (juce::Label&, float size = theme::textMd, juce::Colour = theme::text);
 
+    /** The name of the view it is in, quiet at that view's edge (owner): "Main grid", "Mixer",
+        "Sample editor". Drawn right-aligned in `area` on a patch of `behind`, so whatever runs
+        under it (bar numbers) stops short of it instead of colliding. */
+    void drawViewName (juce::Graphics&, juce::Rectangle<int> area, const juce::String& name, juce::Colour behind);
+    int viewNameWidth (const juce::String& name);   ///< how much room drawViewName takes
+
     /** dBFS of a linear level, floored. */
     float toDecibels (float linear) noexcept;
 }

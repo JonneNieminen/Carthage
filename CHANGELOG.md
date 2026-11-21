@@ -11,6 +11,17 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Drop several samples at once (from the sample browser, Cmd- or Shift-click to pick them, or from
+  the Finder/Explorer) and each lands on its own lane, from where you drop down, and plays into
+  its own free mixer channel; lanes and channels are added when there are not enough. While you
+  drag, each sound's outline shows its lane and the channel it will go to. One undo takes it back.
+- Each part of the app says what it is: "Main grid" at the end of the ruler, "Mixer" beside Add
+  channel, "Sample editor" beside its close button; the timeline's window and menu item are now
+  called Main grid too.
+- Settings > Audio shows how to measure latency: an interface with a cable from an output back
+  into an input, the arrows showing the way the sound goes; the cable lights while it measures.
+- Bus channels: type any interval from 2 to 64 into "Bus every", or pick one of the usual ones.
+- Escape anywhere in Settings closes it, back to the lanes or the mixer.
 - Project loudness (Settings > Projects): new projects start with master at 0 dB, or at -3, -6,
   -9 or -12 dB if you like to mix with room above; double-clicking the master fader returns there.
   Channels always start at 0 dB.
@@ -116,6 +127,15 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   its name. Settings > Browser can fit a dropped loop to the project's tempo.
 
 ### Changed
+- App loudness in the toolbar is now the app's own volume: how loud Carthage plays
+  through your interface, whatever the project. It no longer moves master's fader and never
+  changes an export.
+- A mixer channel's column on the right lines its headings up over their fields with
+  even spacing; Level has its own heading like the rest.
+- Snap is lit in the accent while it is on and plain like the tools while it is off.
+- The main grid's ruler is half again as tall.
+- Mixer strips say "→ Pre-Master" when a channel's sound passes through the Pre-Master
+  on its way to master.
 - The mixer's route buttons are much larger (each strip's full width), and a click on them, or
   around them, only routes: it never changes which channel is selected.
 - The mixer's column has a Level row: drag it, or click the figure and type a level in dB.

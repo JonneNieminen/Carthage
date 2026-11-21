@@ -589,7 +589,14 @@ namespace carthage::ui
             if (editing::playsToOutput (*track))
             {
                 auto* into = editing::outputOf (*track);
-                names.add (into != nullptr ? (brief ? shortName (into->getName()) : into->getName()) : String ("Master"));
+
+                // Master's route passes through the Pre-Master while it is on: the strip says so (owner).
+                if (into != nullptr)
+                    names.add (brief ? shortName (into->getName()) : into->getName());
+                else if (editing::usesPreMaster (track->edit))
+                    names.add (brief ? String ("Pre-Master") : String ("the Pre-Master (on to Master)"));
+                else
+                    names.add ("Master");
             }
 
             for (const auto& send : editing::sendsOf (*track))
@@ -2001,6 +2008,7 @@ namespace carthage::ui
 
     void MixerView::refreshColumn()
     {
+        const ScopeGuard relayout { [this] { resized(); } };   // what shows, and the list's height, set the layout
         auto* channel = selectedChannel();
         auto& edit = session.getEdit();
         const auto any = channel != nullptr || masterSelected;
@@ -2250,8 +2258,13 @@ namespace carthage::ui
     void MixerView::readLevel()
     {
         auto* v = levelTarget();
-        level.setVisible (v != nullptr);
-        columnLevel.setVisible (v != nullptr);
+
+        if (level.isVisible() != (v != nullptr))
+        {
+            level.setVisible (v != nullptr);
+            columnLevel.setVisible (v != nullptr);
+            resized();
+        }
 
         if (v == nullptr)
             return;
@@ -2282,6 +2295,7 @@ namespace carthage::ui
         g.fillAll (theme::bg);
         g.setColour (theme::line);
         g.fillRect (getWidth() - columnWidth - 1, 0, 1, getHeight());
+        drawViewName (g, viewNameArea, "Mixer", theme::bg);
     }
 
     void MixerView::resized()
@@ -2304,6 +2318,7 @@ namespace carthage::ui
         }
 
         addButton.setBounds (bottom.withX (r.getX()).withWidth (120).reduced (0, 2));
+        viewNameArea = bottom;
         viewport.setBounds (r);
         const auto width = roundToInt (static_cast<float> (stripWidth) * zoom);
         const auto busWidth = roundToInt (static_cast<float> (width) * 1.5f);   // a bus stands out by its size
@@ -2320,43 +2335,76 @@ namespace carthage::ui
 
         stripHolder->setSize (std::max (r.getWidth(), x), height);
 
+        // The column reads as stacked sections: a heading, a fixed gap, its field; the same gap
+        // between every heading and its field, and the same wider gap between sections (owner).
+        constexpr int headingHeight = 16, fieldHeight = 28, switchHeight = 26;
+        const auto heading = [&column] (Component& label)
         {
-            auto title = column.removeFromTop (28);
-            swatch->setBounds (title.removeFromLeft (swatch->isVisible() ? 22 : 0));
-            columnName.setBounds (title);
-        }
-        column.removeFromTop (theme::space2);
+            label.setBounds (column.removeFromTop (headingHeight));
+            column.removeFromTop (theme::space2);
+        };
+        const auto nextSection = [&column] { column.removeFromTop (theme::space6); };
 
         {
-            auto row = column.removeFromTop (28);
-            columnLevel.setBounds (row.removeFromLeft (44));
-            level.setBounds (row);
-            column.removeFromTop (theme::space2);
+            auto title = column.removeFromTop (fieldHeight);
+
+            if (swatch->isVisible())
+            {
+                swatch->setBounds (title.removeFromLeft (22));
+                title.removeFromLeft (theme::space2);
+            }
+            else
+            {
+                swatch->setBounds ({});
+            }
+
+            columnName.setBounds (title);
+        }
+        nextSection();
+
+        if (level.isVisible())
+        {
+            heading (columnLevel);
+            level.setBounds (column.removeFromTop (fieldHeight));
+            nextSection();
         }
 
         if (masterSelected)
         {
-            columnInto.setBounds (column.removeFromTop (18));
-            masterOutput.setBounds (column.removeFromTop (28));
-            column.removeFromTop (theme::space4);
+            heading (columnInto);
+            masterOutput.setBounds (column.removeFromTop (fieldHeight));
+            nextSection();
         }
-        else
+        else if (input.isVisible())
         {
-            columnInput.setBounds (column.removeFromTop (18));
-            input.setBounds (column.removeFromTop (28));
-            column.removeFromTop (theme::space1);
-            hear.setBounds (column.removeFromTop (24));
-            recordHere.setBounds (column.removeFromTop (24));
-            column.removeFromTop (theme::space3);
-            columnInto.setBounds (column.removeFromTop (18));
-            output.setBounds (column.removeFromTop (28));
+            heading (columnInput);
+            input.setBounds (column.removeFromTop (fieldHeight));
+            column.removeFromTop (theme::space2);
+            hear.setBounds (column.removeFromTop (switchHeight));
+            recordHere.setBounds (column.removeFromTop (switchHeight));
+            nextSection();
+            heading (columnInto);
+            output.setBounds (column.removeFromTop (fieldHeight));
+            nextSection();
         }
-        column.removeFromTop (theme::space4);
-        columnFrom.setBounds (column.removeFromTop (18));
-        columnFromList.setBounds (column.removeFromTop (std::min (96, column.getHeight() / 3)));
-        column.removeFromTop (theme::space3);
-        columnPlugins.setBounds (column.removeFromTop (18));
-        column.removeFromTop (theme::space1);
+
+        if (columnFromList.isVisible())
+        {
+            // As tall as its lines, wrapped to the column's width: no gap under a short list.
+            const auto font = columnFromList.getFont();
+            const auto listWidth = static_cast<float> (column.getWidth());
+            int rows = 0;
+
+            for (const auto& lineText : StringArray::fromLines (columnFromList.getText()))
+                rows += std::max (1, static_cast<int> (std::ceil (GlyphArrangement::getStringWidth (font, lineText) / listWidth)));
+
+            heading (columnFrom);
+            const auto rowHeight = roundToInt (font.getHeight() * 1.25f);
+            columnFromList.setBounds (column.removeFromTop (std::min (rowHeight * std::max (1, rows), column.getHeight() / 3)));
+            nextSection();
+        }
+
+        heading (columnPlugins);
         line->setBounds (column);
     }
 }

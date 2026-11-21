@@ -275,6 +275,11 @@ namespace carthage::engine
             settings. The click sounds through it whether the metronome is on or not. */
         int getCountInBars() const;
 
+        /** App loudness (owner): the app's own output level in dB, 0 by default, for every
+            project; it is not master's fader and is never in an export. Remembered. */
+        float getAppLoudness() const;
+        void setAppLoudness (float db);
+
         /** The loudness new projects start at (Settings > Projects): 0 dB by default. */
         float getNewProjectLoudness() const;
         void setNewProjectLoudness (float db);

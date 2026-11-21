@@ -77,6 +77,7 @@ namespace carthage::ui
 
         void paint (juce::Graphics&) override;
         void resized() override;
+        bool keyPressed (const juce::KeyPress&) override;
 
         static constexpr int sidebarWidth = 212;
 
@@ -85,6 +86,8 @@ namespace carthage::ui
 
         class PageList;
         std::unique_ptr<PageList> pageList;
+        class LoopbackPicture;
+        std::unique_ptr<LoopbackPicture> loopPicture;   // an interface with a cable from an output to an input
         Page page = Page::audio;
         bool layingOut = false;
         std::array<int, pageCount> matches {};   // per page, while searching
