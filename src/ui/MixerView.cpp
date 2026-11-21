@@ -772,7 +772,7 @@ namespace carthage::ui
         /** A strip's centre in this band, and whether it is out of view (a scrolled channel). */
         std::pair<float, int> placeOf (const Strip& s) const
         {
-            const auto x = static_cast<float> (getLocalPoint (&s, Point<int> (s.getWidth() / 2, 0)).x);
+            const auto x = getLocalPoint (&s, Point<float> (static_cast<float> (s.getWidth()) * 0.5f, 0.0f)).x;
 
             if (s.getParentComponent() != view.stripHolder.get())
                 return { x, 0 };   // master and the Pre-Master are always in view
