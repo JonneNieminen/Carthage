@@ -385,4 +385,7 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Not tried in the app: the owner's Carthage was running the previous build with their takes.
 - Then W59: cables in a band over the whole mixer (into master and the Pre-Master), the strip's
   "→" lists every destination, X shows the mixer too. Checked by snapshot.
+- Route buttons: full strip width, 34 px tall, a send knob row above (both always kept); the
+  foot of a strip routes and never selects while another channel is selected. Level row (typed
+  dB) in the column. Owner asked for 5 design options for a Routing section next.
 

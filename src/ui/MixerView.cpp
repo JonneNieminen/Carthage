@@ -310,7 +310,7 @@ namespace carthage::ui
                 // FL's route button: an arrow into this strip, lit when the selected channel's
                 // sound comes here (accent: live); "SC" when it keys a plugin here.
                 const auto lit = route != Route::none;
-                auto button = (route == Route::send ? routeArea.withWidth (routeArea.getWidth() / 2) : routeArea).reduced (6, 2).toFloat();
+                const auto button = routeArea.reduced (3, 2).toFloat();   // the strip's whole width (owner: a big target)
                 g.setColour (lit ? theme::accent : theme::well);
                 g.fillRoundedRectangle (button, theme::radiusXs);
 
@@ -324,19 +324,19 @@ namespace carthage::ui
 
                 if (route == Route::sidechain)
                 {
-                    g.setFont (theme::uiFont (theme::textXs, true));
+                    g.setFont (theme::uiFont (theme::textSm, true));
                     g.drawText ("SC", button, Justification::centred, false);
                 }
                 else
                 {
                     const auto c = button.getCentre();
                     Path arrow;   // up into the strip
-                    arrow.startNewSubPath (c.x, c.y + 4.0f);
-                    arrow.lineTo (c.x, c.y - 4.0f);
-                    arrow.startNewSubPath (c.x - 3.5f, c.y - 0.5f);
-                    arrow.lineTo (c.x, c.y - 4.0f);
-                    arrow.lineTo (c.x + 3.5f, c.y - 0.5f);
-                    g.strokePath (arrow, PathStrokeType (1.5f, PathStrokeType::curved, PathStrokeType::rounded));
+                    arrow.startNewSubPath (c.x, c.y + 7.0f);
+                    arrow.lineTo (c.x, c.y - 7.0f);
+                    arrow.startNewSubPath (c.x - 6.0f, c.y - 1.0f);
+                    arrow.lineTo (c.x, c.y - 7.0f);
+                    arrow.lineTo (c.x + 6.0f, c.y - 1.0f);
+                    g.strokePath (arrow, PathStrokeType (2.0f, PathStrokeType::curved, PathStrokeType::rounded));
                 }
             }
         }
@@ -371,9 +371,12 @@ namespace carthage::ui
             if (track == nullptr)
                 outputArea = r.removeFromBottom (14);   // master's output: the interface (owner)
 
-            // The route button (and a send's knob) at the foot: shown while another channel is selected.
-            routeArea = r.removeFromBottom (22);
-            sendLevel.setBounds (routeArea.withTrimmedLeft (routeArea.getWidth() / 2).withSizeKeepingCentre (26, 20));
+            // The route button at the foot, the strip's full width and tall (owner: easy to hit), and
+            // a send's level knob in its own row above it. Both rows are always kept, so nothing
+            // moves when a route appears.
+            routeArea = r.removeFromBottom (34);
+            sendRow = r.removeFromBottom (26);
+            sendLevel.setBounds (sendRow.withSizeKeepingCentre (26, 24));
             r.removeFromBottom (theme::space1);
             figureArea = r.removeFromBottom (16);
             r.removeFromBottom (theme::space1);
@@ -383,14 +386,19 @@ namespace carthage::ui
 
         void mouseDown (const MouseEvent& e) override
         {
-            if (showsRoute && routeArea.contains (e.getPosition()) && ! sendLevel.getBounds().contains (e.getPosition()))
+            // While another channel is selected the foot of this strip is for routing it, and only
+            // that: a click there routes and never changes which channel is selected (owner).
+            if (showsRoute && routeZone().contains (e.getPosition()))
             {
-                if (e.mods.isPopupMenu() && track != nullptr)
-                    view.showRouteMenu (*track, *this);
-                else
-                    view.toggleRoute (track, e.mods.isAltDown());   // a click routes here or back; Option: a send
+                if (routeArea.expanded (0, 3).contains (e.getPosition()))
+                {
+                    if (e.mods.isPopupMenu() && track != nullptr)
+                        view.showRouteMenu (*track, *this);
+                    else
+                        view.toggleRoute (track, e.mods.isAltDown());   // a click routes here or back; Option: a send
+                }
 
-                return;   // routing does not change the selection: the source stays selected
+                return;   // the send row around its knob does nothing; the source stays selected
             }
 
             view.grabKeyboardFocus();   // the arrow keys move between channels from here
@@ -474,7 +482,7 @@ namespace carthage::ui
             const auto pos = getMouseXYRelative();
             const auto cmd = String (app::commands::commandName);
 
-            if (showsRoute && routeArea.contains (pos) && ! sendLevel.getBounds().contains (pos))
+            if (showsRoute && routeArea.expanded (0, 3).contains (pos))
             {
                 const auto* from = view.selectedChannel();
                 const auto fromName = from != nullptr ? from->getName() : String ("The selected channel");
@@ -563,7 +571,11 @@ namespace carthage::ui
         ValueSlider fader { 0.0 }, pan { 0.0 }, sendLevel { 0.0 };
         Route route = Route::none;
         bool showsRoute = false;
-        Rectangle<int> routeArea;
+        Rectangle<int> routeArea, sendRow;
+
+        /** The foot that belongs to routing while another channel is selected: the button, the
+            send row above it, and a little margin. */
+        Rectangle<int> routeZone() const   { return routeArea.getUnion (sendRow).expanded (0, 3).withX (0).withRight (getWidth()); }
         Rectangle<int> colourBar, nameArea, outputArea, inputArea, muteArea, soloArea, armArea, meterArea, figureArea;
 
         String nameForUndo() const   { return track != nullptr ? track->getName() : String ("Master"); }
@@ -1362,6 +1374,35 @@ namespace carthage::ui
         };
         swatch = std::make_unique<Swatch> (*this);
         addChildComponent (*swatch);
+
+        // Level: the strip's fader, here to type a figure into (owner).
+        styleLabel (columnLevel, theme::textSm, theme::text, true);
+        columnLevel.setText ("Level", dontSendNotification);
+        level.setSliderStyle (Slider::LinearHorizontal);
+        level.setTextBoxStyle (Slider::TextBoxRight, false, 64, 24);   // click the figure to type one
+        level.setRange (minDb, maxDb, 0.1);
+        level.setSkewFactorFromMidPoint (-12.0);
+        level.setTextValueSuffix (" dB");
+        level.setNumDecimalPlacesToDisplay (1);
+        level.setTooltip ("This channel's level, as its fader. Drag, or click the figure and type one in dB (-60 to +6); "
+                          "double-click returns to its default.");
+        level.onDragStart = [this] { if (levelTarget() != nullptr) editing::begin (session.getEdit(), columnName.getText() + " volume"); };
+        level.onWheelStart = level.onDragStart;
+        level.onValueChange = [this]
+        {
+            auto* v = levelTarget();
+
+            if (v == nullptr || std::abs (v->getVolumeDb() - static_cast<float> (level.getValue())) < 0.01f)
+                return;
+
+            if (! level.isMouseButtonDown())
+                editing::begin (session.getEdit(), columnName.getText() + " volume");   // a typed figure: its own undo step
+
+            v->setVolumeDb (static_cast<float> (level.getValue()));
+            repaint();
+        };
+        for (auto* c : std::initializer_list<Component*> { &columnLevel, &level })
+            addChildComponent (c);
         for (auto* l : { &columnInto, &columnFrom, &columnPlugins })
             styleLabel (*l, theme::textSm, theme::text, true);
         styleLabel (columnFromList, theme::textSm, theme::muted);
@@ -1974,6 +2015,7 @@ namespace carthage::ui
             return;
 
         line->setChannel (channel);   // null: master's Line
+        readLevel();
         const auto renamable = channel != nullptr && channel != editing::preMaster (edit);
         columnName.setEditable (false, renamable, false);
         columnName.setTooltip (renamable ? "Double-click to rename this channel" : String());
@@ -2197,10 +2239,36 @@ namespace carthage::ui
         editor->grabKeyboardFocus();
     }
 
+    tracktion::VolumeAndPanPlugin* MixerView::levelTarget() const
+    {
+        if (auto* channel = selectedChannel())
+            return editing::faderOf (*channel);
+
+        return masterSelected ? session.getEdit().getMasterVolumePlugin().get() : nullptr;
+    }
+
+    void MixerView::readLevel()
+    {
+        auto* v = levelTarget();
+        level.setVisible (v != nullptr);
+        columnLevel.setVisible (v != nullptr);
+
+        if (v == nullptr)
+            return;
+
+        level.setDefault (masterSelected ? editing::projectLoudness (session.getEdit()) : 0.0);
+
+        // Follows the fader, unless the person is dragging it or typing into it here.
+        if (! level.isMouseButtonDown() && ! level.hasKeyboardFocus (true))   // its figure is being typed into
+            level.setValue (std::clamp (static_cast<double> (v->getVolumeDb()), static_cast<double> (minDb), static_cast<double> (maxDb)), dontSendNotification);
+    }
+
     void MixerView::timerCallback()
     {
         if (rebuildPending)
             rebuild();
+
+        readLevel();
 
         if (! isShowing())
             return;
@@ -2258,6 +2326,13 @@ namespace carthage::ui
             columnName.setBounds (title);
         }
         column.removeFromTop (theme::space2);
+
+        {
+            auto row = column.removeFromTop (28);
+            columnLevel.setBounds (row.removeFromLeft (44));
+            level.setBounds (row);
+            column.removeFromTop (theme::space2);
+        }
 
         if (masterSelected)
         {

@@ -116,6 +116,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   its name. Settings > Browser can fit a dropped loop to the project's tempo.
 
 ### Changed
+- The mixer's route buttons are much larger (each strip's full width), and a click on them, or
+  around them, only routes: it never changes which channel is selected.
+- The mixer's column has a Level row: drag it, or click the figure and type a level in dB.
 - A mixer channel's "→" line lists every channel it plays into ("→ 1, 2, 10"), and its tooltip
   names them in full.
 - The routing cables run all the way into the strips they reach, master's and the Pre-Master's

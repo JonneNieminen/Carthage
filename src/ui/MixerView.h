@@ -124,6 +124,12 @@ namespace carthage::ui
         juce::Label columnName, columnInto, columnFrom, columnFromList, columnPlugins, columnInput;
         juce::ComboBox input, masterOutput;
         Switch hear { "Hear the input" }, recordHere { "Arm: record this channel" };
+
+        // The selected channel's (or master's) level, to drag or to type in dB (owner).
+        juce::Label columnLevel;
+        ValueSlider level { 0.0 };
+        tracktion::VolumeAndPanPlugin* levelTarget() const;
+        void readLevel();
         std::unique_ptr<InsertLine> line;
         juce::ComboBox output;
         void refreshColumn();
