@@ -215,6 +215,7 @@ namespace carthage::app
                 case toggleMixer:
                     info.setInfo ("Show mixer", "Show the mixer in place of the lanes, or the lanes again (in its own window: bring it forward)", "Window", 0);
                     info.addDefaultKeypress (KP::F9Key, 0);
+                    info.addDefaultKeypress ('x', 0);   // a second key: some keyboards keep F9 for themselves (owner)
                     break;
                 case pluginBrowser:
                     info.setInfo ("Show plugins", "Show or hide the plugin browser", "Plugin", 0);

@@ -98,6 +98,8 @@ namespace carthage::ui
         juce::Viewport viewport;
         class StripHolder;
         std::unique_ptr<StripHolder> stripHolder;
+        class CableBand;
+        std::unique_ptr<CableBand> cableLayer;
         /** "Add channel"; a right-click offers several at once (owner). */
         struct AddButton final : public juce::TextButton
         {

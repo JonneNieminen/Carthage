@@ -383,4 +383,6 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   arrive (fn or not). Likely macOS or Wootility takes F9. Asked the owner; a second default key is
   an option.
 - Not tried in the app: the owner's Carthage was running the previous build with their takes.
+- Then W59: cables in a band over the whole mixer (into master and the Pre-Master), the strip's
+  "→" lists every destination, X shows the mixer too. Checked by snapshot.
 

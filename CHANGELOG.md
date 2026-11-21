@@ -116,6 +116,11 @@ Fixed or Removed. Write what the user can now do, not what the code does.
   its name. Settings > Browser can fit a dropped loop to the project's tempo.
 
 ### Changed
+- A mixer channel's "→" line lists every channel it plays into ("→ 1, 2, 10"), and its tooltip
+  names them in full.
+- The routing cables run all the way into the strips they reach, master's and the Pre-Master's
+  too: sound bound for master goes into the Pre-Master and on into master.
+- X also shows the mixer, beside F9 (some keyboards keep F9 for themselves).
 - On the ruler, a left click or drag moves the playhead; a right-drag sets the loop region.
 - The plugin wet/dry knob is now called plugin volume; the toolbar's Master slider is App loudness.
 - The mixer and Settings buttons sit beside Snap.
