@@ -113,6 +113,16 @@ public:
             expect (ui::motion::allowedFor (s) == ! ui::motion::reduced(), "stopped, it moves unless the system asks for less motion");
         }
 
+        beginTest ("A panel shown again after a fade-out is opaque, whether or not anything rises (owner's empty sample editor)");
+        {
+            juce::Component panel;
+            panel.setAlpha (0.0f);   // where a finished ComponentAnimator::fadeOut leaves it
+            panel.setVisible (false);
+            ui::motion::showAgain (panel);
+            expect (panel.isVisible());
+            expectEquals (panel.getAlpha(), 1.0f, "not left see-through");
+        }
+
         beginTest ("A tween that may not move lands at its end at once");
         {
             juce::Component owner;

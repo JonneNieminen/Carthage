@@ -823,7 +823,8 @@ namespace carthage::ui
     void MainComponent::openSampleEditor (tracktion::Clip& c)
     {
         const auto opening = ! sampleEditor.isVisible();
-        sampleEditor.setVisible (true);
+
+        motion::showAgain (sampleEditor);   // closing faded it to alpha 0; the rise below may be skipped
         sampleEditorEdge.setVisible (true);
         resized();
         sampleEditor.show (c);

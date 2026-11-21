@@ -11,10 +11,20 @@ namespace carthage::ui
     {
         constexpr int rowHeight = 28, sliderRow = 24, headingHeight = 16, labelWidth = 56, controlsWidth = 380;
 
-        /** "Key: A minor   Tempo: 120 bpm" (owner: the key clearly apart from the clip count). */
+        /** "Key: A minor   BPM: 120" (owner): the key clearly apart from the clip count, the tempo
+            beside it in the same form, each saying so when none was found. */
+        String bpmText (std::optional<double> bpm)
+        {
+            if (! bpm)
+                return "BPM: none found";
+
+            const auto whole = std::abs (*bpm - std::round (*bpm)) < 0.05;
+            return "BPM: " + (whole ? String (roundToInt (*bpm)) : String (*bpm, 1));
+        }
+
         String factsText (const engine::SampleLibrary::Analysis& a)
         {
-            return "Key: " + (a.key.isNotEmpty() ? a.key : String ("none found")) + (a.bpm ? "   Tempo: " + String (*a.bpm, 1) + " bpm" : String());
+            return "Key: " + (a.key.isNotEmpty() ? a.key : String ("none found")) + "   " + bpmText (a.bpm);
         }
     }
 
@@ -236,7 +246,7 @@ namespace carthage::ui
                     return;
 
                 safe->bpm = found ? found->bpm : std::nullopt;
-                safe->facts.setText (found ? factsText (*found) : String ("Key: none found"),
+                safe->facts.setText (found ? factsText (*found) : String ("Key: none found   BPM: none found"),
                                      dontSendNotification);
                 safe->fit.setEnabled (safe->bpm.has_value());
             });

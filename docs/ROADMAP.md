@@ -748,6 +748,8 @@ Deliver:
 - [ ] (Export moved to phase 5, with Cmd+R and the loop-region or whole-project choice)
 - [ ] README updated with real screenshots, install steps and the shortcut table; feature cards added to the README art
 - [ ] A pass over every feature in the brief, 1–12, with anything missing listed
+- [ ] **Owner (2026-11-21):** a small Carthage mark in the right-hand corner of each project tab,
+      quiet, so the app stays minimal but plainly Carthage's (the fixed mark, not redrawn)
 - [ ] **Owner (2026-11-21):** more colours to choose from everywhere a colour is chosen (lanes,
       mixer channels, clips): new tokens in `design/tokens.css` first
 - [ ] **Owner's ideas (F20):** illustrated getting-started help (wiring an interface and microphone, what plugins do, starting with guitar), input level help, and troubleshooting that finds and fixes the actual problem
@@ -761,7 +763,34 @@ Report: _not written yet_
 
 ---
 
-## Phase 8 — Refine animations
+## Phase 8 — Performance optimization
+
+Owner (2026-11-21): "serious buffer underruns and audio dropouts" with the recommended settings.
+Where playback and the audio thread are made solid and lean.
+
+Deliver:
+- [ ] Reproduce the owner's dropouts: their interface, buffer size, project and plugins; count them
+      (the dropouts figure in Settings > Audio) and find where each block's time goes (Instruments,
+      the bench, RTSan)
+- [ ] The recommended settings hold with no dropouts on the owner's Mac, or the recommendation
+      changes to what does
+- [ ] The audio thread and Tracktion's render threads: no allocation, locks or waiting
+      (RTSan baseline unchanged), work spread over cores, plugins with latency or heavy CPU named
+- [ ] The message thread never holds up audio: painting, meters and the cables under the mixer
+      measured at display rate with a busy project open
+- [ ] Bench cases for a busy session (many channels, plugins, clips) and an idle mixer, with
+      limits CI checks
+
+Exit checks:
+- [ ] An hour of playback and recording on the owner's project at the recommended buffer size:
+      no dropouts
+- [ ] Load figures (CPU, audio thread) before and after, in the report
+
+Report: _not written yet_
+
+---
+
+## Phase 9 — Refine animations
 
 Owner (2026-11-21). A pass over every animation in the app once the features stand.
 
@@ -781,7 +810,7 @@ Report: _not written yet_
 
 ---
 
-## After phase 8
+## After phase 9
 
 - [ ] **Owner's list (F22, W38):** a help assistant that knows Carthage: on-device (Apple's model on
       macOS 26+, an optional downloaded model elsewhere), reading Carthage's own measurements (levels,

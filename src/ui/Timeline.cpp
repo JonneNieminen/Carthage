@@ -1576,6 +1576,30 @@ namespace carthage::ui
         vScroll.setAutoHide (true);
         hScroll.addListener (this);
         vScroll.addListener (this);
+
+        // Pulling a scroll bar's end zooms (owner): time along the bottom, lane height at the side.
+        hScroll.onZoom = [this] (Range<double> beats)
+        {
+            pixelsPerBeat = std::clamp (lanesArea().getWidth() / std::max (beats.getLength(), 1.0e-3), minPixelsPerBeat, maxPixelsPerBeat);
+            setScrollBeat (beats.getStart());
+            updateScrollBars();
+        };
+        vScroll.onZoomStart = [this] { zoomFromHeight = laneHeight; };
+        vScroll.onZoom = [this] (Range<double> pixels)
+        {
+            // The part of the lanes taken hold of becomes the whole height: lanes grow or shrink
+            // to fit, measured from where the drag began.
+            const auto view = static_cast<double> (lanesArea().getHeight());
+
+            if (pixels.getLength() <= 0.0)
+                return;
+
+            setLaneHeight (roundToInt (zoomFromHeight * view / pixels.getLength()));
+            const auto grown = static_cast<double> (laneHeight) / std::max (1, zoomFromHeight);
+            scrollY = std::clamp (roundToInt (pixels.getStart() * grown), 0, std::max (0, lanesHeight() - lanesArea().getHeight()));
+            repaintLanes();
+            updateScrollBars();
+        };
         editState.addListener (this);
     }
 

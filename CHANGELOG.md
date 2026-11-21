@@ -11,6 +11,9 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Zoom the main grid by its scroll bars: drag either end of the bottom bar's thumb to show more
+  or less time, or of the side bar's to make lanes taller or shorter. The middle still scrolls.
+- The sample editor shows the tempo beside the key, "BPM: 120", or that none was found.
 - Drop several samples at once (from the sample browser, Cmd- or Shift-click to pick them, or from
   the Finder/Explorer) and each lands on its own lane, from where you drop down, and plays into
   its own free mixer channel; lanes and channels are added when there are not enough. While you
@@ -183,6 +186,8 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 
 
 ### Fixed
+- The sample editor no longer opens empty after it was closed and opened again while playing
+  (or with reduced motion on).
 - The plugin browser's manufacturer filter could not be opened again after choosing one.
 - An export no longer loses the first moment of its first sound when a plugin in the mix looks ahead.
 

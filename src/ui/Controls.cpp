@@ -118,6 +118,134 @@ namespace carthage::ui
         l.setMinimumHorizontalScale (1.0f);
     }
 
+    juce::Range<float> ZoomScrollBar::thumb()
+    {
+        // As juce::ScrollBar places it (no buttons in Carthage's look), to find its ends.
+        const auto length = static_cast<float> (isVertical() ? getHeight() : getWidth());
+        const auto total = getMaximumRangeLimit() - getMinimumRangeLimit();
+        const auto visible = getCurrentRange();
+
+        if (total <= 0.0 || length <= 0.0f)
+            return {};
+
+        const auto minimum = static_cast<float> (getLookAndFeel().getMinimumScrollbarThumbSize (*this));
+        const auto size = std::max (minimum, static_cast<float> (visible.getLength() / total) * length);
+        const auto room = total - visible.getLength();
+        const auto start = room > 0.0 ? static_cast<float> ((visible.getStart() - getMinimumRangeLimit()) / room) * (length - size) : 0.0f;
+        return { start, start + size };
+    }
+
+    ZoomScrollBar::End ZoomScrollBar::endAt (int position)
+    {
+        constexpr float grab = 7.0f;   // pixels either side of an end that hold it
+        const auto t = thumb();
+        const auto p = static_cast<float> (position);
+
+        if (t.isEmpty())
+            return End::none;
+
+        const auto grabWithin = std::min (grab, t.getLength() / 3.0f);   // a short thumb keeps a middle to scroll by
+
+        if (p >= t.getStart() - grab && p <= t.getStart() + grabWithin)
+            return End::start;
+
+        if (p >= t.getEnd() - grabWithin && p <= t.getEnd() + grab)
+            return End::finish;
+
+        return End::none;
+    }
+
+    void ZoomScrollBar::paint (Graphics& g)
+    {
+        ScrollBar::paint (g);
+
+        // A short mark across each end: they can be held.
+        const auto t = thumb();
+
+        if (t.isEmpty())
+            return;
+
+        const auto across = static_cast<float> (isVertical() ? getWidth() : getHeight());
+        const auto mark = across * 0.4f;
+
+        for (const auto end : { End::start, End::finish })
+        {
+            const auto at = end == End::start ? t.getStart() + 3.0f : t.getEnd() - 4.0f;
+            g.setColour (hovered == end || held == end ? theme::text : theme::mist.withAlpha (0.7f));
+
+            if (isVertical())
+                g.fillRect ((across - mark) * 0.5f, at, mark, 1.0f);
+            else
+                g.fillRect (at, (across - mark) * 0.5f, 1.0f, mark);
+        }
+    }
+
+    void ZoomScrollBar::mouseMove (const MouseEvent& e)
+    {
+        if (const auto end = endAt (along (e)); end != hovered)
+        {
+            hovered = end;
+            setMouseCursor (end == End::none ? MouseCursor::NormalCursor
+                                             : isVertical() ? MouseCursor::UpDownResizeCursor : MouseCursor::LeftRightResizeCursor);
+            repaint();
+        }
+    }
+
+    void ZoomScrollBar::mouseExit (const MouseEvent& e)
+    {
+        hovered = End::none;
+        repaint();
+        ScrollBar::mouseExit (e);
+    }
+
+    void ZoomScrollBar::mouseDown (const MouseEvent& e)
+    {
+        held = onZoom ? endAt (along (e)) : End::none;
+
+        if (held == End::none)
+        {
+            ScrollBar::mouseDown (e);
+            return;
+        }
+
+        rangeAtDown = getCurrentRange();
+        downAt = along (e);
+        if (onZoomStart) onZoomStart();
+        repaint();
+    }
+
+    void ZoomScrollBar::mouseDrag (const MouseEvent& e)
+    {
+        if (held == End::none)
+        {
+            ScrollBar::mouseDrag (e);
+            return;
+        }
+
+        // A pixel along the bar is this much of the whole; the other end stays where it was.
+        const auto length = static_cast<double> (isVertical() ? getHeight() : getWidth());
+        const auto perPixel = (getMaximumRangeLimit() - getMinimumRangeLimit()) / std::max (1.0, length);
+        const auto moved = static_cast<double> (along (e) - downAt) * perPixel;
+        const auto smallest = rangeAtDown.getLength() * 0.02;
+        auto range = rangeAtDown;
+
+        if (held == End::start)
+            range.setStart (std::clamp (rangeAtDown.getStart() + moved, getMinimumRangeLimit(), rangeAtDown.getEnd() - smallest));
+        else
+            range.setEnd (std::max (rangeAtDown.getEnd() + moved, rangeAtDown.getStart() + smallest));
+
+        onZoom (range);
+    }
+
+    void ZoomScrollBar::mouseUp (const MouseEvent& e)
+    {
+        if (held == End::none)
+            ScrollBar::mouseUp (e);
+
+        held = End::none;
+        repaint();
+    }
+
     namespace
     {
         Font viewNameFont()   { return theme::uiFont (theme::textXs, true); }

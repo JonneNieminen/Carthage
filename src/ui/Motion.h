@@ -18,6 +18,16 @@ namespace carthage::ui::motion
         [[nodiscard]] virtual bool isPlaying() const = 0;
     };
 
+    /** Shows a panel again after ComponentAnimator::fadeOut hid it: stops what is left of that
+        fade and puts the panel back at full opacity, which a finished fade leaves at 0 (the sample
+        editor reopened empty, owner, 2026-11-21). A rise or fade-in may follow. */
+    inline void showAgain (juce::Component& c)
+    {
+        juce::Desktop::getInstance().getAnimator().cancelAnimation (&c, false);
+        c.setAlpha (1.0f);
+        c.setVisible (true);
+    }
+
     /** Whether `c` may move now: inside a Host that is not playing, and the system has not asked
         for less motion. A control outside any Host (a view in its own window) does not move. */
     [[nodiscard]] inline bool allowedFor (const juce::Component& c)

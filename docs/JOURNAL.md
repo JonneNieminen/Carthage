@@ -397,7 +397,13 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Loopback drawing in Settings > Audio (`SettingsPanel::LoopbackPicture`); typed bus interval.
 - W60: App loudness as an output gain in AudioCallback (OutputGainTests); several dropped sounds
   each on its own lane and free channel (EditingTests); view names; ruler 42 px; "→ Pre-Master".
-- Roadmap: more colours (phase 7), a new phase 8 to refine animations.
-- Still asked for, not started: zoom by dragging the ends of the main grid's scrollbars (both
-  axes), BPM in the sample editor beside the key, 5 Routing section designs, then UAT.
+- Roadmap: more colours and a Carthage mark on each project tab (phase 7); phase 8 performance
+  optimization (the owner hears serious dropouts at the recommended settings); phase 9 refine
+  animations.
+- Main grid scroll bars zoom when their ends are dragged (`ZoomScrollBar`); the sample editor shows
+  "BPM: 120" (or "none found") beside the key.
+- Fixed: the sample editor reopened see-through (a finished fade-out leaves alpha 0 and the rise
+  was skipped while playing); `motion::showAgain`, MotionTests.
+- Still asked for, not started: 5 Routing section designs, then UAT. The owner's dropouts are
+  phase 8's first task; not looked into yet.
 

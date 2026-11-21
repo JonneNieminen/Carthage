@@ -132,6 +132,37 @@ namespace carthage::ui
         back to its default, and the scroll wheel over it adjusts it, with Shift for fine steps (a
         tenth). Switches and menus are not, and ignore the wheel, so scrolling a panel never
         changes a choice by accident. */
+    /** A scroll bar whose thumb can be pulled longer or shorter by its ends to zoom (owner): the
+        thumb is the part in view, so dragging an end out shows more, in shows less. The middle
+        scrolls as usual; small marks show the ends can be held. */
+    class ZoomScrollBar final : public juce::ScrollBar
+    {
+    public:
+        using juce::ScrollBar::ScrollBar;
+
+        /** While an end is dragged: the range the view should now show. The owner zooms to it
+            and sets the scroll bar's range again. */
+        std::function<void (juce::Range<double>)> onZoom;
+        std::function<void()> onZoomStart;   ///< when an end is taken hold of
+
+        void paint (juce::Graphics&) override;
+        void mouseMove (const juce::MouseEvent&) override;
+        void mouseExit (const juce::MouseEvent&) override;
+        void mouseDown (const juce::MouseEvent&) override;
+        void mouseDrag (const juce::MouseEvent&) override;
+        void mouseUp (const juce::MouseEvent&) override;
+
+    private:
+        enum class End { none, start, finish };
+        juce::Range<float> thumb();   // along the bar, in pixels (non-const: the look asks for a ScrollBar&)
+        End endAt (int position);
+        int along (const juce::MouseEvent& e) const   { return isVertical() ? e.y : e.x; }
+
+        End held = End::none, hovered = End::none;
+        juce::Range<double> rangeAtDown;
+        int downAt = 0;
+    };
+
     class ValueSlider final : public juce::Slider
     {
     public:

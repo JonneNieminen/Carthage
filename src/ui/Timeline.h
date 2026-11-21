@@ -145,6 +145,7 @@ namespace carthage::ui
         double scrollBeat = 0.0;
         int scrollY = 0;
         int laneHeight = defaultLaneHeight;   // the default for lanes without a height of their own
+        int zoomFromHeight = defaultLaneHeight;   // laneHeight when a scroll bar end was taken hold of
         int headerWidth = defaultHeaderWidth;
         int currentLane = 0;   // the current lane's id
         editing::Lane findCurrentLane() const;
@@ -173,7 +174,7 @@ namespace carthage::ui
         std::unique_ptr<Lanes> lanes;
         std::unique_ptr<Playhead> playhead;
         std::unique_ptr<RecordingRegion> recording;
-        juce::ScrollBar hScroll { false }, vScroll { true };
+        ZoomScrollBar hScroll { false }, vScroll { true };   // their ends zoom (owner)
         juce::TextButton addLaneButton { "Add lane" };   // in the corner above the lane headers
         PanelEdge headerEdge;                            // the border between lane names and the grid
         int fittingHeaderWidth() const;
