@@ -19,6 +19,10 @@
 //                          [--plugin-format VST3|AudioUnit --plugin FILE_OR_ID] [--while-playing]
 //                          (records takes back to back the way a player does: R, play, R, R, ...;
 //                          every other one after returning to the start; reports any that ended early)
+//   carthage-bench presets --plugin-format VST3|AudioUnit --plugin FILE_OR_ID [--parameter N]
+//                          (a real plugin's presets, W64: a setting changed, saved as a Carthage preset and
+//                          in the plugin's own format (.vstpreset or .aupreset), changed again, then each
+//                          loaded back through Carthage; the setting must return, and undo take it away)
 //   carthage-bench projects
 //                          (through the app's Session: save as, reopen, save, autosave after a pause, a
 //                          crash left behind and its recovery; needs no particular device)
@@ -40,6 +44,7 @@
 #include <engine/AudioFormats.h>
 
 #include <engine/Editing.h>
+#include <engine/Presets.h>
 #include <engine/Session.h>
 #include <engine/SettingsTest.h>
 #include <engine/SampleEdits.h>
@@ -145,6 +150,7 @@ namespace
             else if (args.command == "plugin-window") result = pluginWindow();
             else if (args.command == "carrier") result = carrier();
             else if (args.command == "idle-mixer") result = idleMixer();
+            else if (args.command == "presets") result = presetRoundTrip();
             else say ("unknown command: " + args.command);
 
             onMessageThreadVoid ([this] { session.reset(); });
@@ -638,6 +644,154 @@ namespace
             check (! carthage::editing::addSend (*other, *channel).wasOk(), "a send back would loop: refused");
             say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
             return checksFailed == 0 ? 0 : 1;
+        }
+
+        /** A real plugin's presets (W64): save, change, load back, undo. Needs no audio device. */
+        int presetRoundTrip()
+        {
+            // A VST3 hands a changed setting to its audio side only while it processes audio: with
+            // --device the plugin runs, as it does in the app, and its saved state is current.
+            if (args.has ("device") && ! openDevice (args.getInt ("buffer", 256)))
+                return 1;
+
+            if (insertPlugin() != 0)
+                return 1;
+
+            if (args.has ("play"))   // the plugin processed all along, as while a project plays
+                onMessageThreadVoid ([this] { session->getEdit().getTransport().play (false); });
+
+            const auto index = args.getInt ("parameter", 0);
+            int failures = 0;
+            const auto check = [&] (bool ok, const String& what)
+            {
+                say (String (ok ? "PASS " : "FAIL ") + what);
+                failures += ok ? 0 : 1;
+            };
+
+            // The plugin's parameter `index`, read and written through Tracktion's parameter for it,
+            // as the host does: set behind Tracktion's back, an Audio Unit's value was pushed back
+            // to Tracktion's and its saved state never held it; read from JUCE's, an AU gives a
+            // cached value, not the unit's.
+            const auto paramOf = [index] (tracktion::Plugin* p) -> tracktion::AutomatableParameter*
+            {
+                auto* ext = dynamic_cast<tracktion::ExternalPlugin*> (p);
+                auto* instance = ext != nullptr ? ext->getAudioPluginInstance() : nullptr;
+
+                if (instance == nullptr || ! isPositiveAndBelow (index, instance->getParameters().size()))
+                    return nullptr;
+
+                auto* hosted = dynamic_cast<HostedAudioProcessorParameter*> (instance->getParameters()[index]);
+
+                for (auto* param : ext->getAutomatableParameters())
+                    if (hosted != nullptr && param->paramID == hosted->getParameterID())
+                        return param;
+
+                return nullptr;
+            };
+            const auto valueOf = [paramOf] (tracktion::Plugin* p) -> float
+            {
+                auto* param = paramOf (p);
+                return param != nullptr ? param->getCurrentValue() : -1.0f;
+            };
+            const auto setValue = [paramOf] (tracktion::Plugin* p, float v)
+            {
+                if (auto* param = paramOf (p))
+                    param->setParameter (v, sendNotification);
+            };
+
+            auto* first = onMessageThread ([this] { return session->getInsertedPlugin(); });
+            auto* list = first != nullptr ? first->getOwnerList() : nullptr;
+            auto* ext = dynamic_cast<tracktion::ExternalPlugin*> (first);
+
+            if (ext == nullptr || list == nullptr || ext->getAudioPluginInstance() == nullptr)
+            {
+                say ("FAIL no plugin instance to try presets on");
+                return 1;
+            }
+
+            const auto name = onMessageThread ([&] { return ext->getAudioPluginInstance()->getParameters()[index]->getName (64); });
+            say ("parameter " + String (index) + ": " + name);
+
+            const auto saved = 0.23f, changed = 0.81f;
+            Array<File> files;
+
+            onMessageThreadVoid ([&] { setValue (first, saved); });
+            waitMs (500);   // processed, if the device runs
+
+            onMessageThreadVoid ([&]
+            {
+                auto* instance = ext->getAudioPluginInstance();
+                const auto own = folder.getChildFile (String ("Saved") + presets::extension);
+                check (presets::save (*first, own).wasOk(), "saved as a Carthage preset");
+                files.add (own);
+
+                // In the plugin's own format, as the plugin itself writes it.
+                if (ext->isVST3())
+                {
+                    if (auto* vst3 = instance->getVST3Client())
+                    {
+                        const auto f = folder.getChildFile ("Saved.vstpreset");
+                        const auto data = vst3->getPreset();
+                        check (! data.isEmpty() && f.replaceWithData (data.getData(), data.getSize()), "the plugin wrote a .vstpreset");
+                        files.add (f);
+                    }
+                }
+                else if (ext->isAU())
+                {
+                    MemoryBlock data;
+                    instance->getStateInformation (data);   // an AU's state is its class info: an .aupreset's content
+                    const auto f = folder.getChildFile ("Saved.aupreset");
+                    check (! data.isEmpty() && f.replaceWithData (data.getData(), data.getSize()), "the plugin wrote its state as an .aupreset");
+                    files.add (f);
+                }
+            });
+
+            for (const auto& f : files)
+            {
+                onMessageThreadVoid ([&] { setValue (editing::insertsOf (*list).getLast(), changed); });
+                waitMs (500);
+
+                // Load, then read after a moment, undo, then read again: an Audio Unit's parameter
+                // values reach JUCE's host through the unit's notifications, a little later.
+                const auto r = onMessageThread ([&]
+                {
+                    auto* current = editing::insertsOf (*list).getLast();
+                    editing::begin (session->getEdit(), "Load preset");
+                    return presets::load (*current, f).second;
+                });
+                waitMs (500);
+                const auto after = onMessageThread ([&] { return valueOf (editing::insertsOf (*list).getLast()); });
+
+                // For an Audio Unit, what the unit itself holds, against the .aupreset written from
+                // the setting (Tracktion's view of an AU's parameter can lag the unit, see above).
+                if (const auto au = folder.getChildFile ("Saved.aupreset"); au.existsAsFile())
+                {
+                    const auto holds = onMessageThread ([&]
+                    {
+                        MemoryBlock now, saved;
+                        auto* e = dynamic_cast<tracktion::ExternalPlugin*> (editing::insertsOf (*list).getLast());
+                        if (e != nullptr && e->getAudioPluginInstance() != nullptr)
+                            e->getAudioPluginInstance()->getStateInformation (now);
+                        au.loadFileAsData (saved);
+                        return now == saved;
+                    });
+                    check (holds, f.getFileName() + ": the unit itself holds the saved setting");
+                }
+                onMessageThreadVoid ([&] { editing::undo (session->getEdit()); });
+                waitMs (500);
+                const auto undone = onMessageThread ([&] { return valueOf (editing::insertsOf (*list).getLast()); });
+                check (r.wasOk(), f.getFileName() + " loaded" + (r.failed() ? ": " + r.getErrorMessage() : String()));
+                // An Audio Unit takes a state whole without reporting each parameter, so Tracktion's
+                // view of it lags (W64); what counts is what the unit holds, checked above.
+                if (ext->isAU())
+                    say ("  " + f.getFileName() + ": Tracktion's view of the setting reads " + String (after, 3) + " (an AU does not report a whole-state load)");
+                else
+                    check (std::abs (after - saved) < 0.01f, f.getFileName() + ": the setting is back to " + String (saved, 2) + " (" + String (after, 3) + ")");
+                check (std::abs (undone - changed) < 0.01f, f.getFileName() + ": undo takes it back to " + String (changed, 2) + " (" + String (undone, 3) + ")");
+            }
+
+            say ("RESULT presets: " + String (failures) + " failed");
+            return failures == 0 ? 0 : 1;
         }
 
         /** What 50 empty channels cost (5a exit check): the audio thread's load playing an empty

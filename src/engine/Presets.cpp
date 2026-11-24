@@ -126,8 +126,25 @@ namespace carthage::presets
             return { created, created != nullptr ? juce::Result::ok() : juce::Result::fail ("Carthage could not make " + p.getName() + " from " + file.getFileName()) };
         }
 
-        // A plugin's own format: the plugin reads it, its new state is taken, and the plugin in
-        // the Line goes back to how it was before (that is what an undo brings back).
+        // An Audio Unit's preset is the unit's whole state, as the host stores it: the new plugin
+        // is made from the old one's tree with that state in it, the old one untouched.
+        if (kindOf (file) == ".aupreset")
+        {
+            juce::MemoryBlock data;
+
+            if (! file.loadFileAsData (data) || data.isEmpty())
+                return { {}, juce::Result::fail ("Carthage could not read " + file.getFileName()) };
+
+            p.flushPluginStateToValueTree();
+            auto state = p.state.createCopy();
+            state.setProperty (IDs::state, data.toBase64Encoding(), nullptr);
+            state.removeProperty (IDs::parameters, nullptr);   // values the old settings left behind
+            auto created = replaceWith (p, state);
+            return { created, created != nullptr ? juce::Result::ok() : juce::Result::fail ("Carthage could not make " + p.getName() + " from " + file.getFileName()) };
+        }
+
+        // A VST3's preset: the plugin reads it, its new state is taken, and the plugin in the Line
+        // goes back to how it was before (that is what an undo brings back).
         auto* ext = dynamic_cast<ExternalPlugin*> (&p);
         auto* instance = ext != nullptr ? ext->getAudioPluginInstance() : nullptr;
         juce::MemoryBlock data;
@@ -139,16 +156,8 @@ namespace carthage::presets
         const auto before = p.state.createCopy();
         bool read = false;
 
-        if (kindOf (file) == ".vstpreset")
-        {
-            if (auto* vst3 = instance->getVST3Client())
-                read = vst3->setPreset (data);
-        }
-        else
-        {
-            instance->setStateInformation (data.getData(), static_cast<int> (data.getSize()));   // an .aupreset is the unit's class info
-            read = true;
-        }
+        if (auto* vst3 = instance->getVST3Client())
+            read = vst3->setPreset (data);
 
         if (! read)
             return { {}, juce::Result::fail (p.getName() + " did not take " + file.getFileName()) };

@@ -692,7 +692,7 @@ Deliver:
       lane, the newest full pass playing; punch in the loop region, off by default; several armed
       channels record at once, each to its own take; tested headless, not yet tried with an interface)
 - [ ] **Owner's addition (F19, W30):** plugin presets in one format for one plugin or a whole Insert Line, in a folder the user chooses; opening .vstpreset and .aupreset, and other DAWs' presets as far as their formats allow
-      (built W63, W64: a whole Insert Line saves and loads as a mixer chain, `.carthagechain`; one plugin's presets as `.carthagepreset`, and .vstpreset and .aupreset opened onto their plugins; any folder, starting in Carthage's own; tested headless with a built-in stand-in, not yet with a real plugin's .vstpreset/.aupreset; other DAWs' formats not done)
+      (built W63, W64: a whole Insert Line saves and loads as a mixer chain, `.carthagechain`; one plugin's presets as `.carthagepreset`, and .vstpreset and .aupreset opened onto their plugins; any folder, starting in Carthage's own; tested headless with a built-in stand-in and with the bench on FabFilter Pro-C 2 (VST3, AU) and Apple's AUDelay, each kind loaded back and undone; other DAWs' formats not done)
 - [ ] **Owner's list (F22, W38):** plugins in their own processes except the live input chain,
       grouped automatically by crash history (on by default; your own grouping when off); presets
       under each plugin in the browser and from folders onto channels (built W64: the browser's

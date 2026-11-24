@@ -443,8 +443,11 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   block); feedback refusal ticked from MixerTests; idle mixer measured on the iD44 (0.89%).
 - 5e: `engine/Presets` (W64), the Line's Presets menu, the browser's right-click "Add with a
   preset", `Paths::presets`. Tested with Tracktion's reverb as a stand-in.
-- Next: try a real plugin's .vstpreset/.aupreset (e.g. a plugin on this Mac that ships presets),
-  then 5f (plugins in their own processes) and 5g.
+- Real plugins (bench `presets`, no preset files ship on this Mac, so the plugin writes them): Pro-C 2
+  VST3 and AU, Apple AUDelay: all pass. Found on the way: set a parameter through JUCE behind
+  Tracktion's back and an AU's saved state never holds it; set through Tracktion it does. An AU's
+  whole-state load leaves Tracktion's parameter view stale (the unit is right; W64).
+- Next: 5f (plugins in their own processes) and 5g.
 - Still asked for, not started: 5 Routing section designs, then UAT. The owner's dropouts are
   phase 8's first task; not looked into yet.
 

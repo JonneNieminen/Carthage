@@ -99,6 +99,8 @@ open --env CARTHAGE_FRAME_LOG=1 --stderr build/demo/frames.log build/release/src
     --args "$PWD/build/demo/Demo/Demo.carthage"   # a project on the command line opens at launch
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench takes --device "Audient iD44" \
     --rate 48000 --buffer 512 --plugin-format AudioUnit --plugin "AudioUnit:Effects/aufx,Akrc,Bgrn"
+build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench presets --play --device "Audient iD44" \
+    --rate 48000 --plugin-format VST3 --plugin "/Library/Audio/Plug-Ins/VST3/FabFilter Pro-C 2.vst3" --parameter 1
 ```
 
 - clangd reads `build/debug/compile_commands.json` (see `.clangd`); configure the `debug` preset once.
