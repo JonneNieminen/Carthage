@@ -154,8 +154,45 @@ namespace carthage::ui
                 }
             }
 
-            void listBoxItemClicked (int row, const MouseEvent&) override   { choose (row); }
-            void returnKeyPressed (int row) override                       { choose (row); }
+            void returnKeyPressed (int row) override   { choose (row); }
+
+            /** Each row takes its own clicks (owner: a click sometimes needed several). JUCE's list
+                chooses an already highlighted row only on mouse-up and drops that click if the
+                pointer moved a little in between; a row here chooses on release anywhere on it. */
+            struct Row final : public Component
+            {
+                explicit Row (ManufacturerList& o) : owner (o)   { setRepaintsOnMouseActivity (true); }
+
+                void paint (Graphics& g) override
+                {
+                    owner.paintListBoxItem (row, g, getWidth(), getHeight(), isMouseOver() || owner.list.isRowSelected (row));
+                }
+
+                void mouseEnter (const MouseEvent&) override   { owner.list.selectRow (row, true, true); }
+                void mouseUp (const MouseEvent& e) override
+                {
+                    if (! e.mods.isPopupMenu() && getLocalBounds().contains (e.getPosition()))
+                        owner.choose (row);
+                }
+
+                ManufacturerList& owner;
+                int row = -1;
+            };
+
+            Component* refreshComponentForRow (int row, bool, Component* existing) override
+            {
+                auto* r = dynamic_cast<Row*> (existing);
+
+                if (r == nullptr)
+                {
+                    delete existing;   // the list owns what this returns
+                    r = new Row (*this);
+                }
+
+                r->row = row;
+                r->repaint();
+                return r;
+            }
         };
     }
 

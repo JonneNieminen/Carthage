@@ -926,7 +926,7 @@ namespace carthage::ui
                     return;   // another project came forward meanwhile
 
                 for (int n = 0; n < count; ++n)
-                    edit->getUndoManager().undo();
+                    editing::undo (*edit);
 
                 commands.commandStatusChanged();
                 setStatus (count == 1 ? String ("Undid 1 step") : "Undid " + String (count) + " steps");
@@ -1002,8 +1002,8 @@ namespace carthage::ui
             case cmd::toolSelect: case cmd::toolDraw: case cmd::toolPaint: case cmd::toolSlice:
             case cmd::toolDelete: case cmd::toolMute: case cmd::toolZoom: case cmd::toolStretch:
                 toolCommand (info); return true;
-            case cmd::undo:             session.getEdit().getUndoManager().undo(); commands.commandStatusChanged(); return true;
-            case cmd::redo:             session.getEdit().getUndoManager().redo(); commands.commandStatusChanged(); return true;
+            case cmd::undo:             editing::undo (session.getEdit()); commands.commandStatusChanged(); return true;
+            case cmd::redo:             editing::redo (session.getEdit()); commands.commandStatusChanged(); return true;
             // A key equivalent arrives inside the menu bar's own handling; a list opened there is
             // closed again at once (undo history did nothing from ⌥⌘Z). Open it just after.
             case cmd::undoHistory:      MessageManager::callAsync ([safe = SafePointer<MainComponent> (this)] { if (safe != nullptr) safe->showUndoHistory(); }); return true;

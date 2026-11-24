@@ -1132,6 +1132,25 @@ namespace carthage::ui
         line = std::make_unique<InsertLine> (*this);
 
         columnInto.setText ("Plays into", dontSendNotification);
+        resetRoutingButton.setTooltip ("Reset routing: this channel plays into master again, and its sends are removed. "
+                                       "Its input, plugins and what plays into it stay. One undo step.");
+        resetRoutingButton.onClick = [this] { if (auto* c = selectedChannel()) resetRouting (*c); };
+        addChildComponent (resetRoutingButton);
+
+        loadChainButton.setTooltip ("Load a mixer chain: put plugins saved from another channel here, in place of these");
+        saveChainButton.setTooltip ("Save this channel's plugins, with their settings, as a mixer chain to load elsewhere");
+        copyChannelButton.setTooltip ("Copy this channel to another: level, pan, mute, solo, plugins and routing. "
+                                      "Not its name, colour, input or arm. One undo step.");
+        loadChainButton.onClick = [this] { if (auto* c = selectedChannel()) loadChainOnto (*c); };
+        saveChainButton.onClick = [this] { if (auto* c = selectedChannel()) saveChainOf (*c); };
+        copyChannelButton.onClick = [this]
+        {
+            if (auto* c = selectedChannel())
+                copyMenu (*c).showMenuAsync (PopupMenu::Options().withTargetComponent (&copyChannelButton));
+        };
+
+        for (auto* b : { &loadChainButton, &saveChainButton, &copyChannelButton })
+            addChildComponent (b);
         columnInput.setText ("Input", dontSendNotification);
         styleLabel (columnInput, theme::textSm, theme::text, true);
         input.setTooltip ("The interface input this channel takes: plug your guitar in there");
@@ -1822,6 +1841,139 @@ namespace carthage::ui
         refreshColumn();
     }
 
+    tracktion::AudioTrack* MixerView::channelWithID (tracktion::EditItemID id) const
+    {
+        for (auto* ch : editing::channels (session.getEdit()))
+            if (ch->itemID == id)
+                return ch;
+
+        return nullptr;
+    }
+
+    File MixerView::folderForChains() const
+    {
+        return chainsFolder != File() ? chainsFolder
+                                      : File::getSpecialLocation (File::userDocumentsDirectory).getChildFile ("Carthage mixer chains");
+    }
+
+    void MixerView::loadChainOnto (tracktion::AudioTrack& channel)
+    {
+        const auto folder = folderForChains();
+        [[maybe_unused]] const auto made = folder.createDirectory();
+        chainChooser = std::make_unique<FileChooser> ("Load a mixer chain onto " + channel.getName(), folder, String ("*") + editing::chainExtension);
+        const auto id = channel.itemID;   // the channel may be gone by the time a file is chosen
+
+        chainChooser->launchAsync (FileBrowserComponent::openMode | FileBrowserComponent::canSelectFiles,
+                                   [safe = SafePointer<MixerView> (this), id] (const FileChooser& chooser)
+        {
+            if (safe == nullptr || chooser.getResult() == File())
+                return;
+
+            auto* target = safe->channelWithID (id);
+            const auto chain = editing::readChain (chooser.getResult());
+
+            if (target == nullptr || ! chain)
+            {
+                if (safe->onStatus)
+                    safe->onStatus (chain ? String ("That channel is gone") : chooser.getResult().getFileName() + " is not a mixer chain");
+                return;
+            }
+
+            editing::begin (safe->session.getEdit(), "Load mixer chain onto " + target->getName());
+            const auto placed = editing::loadChain (*target, *chain);
+            const auto wanted = chain->getNumChildren();
+
+            if (safe->onStatus)
+                safe->onStatus ("Loaded " + chooser.getResult().getFileNameWithoutExtension() + " onto " + target->getName()
+                                + (placed < wanted ? ": " + String (wanted - placed) + " of its plugins are not installed here" : String()));
+
+            safe->refreshColumn();
+        });
+    }
+
+    void MixerView::saveChainOf (tracktion::AudioTrack& channel)
+    {
+        if (editing::insertsOf (channel).isEmpty())
+        {
+            if (onStatus)
+                onStatus (channel.getName() + " has no plugins to save yet");
+            return;
+        }
+
+        const auto folder = folderForChains();
+        [[maybe_unused]] const auto made = folder.createDirectory();
+        chainChooser = std::make_unique<FileChooser> ("Save " + channel.getName() + "'s plugins as a mixer chain",
+                                                      folder.getChildFile (File::createLegalFileName (channel.getName()) + editing::chainExtension),
+                                                      String ("*") + editing::chainExtension);
+        const auto id = channel.itemID;
+
+        chainChooser->launchAsync (FileBrowserComponent::saveMode | FileBrowserComponent::canSelectFiles | FileBrowserComponent::warnAboutOverwriting,
+                                   [safe = SafePointer<MixerView> (this), id] (const FileChooser& chooser)
+        {
+            if (safe == nullptr || chooser.getResult() == File())
+                return;
+
+            auto* source = safe->channelWithID (id);
+            const auto file = chooser.getResult().withFileExtension (editing::chainExtension);
+
+            if (source == nullptr)
+                return;
+
+            const auto result = editing::saveChain (*source, file);
+
+            if (safe->onStatus)
+                safe->onStatus (result.wasOk() ? "Saved " + source->getName() + "'s plugins as " + file.getFileNameWithoutExtension() : result.getErrorMessage());
+        });
+    }
+
+    PopupMenu MixerView::copyMenu (tracktion::AudioTrack& channel)
+    {
+        PopupMenu m;
+        auto* held = &channel;
+        auto* next = editing::nextChannel (channel);
+        auto* empty = editing::nextEmptyChannel (channel);
+
+        m.addItem (next != nullptr ? "The next channel (" + next->getName() + ")" : String ("The next channel (there is none)"),
+                   next != nullptr, false, [this, held, next] { copyChannelTo (*held, next); });
+        m.addItem (empty != nullptr ? "The next empty channel (" + empty->getName() + ")" : String ("A new channel at the end (none is empty)"),
+                   [this, held, empty] { copyChannelTo (*held, empty); });
+
+        PopupMenu any;
+
+        for (auto* ch : editing::channels (session.getEdit()))
+            if (ch != held)
+                any.addItem (ch->getName(), [this, held, ch] { copyChannelTo (*held, ch); });
+
+        m.addSubMenu ("Another channel", any);
+        return m;
+    }
+
+    void MixerView::copyChannelTo (tracktion::AudioTrack& from, tracktion::AudioTrack* to)
+    {
+        auto& edit = session.getEdit();
+        editing::begin (edit, "Copy " + from.getName() + (to != nullptr ? " to " + to->getName() : String (" to a new channel")));
+
+        if (to == nullptr)
+            to = editing::addChannel (edit);   // the same undo step
+
+        if (to == nullptr)
+            return;
+
+        const auto result = editing::copyChannel (from, *to);
+
+        if (onStatus)
+            onStatus (result.wasOk() ? "Copied " + from.getName() + " to " + to->getName() : result.getErrorMessage());
+    }
+
+    void MixerView::resetRouting (tracktion::AudioTrack& channel)
+    {
+        editing::begin (session.getEdit(), "Reset routing of " + channel.getName());
+        editing::resetRouting (channel);
+
+        if (onStatus)
+            onStatus (channel.getName() + " plays into master again, with no sends");
+    }
+
     void MixerView::refreshColumn()
     {
         const ScopeGuard relayout { [this] { resized(); } };   // what shows, and the list's height, set the layout
@@ -1830,7 +1982,8 @@ namespace carthage::ui
         const auto any = channel != nullptr || masterSelected;
 
         for (auto* c : std::initializer_list<Component*> { &columnName, &columnInput, &input, &hear, &recordHere,
-                                                           &columnInto, &output, &columnFrom, &columnFromList, &columnPlugins, line.get() })
+                                                           &columnInto, &output, &resetRoutingButton, &columnFrom, &columnFromList, &columnPlugins, line.get(),
+                                                           &loadChainButton, &saveChainButton, &copyChannelButton })
             c->setVisible (any);
 
         masterOutput.setVisible (false);
@@ -1850,7 +2003,8 @@ namespace carthage::ui
         {
             columnName.setText ("Master", dontSendNotification);
 
-            for (auto* c : std::initializer_list<Component*> { &input, &hear, &recordHere, &columnFrom, &columnFromList, &output })
+            for (auto* c : std::initializer_list<Component*> { &input, &hear, &recordHere, &columnFrom, &columnFromList, &output, &resetRoutingButton,
+                                                               &loadChainButton, &saveChainButton, &copyChannelButton })
                 c->setVisible (false);
 
             // Master's place in the column: where it goes, the interface's outputs.
@@ -1876,7 +2030,7 @@ namespace carthage::ui
             // The Pre-Master: its Line, and where it goes (always master).
             columnName.setText ("Pre-Master", dontSendNotification);
 
-            for (auto* c : std::initializer_list<Component*> { &columnInput, &input, &hear, &recordHere, &output, &columnFrom, &columnFromList })
+            for (auto* c : std::initializer_list<Component*> { &columnInput, &input, &hear, &recordHere, &output, &resetRoutingButton, &columnFrom, &columnFromList, &copyChannelButton })
                 c->setVisible (false);
 
             columnInto.setVisible (false);
@@ -1988,6 +2142,12 @@ namespace carthage::ui
                     showRename (*held, s->localAreaToGlobal (s->nameBounds()));
         });
         m.addSubMenu ("Colour", colourMenu (channel));
+        m.addItem ("Reset routing", [this, held] { resetRouting (*held); });
+        m.addSeparator();
+        m.addSubMenu ("Copy channel to", copyMenu (channel));
+        m.addItem (String::fromUTF8 ("Load mixer chain\xe2\x80\xa6"), [this, held] { loadChainOnto (*held); });
+        m.addItem (String::fromUTF8 ("Save mixer chain\xe2\x80\xa6"), ! editing::insertsOf (channel).isEmpty(), false, [this, held] { saveChainOf (*held); });
+        m.addSeparator();
         m.addItem ("Move left", index > 0, false, [&edit, held, index] { editing::begin (edit, "Move channel"); editing::moveChannel (*held, index - 1); });
         m.addItem ("Move right", index < editing::channels (edit).size() - 1, false, [&edit, held, index] { editing::begin (edit, "Move channel"); editing::moveChannel (*held, index + 1); });
         m.addSeparator();
@@ -2215,6 +2375,7 @@ namespace carthage::ui
             hear.setBounds (column.removeFromTop (switchHeight));
             recordHere.setBounds (column.removeFromTop (switchHeight));
             nextSection();
+            resetRoutingButton.setBounds (column.getX() + column.getWidth() - 56, column.getY() - 3, 56, headingHeight + 6);
             heading (columnInto);
             output.setBounds (column.removeFromTop (fieldHeight));
             nextSection();
@@ -2234,6 +2395,16 @@ namespace carthage::ui
             const auto rowHeight = roundToInt (font.getHeight() * 1.25f);
             columnFromList.setBounds (column.removeFromTop (std::min (rowHeight * std::max (1, rows), column.getHeight() / 3)));
             nextSection();
+        }
+
+        {
+            // Load, Save and Copy to on the Plugins heading's row, at its right.
+            auto row = Rectangle<int> (column.getX(), column.getY() - 3, column.getWidth(), headingHeight + 6);
+            copyChannelButton.setBounds (row.removeFromRight (60));
+            row.removeFromRight (theme::space1);
+            saveChainButton.setBounds (row.removeFromRight (44));
+            row.removeFromRight (theme::space1);
+            loadChainButton.setBounds (row.removeFromRight (44));
         }
 
         heading (columnPlugins);

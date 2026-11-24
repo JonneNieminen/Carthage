@@ -27,6 +27,9 @@ namespace carthage::ui
         void projectChanged();
         void projectClosing();
 
+        /** Where mixer chains are saved and looked for (from the app's path provider). */
+        void setChainsFolder (const juce::File& folder)   { chainsFolder = folder; }
+
         /** How the Routing section draws the mix (Settings > Mixer). */
         void setRoutingStyle (routing::Style);
 
@@ -144,6 +147,19 @@ namespace carthage::ui
         void readLevel();
         std::unique_ptr<InsertLine> line;
         juce::ComboBox output;
+        juce::TextButton resetRoutingButton { "Reset" };   // beside "Plays into" (owner)
+        void resetRouting (tracktion::AudioTrack&);
+
+        // Mixer chains (owner, 5e): load and save a channel's plugins; copy a whole channel.
+        juce::TextButton loadChainButton { "Load" }, saveChainButton { "Save" }, copyChannelButton { "Copy to" };
+        juce::File chainsFolder;
+        std::unique_ptr<juce::FileChooser> chainChooser;
+        void loadChainOnto (tracktion::AudioTrack&);
+        void saveChainOf (tracktion::AudioTrack&);
+        juce::PopupMenu copyMenu (tracktion::AudioTrack&);
+        void copyChannelTo (tracktion::AudioTrack& from, tracktion::AudioTrack* to);   // null: a new channel
+        tracktion::AudioTrack* channelWithID (tracktion::EditItemID) const;
+        juce::File folderForChains() const;
         void refreshColumn();
 
         void rebuild();

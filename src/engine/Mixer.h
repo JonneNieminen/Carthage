@@ -2,6 +2,8 @@
 
 #include <tracktion_engine/tracktion_engine.h>
 
+#include <optional>
+
 namespace carthage::editing
 {
     /** Phase 5a's model (W47, W49): lanes and mixer channels are separate (F5).
@@ -130,6 +132,11 @@ namespace carthage::editing
     void removeSend (tracktion::AudioTrack& from, tracktion::AudioTrack& to);
     void setSendLevel (tracktion::AudioTrack& from, tracktion::AudioTrack& to, float gainDb);
 
+    /** Reset routing (owner): the channel's main output back on and into master (through the
+        Pre-Master while it is on), and every send it has removed. Its input, its plugins and what
+        plays into it stay. Inside the caller's undo step. */
+    void resetRouting (tracktion::AudioTrack&);
+
     /** A channel's fader: its own volume and pan (never Tracktion's getVolumePlugin(), which
         returns the last such stage, and a channel may end in a "main output off" gate). */
     tracktion::VolumeAndPanPlugin* faderOf (tracktion::AudioTrack&);
@@ -233,6 +240,31 @@ namespace carthage::editing
         keeps running (its window stays open); across channels it is rebuilt from its saved state. */
     void moveInsert (tracktion::Plugin&, tracktion::PluginList& to, int slot);
     void removeInsert (tracktion::Plugin&);
+
+    /** Mixer chains (owner, 5e): a channel's plugins in order, each with its settings, as one
+        tree (`<CARTHAGECHAIN version="1">`), to save as a preset, load onto another channel, or
+        copy with the rest of a channel. */
+    juce::ValueTree chainOf (tracktion::AudioTrack&);
+
+    /** Puts a chain on a channel in place of the plugins it has; inside the caller's undo step.
+        Returns how many plugins were placed (a plugin no longer installed is skipped). */
+    int loadChain (tracktion::AudioTrack&, const juce::ValueTree& chain);
+
+    /** A chain as a file (".carthagechain"), and back; nothing when the file is not one. */
+    juce::Result saveChain (tracktion::AudioTrack&, const juce::File&);
+    std::optional<juce::ValueTree> readChain (const juce::File&);
+    inline constexpr const char* chainExtension = ".carthagechain";
+
+    /** Copy a channel (owner): everything that makes it sound as it does goes to `to`: level, pan,
+        mute, solo, its plugins and their settings, where it plays and its sends. Not its name,
+        colour, input or arm, which belong to `to`. A route that would feed `to` back into itself
+        is left out, and the result says so. Inside the caller's undo step. */
+    juce::Result copyChannel (tracktion::AudioTrack& from, tracktion::AudioTrack& to);
+
+    /** The channel after `from`, and the first after it that is empty (no plugins, nothing
+        playing into it, no input); null when there is none. */
+    tracktion::AudioTrack* nextChannel (tracktion::AudioTrack& from);
+    tracktion::AudioTrack* nextEmptyChannel (tracktion::AudioTrack& from);
 
     bool isBypassed (const tracktion::Plugin&);
     void setBypassed (tracktion::Plugin&, bool);

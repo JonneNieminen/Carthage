@@ -21,6 +21,14 @@ namespace carthage::editing
     /** Starts one undoable step with a name the Edit menu shows ("Move clip", "Trim 3 clips"). */
     void begin (tracktion::Edit&, const juce::String& name);
 
+    /** Undo and redo one step. Use these, never the UndoManager's own: Tracktion puts a fader's
+        (or any built-in plugin's) value back in the project tree on undo but leaves the parameter
+        that the sound and the strips read where it was, so a level change undid on screen only
+        after something else moved it (owner, found again in W63). These bring every parameter
+        back to the tree. */
+    bool undo (tracktion::Edit&);
+    bool redo (tracktion::Edit&);
+
     /** "Move clip" or "Move 3 clips": names follow the count. */
     juce::String named (const juce::String& verb, int count, const juce::String& noun = "clip");
 

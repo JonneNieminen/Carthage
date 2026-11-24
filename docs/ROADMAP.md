@@ -692,6 +692,7 @@ Deliver:
       lane, the newest full pass playing; punch in the loop region, off by default; several armed
       channels record at once, each to its own take; tested headless, not yet tried with an interface)
 - [ ] **Owner's addition (F19, W30):** plugin presets in one format for one plugin or a whole Insert Line, in a folder the user chooses; opening .vstpreset and .aupreset, and other DAWs' presets as far as their formats allow
+      (started W63: a whole Insert Line saves and loads as a mixer chain, `.carthagechain`, any folder, starting in Mixer chains; one plugin's presets and other formats still to come)
 - [ ] **Owner's list (F22, W38):** plugins in their own processes except the live input chain,
       grouped automatically by crash history (on by default; your own grouping when off); presets
       under each plugin in the browser and from folders onto channels; the master volume becomes the

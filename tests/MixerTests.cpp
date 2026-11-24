@@ -335,6 +335,104 @@ public:
             editing::setInput (*chs[4], {});
         }
 
+        beginTest ("Undo puts a fader's level back where the sound and the strip read it (W63)");
+        {
+            auto& ch = *editing::channels (*edit)[24];
+            editing::begin (*edit, "Volume");
+            editing::faderOf (ch)->setVolumeDb (-12.0f);
+            editing::begin (*edit, "Next");
+            expect (editing::undo (*edit));
+            expectWithinAbsoluteError (editing::faderOf (ch)->getVolumeDb(), 0.0f, 0.05f, "the level the fader plays at is 0 dB again");
+            expect (editing::redo (*edit));
+            expectWithinAbsoluteError (editing::faderOf (ch)->getVolumeDb(), -12.0f, 0.05f, "and redo brings -12 dB back");
+            editing::begin (*edit, "Back");
+            editing::faderOf (ch)->setVolumeDb (0.0f);
+        }
+
+        beginTest ("Reset routing: back to master, no sends, the main output on (owner)");
+        {
+            const auto chs = editing::channels (*edit);
+            auto& a = *chs[14];
+            expect (editing::setOutput (a, chs[15]).wasOk());
+            expect (editing::addSend (a, *chs[16], -6.0f).wasOk());
+            expect (editing::addSend (a, *chs[17]).wasOk());
+            editing::setPlaysToOutput (a, false);
+
+            editing::begin (*edit, "Reset routing");
+            editing::resetRouting (a);
+            expect (editing::outputOf (a) == nullptr, "into master again");
+            expect (editing::sendsOf (a).empty(), "no sends left");
+            expect (editing::playsToOutput (a), "its main output on");
+
+            edit->getUndoManager().undo();
+            expect (editing::outputOf (a) == chs[15] && editing::sendsOf (a).size() == 2, "one undo brings the routing back");
+            edit->getUndoManager().redo();
+        }
+
+        beginTest ("Mixer chains: copy a channel whole, save its plugins as a chain and load them elsewhere (owner)");
+        {
+            const auto chs = editing::channels (*edit);
+            auto& a = *chs[20];
+            auto& b = *chs[21];
+            auto& c = *chs[22];
+
+            // A plugin with a setting of its own, as a stand-in for a real one (Tracktion's reverb;
+            // never offered to users, AGENTS.md).
+            auto reverb = edit->getPluginCache().createNewPlugin (tracktion::ReverbPlugin::xmlTypeName, {});
+            expect (reverb != nullptr, "a built-in plugin to carry a setting");
+
+            if (auto* r = dynamic_cast<tracktion::ReverbPlugin*> (reverb.get()))
+            {
+                a.pluginList.insertPlugin (reverb, editing::listIndexForSlot (a.pluginList, 0), nullptr);
+                r->setRoomSize (0.8f);
+            }
+
+            editing::faderOf (a)->setVolumeDb (-6.0f);
+            editing::faderOf (a)->setPan (0.3f);
+            editing::setChannelMuted (a, true);
+            expect (editing::addSend (a, *chs[23], -9.0f).wasOk());
+
+            expect (editing::nextChannel (a) == &b, "the next channel");
+            expect (editing::nextEmptyChannel (a) == &b, "and the next empty one, while it is");
+
+            editing::begin (*edit, "Copy channel");
+            expect (editing::copyChannel (a, b).wasOk());
+            expectWithinAbsoluteError (editing::faderOf (b)->getVolumeDb(), -6.0f, 0.05f, "its level");
+            expectWithinAbsoluteError (editing::faderOf (b)->getPan(), 0.3f, 0.01f, "its pan");
+            expect (editing::isChannelMuted (b), "its mute");
+            expectEquals (editing::insertsOf (b).size(), 1, "its plugins");
+            auto* copied = dynamic_cast<tracktion::ReverbPlugin*> (editing::insertsOf (b).getFirst());
+            expect (copied != nullptr && std::abs (copied->getRoomSize() - 0.8f) < 0.01f, "with their settings");
+            expect (copied != reverb.get(), "a plugin of its own, not the same one");
+            expect (editing::sendsOf (b).size() == 1 && editing::sendsOf (b)[0].to == chs[23], "its sends");
+            expect (editing::nextEmptyChannel (a) == &c, "b is not empty now: the next empty one is c");
+
+            // A chain round trip through a file.
+            const auto file = juce::File::createTempFile (editing::chainExtension);
+            expect (editing::saveChain (a, file).wasOk());
+            const auto chain = editing::readChain (file);
+            expect (chain.has_value(), "the file reads back as a chain");
+            expectEquals (editing::loadChain (c, chain.value_or (juce::ValueTree())), 1, "loaded onto another channel");
+            expect (editing::faderOf (c)->getVolumeDb() > -0.1f, "a chain is plugins only: the level stays");
+            expect (! editing::readChain (juce::File::createTempFile (".txt")).has_value(), "anything else is not a chain");
+            file.deleteFile();
+
+            expect (editing::copyChannel (a, a).failed(), "a channel can not be copied onto itself");
+
+            editing::undo (*edit);
+            expect (editing::insertsOf (b).isEmpty(), "one undo takes the copied plugins away");
+            expect (editing::insertsOf (c).isEmpty(), "and the loaded chain");
+            expect (editing::faderOf (b)->getVolumeDb() > -0.1f, "and the level");
+            expect (editing::sendsOf (b).empty(), "and the sends");
+
+            editing::begin (*edit, "Clean up");
+            for (auto* p : editing::insertsOf (a)) editing::removeInsert (*p);
+            editing::removeSend (a, *chs[23]);
+            editing::setChannelMuted (a, false);
+            editing::faderOf (a)->setVolumeDb (0.0f);
+            editing::faderOf (a)->setPan (0.0f);
+        }
+
         beginTest ("Sends: several destinations, levels, no loops, main output off (W51)");
         {
             const auto chs = editing::channels (*edit);

@@ -424,6 +424,16 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   and right-click; save), copy a channel's whole state to the next, next empty or a chosen channel.
 - Not yet looked into: the stuck lane and dropout after switching windows (asked the owner for
   details). The owner's general dropouts are phase 8.
+
+### 2026-11-24 (mixer chains, reset routing, undo of levels, W63)
+
+- Chains: save/load (`.carthagechain`, `Paths::mixerChains`), copy a channel (next, next empty or
+  new, any), reset routing; column buttons (Reset; Load, Save, Copy to) and right-click items.
+- Found while testing copy's undo: Tracktion leaves a fader's parameter behind on undo (the old
+  "volume undo" retest item). `editing::undo`/`redo` now resync it; MixerTests covers undo and redo.
+- Manufacturer list: rows are components that choose on mouse-up (not tried in the app yet).
+- Not done: 5e's other presets; the stuck lane after switching windows (waiting on the owner);
+  meters at display rate (phase 9); dropouts (phase 8).
 - Still asked for, not started: 5 Routing section designs, then UAT. The owner's dropouts are
   phase 8's first task; not looked into yet.
 

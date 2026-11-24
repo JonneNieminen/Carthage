@@ -29,6 +29,9 @@ namespace carthage::app
             <settings>/Templates */
         static juce::File templates();
 
+        /** Mixer chains the user saved (a channel's plugins, ".carthagechain"). <settings>/Mixer chains */
+        static juce::File mixerChains();
+
         /** Shortcuts the user changed (only the changes). <settings>/Shortcuts.xml */
         static juce::File shortcuts();
 

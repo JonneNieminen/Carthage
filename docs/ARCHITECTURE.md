@@ -362,6 +362,7 @@ to a user folder (DECISIONS W17).
 | Recordings | `<project>/Recordings` | same |
 | Collected samples | `<project>/Samples` | same |
 | Templates (File > Save as template) | `<settings>/Templates/<name>/` | same |
+| Mixer chains (Save mixer chain) | `<settings>/Mixer chains/<name>.carthagechain` | same |
 | The sample browser's folders, favourites, keys and tempos | `<settings>/Samples.xml` | same |
 | Shortcuts the user changed (only the changes) | `<settings>/Shortcuts.xml` | same |
 | Autosaves and crash recovery | `<settings>/Autosave/<project id>/` (the last 10, and the `running` marker) | same |

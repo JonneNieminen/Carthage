@@ -11,6 +11,14 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Mixer chains: save a channel's plugins with their settings (Save on the mixer's Plugins row, or
+  right-click a channel > Save mixer chain) and load them onto any channel (Load, or Load mixer
+  chain). Chains are kept in Carthage's Mixer chains folder.
+- Copy a channel to another: its level, pan, mute, solo, plugins and routing go to the next
+  channel, the next empty one (or a new one), or any channel you pick (Copy to, or right-click >
+  Copy channel to). Its name, colour, input and arm stay its own. One undo step.
+- Reset routing: a channel plays into master again with its sends removed (Reset beside "Plays
+  into", or right-click > Reset routing).
 - A Routing section under the mixer's strips, with its own heading, shows where sound goes. By
   default it tells the selected channel's story: a sentence, what plays into it, the channel's
   input, plugins and level, and its way on to master. Settings > Mixer offers four other ways to
@@ -195,6 +203,10 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 
 
 ### Fixed
+- Undoing a level change now puts the fader back where you hear it, not only on screen; redo
+  works after it too. The same for pan and send levels.
+- Choosing a manufacturer in the plugin browser takes one click, even if the pointer moves a
+  little while clicking.
 - The mixer no longer lags: moving between channels took about a third of a second, and the UI
   stuttered during playback, because every strip asked the audio interface for its input names
   each time it was drawn. They are now read once.

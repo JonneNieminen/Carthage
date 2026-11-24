@@ -637,6 +637,7 @@ namespace carthage::app
 
             auto& start = c->getStartScreen();
             start.setTemplatesFolder (Paths::templates());
+            c->getMixer().setChainsFolder (Paths::mixerChains());
             start.onNew = [this] (const File& templateFile) { newProject (templateFile); };
             start.onOpen = [this] (const File& file)
             {

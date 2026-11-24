@@ -196,6 +196,56 @@ namespace carthage::editing
         edit.getUndoManager().beginNewTransaction (name);
     }
 
+    namespace
+    {
+        /** The values Carthage edits (fader level and pan, send level) back to what the tree
+            now holds, where they differ. Setting a parameter writes its value into the tree as
+            well, and when the undo has just taken that property away (it was at its default) the
+            write is recorded as a new change, which empties the redo list. So the write goes
+            through no undo manager: it puts back the very value the tree holds. */
+        void parametersFollowTree (Edit& edit)
+        {
+            auto* um = &edit.getUndoManager();
+
+            const auto follow = [um] (tracktion::AutomatableParameter* param, juce::CachedValue<float>& stored)
+            {
+                if (param == nullptr || std::abs (param->getCurrentValue() - stored.get()) <= 1.0e-6f)
+                    return;
+
+                stored.referTo (stored.getValueTree(), stored.getPropertyID(), nullptr, stored.getDefault());
+                param->setParameter (stored.get(), juce::dontSendNotification);
+                stored.referTo (stored.getValueTree(), stored.getPropertyID(), um, stored.getDefault());
+            };
+
+            for (auto* p : tracktion::getAllPlugins (edit, true))
+            {
+                if (auto* v = dynamic_cast<tracktion::VolumeAndPanPlugin*> (p))
+                {
+                    follow (v->volParam.get(), v->volume);
+                    follow (v->panParam.get(), v->pan);
+                }
+                else if (auto* send = dynamic_cast<tracktion::AuxSendPlugin*> (p))
+                {
+                    follow (send->gain.get(), send->gainLevel);
+                }
+            }
+        }
+    }
+
+    bool undo (Edit& edit)
+    {
+        const auto done = edit.getUndoManager().undo();
+        parametersFollowTree (edit);
+        return done;
+    }
+
+    bool redo (Edit& edit)
+    {
+        const auto done = edit.getUndoManager().redo();
+        parametersFollowTree (edit);
+        return done;
+    }
+
     juce::String named (const juce::String& verb, int count, const juce::String& noun)
     {
         return count == 1 ? verb + " " + noun : verb + " " + juce::String (count) + " " + noun + "s";

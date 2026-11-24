@@ -307,6 +307,16 @@ namespace carthage::editing
             s->deleteFromParent();
     }
 
+    void resetRouting (AudioTrack& channel)
+    {
+        for (const auto& s : sendsOf (channel))
+            if (s.to != nullptr)
+                removeSend (channel, *s.to);
+
+        [[maybe_unused]] const auto toMaster = setOutput (channel, nullptr);   // master is never refused
+        setPlaysToOutput (channel, true);
+    }
+
     void setSendLevel (AudioTrack& from, AudioTrack& to, float gainDb)
     {
         if (auto* s = sendTo (from, to))
@@ -1091,6 +1101,120 @@ namespace carthage::editing
     }
 
     void removeInsert (Plugin& plugin)   { plugin.deleteFromParent(); }
+
+    namespace
+    {
+        const juce::Identifier chainTag ("CARTHAGECHAIN");
+    }
+
+    juce::ValueTree chainOf (AudioTrack& channel)
+    {
+        juce::ValueTree chain (chainTag);
+        chain.setProperty ("version", 1, nullptr);
+
+        for (auto* p : insertsOf (channel))
+        {
+            p->flushPluginStateToValueTree();   // a plugin's own state is only in the tree once flushed
+            chain.appendChild (p->state.createCopy(), nullptr);
+        }
+
+        return chain;
+    }
+
+    int loadChain (AudioTrack& channel, const juce::ValueTree& chain)
+    {
+        if (! chain.hasType (chainTag))
+            return 0;
+
+        for (auto* p : insertsOf (channel))
+            removeInsert (*p);
+
+        int placed = 0;
+
+        for (const auto& child : chain)
+        {
+            auto state = child.createCopy();
+            EditItemID::remapIDs (state, nullptr, channel.edit);   // a new plugin, not the original
+
+            if (auto plugin = channel.edit.getPluginCache().getOrCreatePluginFor (state))
+            {
+                channel.pluginList.insertPlugin (plugin, listIndexForSlot (channel.pluginList, placed), nullptr);
+                ++placed;
+            }
+        }
+
+        return placed;
+    }
+
+    juce::Result saveChain (AudioTrack& channel, const juce::File& file)
+    {
+        const auto xml = chainOf (channel).createXml();
+
+        if (xml == nullptr || ! file.getParentDirectory().createDirectory().wasOk() || ! xml->writeTo (file))
+            return juce::Result::fail ("Carthage could not write " + file.getFullPathName());
+
+        return juce::Result::ok();
+    }
+
+    std::optional<juce::ValueTree> readChain (const juce::File& file)
+    {
+        const auto xml = juce::parseXML (file);
+        auto chain = xml != nullptr ? juce::ValueTree::fromXml (*xml) : juce::ValueTree();
+        return chain.hasType (chainTag) ? std::optional (chain) : std::nullopt;
+    }
+
+    juce::Result copyChannel (AudioTrack& from, AudioTrack& to)
+    {
+        if (&from == &to)
+            return juce::Result::fail (from.getName() + " is already itself");
+
+        if (auto* a = faderOf (from); a != nullptr)
+            if (auto* b = faderOf (to))
+            {
+                b->setVolumeDb (a->getVolumeDb());
+                b->setPan (a->getPan());
+            }
+
+        setChannelMuted (to, isChannelMuted (from));
+        setChannelSoloed (to, isChannelSoloed (from));
+        loadChain (to, chainOf (from));
+
+        // Where it plays: as `from` does, unless that would loop back into `to`.
+        juce::StringArray skipped;
+        resetRouting (to);
+
+        if (auto* into = outputOf (from); into != nullptr && setOutput (to, into).failed())
+            skipped.add (into->getName());
+
+        setPlaysToOutput (to, playsToOutput (from));
+
+        for (const auto& s : sendsOf (from))
+            if (s.to != nullptr && (s.to == &to || addSend (to, *s.to, s.gainDb).failed()))
+                skipped.add (s.to->getName());
+
+        return skipped.isEmpty() ? juce::Result::ok()
+                                 : juce::Result::fail ("Copied, except the route into " + skipped.joinIntoString (", ")
+                                                       + ": it would feed " + to.getName() + " back into itself");
+    }
+
+    AudioTrack* nextChannel (AudioTrack& from)
+    {
+        const auto all = channels (from.edit);
+        const auto i = all.indexOf (&from);
+        return i >= 0 && i + 1 < all.size() ? all[i + 1] : nullptr;
+    }
+
+    AudioTrack* nextEmptyChannel (AudioTrack& from)
+    {
+        const auto all = channels (from.edit);
+        const auto free = freeChannels (from.edit);
+
+        for (auto i = all.indexOf (&from) + 1; i > 0 && i < all.size(); ++i)
+            if (free.contains (all[i]) && insertsOf (*all[i]).isEmpty())
+                return all[i];
+
+        return nullptr;
+    }
 
     bool isBypassed (const Plugin& p)    { return ! p.isEnabled(); }
     void setBypassed (Plugin& p, bool b) { p.setEnabled (! b); }
