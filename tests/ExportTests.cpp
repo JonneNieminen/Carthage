@@ -194,7 +194,7 @@ public:
             // Compare, allowing for a playback latency, and say what it was. Playback that starts
             // right on a sound fades it in over a few dozen samples (Tracktion, against a click at
             // the start); an export does not, nor should it. So the comparison starts after that.
-            constexpr int startRamp = 128;
+            static constexpr int startRamp = 128;   // static: MSVC calls a constexpr local read only in a lambda unused (C4189)
             const auto residualAt = [&] (int offset)
             {
                 double sum = 0.0, signal = 0.0;
