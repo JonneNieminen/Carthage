@@ -692,10 +692,11 @@ Deliver:
       lane, the newest full pass playing; punch in the loop region, off by default; several armed
       channels record at once, each to its own take; tested headless, not yet tried with an interface)
 - [ ] **Owner's addition (F19, W30):** plugin presets in one format for one plugin or a whole Insert Line, in a folder the user chooses; opening .vstpreset and .aupreset, and other DAWs' presets as far as their formats allow
-      (started W63: a whole Insert Line saves and loads as a mixer chain, `.carthagechain`, any folder, starting in Mixer chains; one plugin's presets and other formats still to come)
+      (built W63, W64: a whole Insert Line saves and loads as a mixer chain, `.carthagechain`; one plugin's presets as `.carthagepreset`, and .vstpreset and .aupreset opened onto their plugins; any folder, starting in Carthage's own; tested headless with a built-in stand-in, not yet with a real plugin's .vstpreset/.aupreset; other DAWs' formats not done)
 - [ ] **Owner's list (F22, W38):** plugins in their own processes except the live input chain,
       grouped automatically by crash history (on by default; your own grouping when off); presets
-      under each plugin in the browser and from folders onto channels; the master volume becomes the
+      under each plugin in the browser and from folders onto channels (built W64: the browser's
+      right-click adds a plugin with one of its presets); the master volume becomes the
       master fader's twin
 - [x] **Export (owner, 2026-11-19; moved here from phase 7):** Cmd+R opens Export: the loop region if
       there is one, or the whole project from its first sound to its last; WAV 16/24/32-float and
@@ -706,19 +707,27 @@ Deliver:
 
 Exit checks:
 - [ ] An exported file (Cmd+R) nulls against the same range played back in the app; the loop region
-      and the whole project are both exported (headless part passed 2026-11-20: ExportTests plays the
-      loop region through the engine's playback graph on a hosted device and the export matches it to
-      the -200 dB floor, 0 samples offset; every format reads back at its rate, depth and length; the
-      whole-project range is checked, not yet nulled; the app's window untried on screen)
+      and the whole project are both exported (headless part passed: ExportTests plays both through
+      the engine's playback graph on a hosted device and each export matches it to the -200 dB floor,
+      0 samples offset, 2026-11-20 and 2026-11-24; playback that starts on a sound fades in over about
+      40 samples and an export does not, so the comparison starts 128 samples in; every format reads
+      back at its rate, depth and length; the app's window untried on screen)
 - [ ] A clip, an instrument and a live input each routed to an arbitrary channel, then re-routed, while playing
+      (a clip passed headless 2026-11-24, ExportTests: moved from a -6 dB channel to a 0 dB one while
+      playing, it kept sounding with no quiet block, 3.3 dB louder; an instrument and a live input not
+      yet: they need a plugin and the interface)
 - [x] Delay compensation verified by a null test with a plugin that reports latency (2026-11-20,
       DelayCompensationTests: Tracktion's latency test plugin, 10 ms, on a channel, a send's
       destination, a bus, the Pre-Master and master; every export nulls against the mix without it
       to -153 dB or below, offset 0, from time zero and mid-sound; playback nulls against the export,
       the whole mix 480 samples later, as compensation should make it)
-- [ ] A feedback route is refused or handled safely
+- [x] A feedback route is refused or handled safely (MixerTests: an output or a send back, directly
+      or through a send, is refused; the column's output menu greys out what would loop)
 - [ ] A realistic session with real third-party plugins on many channels plays without dropouts; load reported
-- [ ] An idle mixer with 50 empty channels costs close to nothing; load reported
+- [x] An idle mixer with 50 empty channels costs close to nothing; load reported (2026-11-24, bench
+      `idle-mixer`, iD44, 48 kHz, 128 samples: the default 50 channels and master, playing, 0.89%
+      average audio-thread load, 3.4% worst block; 50 more empty tracks add 2.7 points unless left
+      out of the graph, as Carthage leaves empty channels, when they add none)
 
 Report: _not written yet_
 

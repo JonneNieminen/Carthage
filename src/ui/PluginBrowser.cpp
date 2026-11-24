@@ -533,6 +533,26 @@ namespace carthage::ui
         if (row < 0 || row >= getNumRows())
             return;
 
+        // Right-click a plugin: add it, or add it with one of its presets (5e).
+        if (const auto* entry = entryAt (row); entry != nullptr && e.mods.isPopupMenu())
+        {
+            const auto description = entry->description;
+            PopupMenu m;
+            m.addItem ("Add to the selected channel", [this, description] { if (onInsert) onInsert (description); });
+            PopupMenu withPreset;
+
+            for (const auto& f : presetsFor ? presetsFor (description) : Array<File>())
+                withPreset.addItem (f.getFileNameWithoutExtension(), [this, description, f] { if (onInsertWithPreset) onInsertWithPreset (description, f); });
+
+            if (withPreset.getNumItems() > 0)
+                m.addSubMenu ("Add with a preset", withPreset);
+            else
+                m.addItem ("No presets saved for " + description.name + " yet", false, false, [] {});
+
+            m.showMenuAsync (PopupMenu::Options().withMousePosition());
+            return;
+        }
+
         const auto& r = rows[static_cast<size_t> (row)];
 
         if (r.id == "unavailable-toggle")

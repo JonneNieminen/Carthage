@@ -124,68 +124,82 @@ public:
                 expectEquals (reader->lengthInSamples, static_cast<juce::int64> (std::llround (4.0 * rate)), label + ": the region's length");
             }
 
-        beginTest ("An export nulls against the same range played back (phase 5 exit check)");
+        // Playback through the engine's own graph on a hosted device, blocks pumped as fast as possible.
+        constexpr double rate = 48000.0;
+        constexpr int block = 512;
+        auto& dm = engine.getDeviceManager();
+        dm.setCpuLimitBeforeMuting (1000.0);
+        auto& io = dm.getHostedAudioDeviceInterface();
+        tracktion::HostedAudioDeviceInterface::Parameters p;
+        p.sampleRate = rate;
+        p.blockSize = block;
+        p.inputChannels = 2;
+        p.outputChannels = 2;
+        io.initialise (p);
+        io.prepareToPlay (rate, block);
+        dm.dispatchPendingUpdates();
+        auto& transport = edit->getTransport();
+        juce::MidiBuffer midi;
+
+        const auto startPlaying = [&] (double fromSeconds)
         {
-            constexpr double rate = 48000.0;
-            constexpr int block = 512;
-            const auto file = folder.getChildFile ("Null.wav");
-            const auto rendered = exporting::render (*edit, range, { exporting::Format::wav32Float, rate }, file);
-            expect (rendered.wasOk(), rendered.getErrorMessage());
-            const auto reader = open (file);
-            expect (reader != nullptr);
-
-            const auto total = static_cast<int> (4.0 * rate);
-            juce::AudioBuffer<float> exported (2, total);
-            exported.clear();
-            if (reader != nullptr)
-                reader->read (&exported, 0, total, 0, true, true);
-
-            // Play the same range through the engine's playback graph on a hosted device.
-            auto& dm = engine.getDeviceManager();
-            dm.setCpuLimitBeforeMuting (1000.0);   // blocks are pumped as fast as possible
-            auto& io = dm.getHostedAudioDeviceInterface();
-            tracktion::HostedAudioDeviceInterface::Parameters p;
-            p.sampleRate = rate;
-            p.blockSize = block;
-            p.inputChannels = 2;
-            p.outputChannels = 2;
-            io.initialise (p);
-            io.prepareToPlay (rate, block);
-            dm.dispatchPendingUpdates();
-
-            auto& transport = edit->getTransport();
             editing::setLooping (*edit, false);
             edit->dispatchPendingUpdatesSynchronously();
             transport.ensureContextAllocated();
-            transport.setPosition (tracktion::TimePosition());
+            transport.setPosition (tracktion::TimePosition::fromSeconds (fromSeconds));
             transport.play (false);
 
             // The file is read through the cache once something plays it: wait until it is mapped.
             const tracktion::AudioFile af (engine, tone);
             for (int i = 0; i < 300 && ! engine.getAudioFileManager().cache.hasMappedReader (af, 0); ++i)
                 std::this_thread::sleep_for (std::chrono::milliseconds (10));
+        };
 
-            juce::AudioBuffer<float> played (2, total);
+        const auto pump = [&] (juce::AudioBuffer<float>& into, int from, int count)
+        {
             juce::AudioBuffer<float> io2 (2, block);
-            juce::MidiBuffer midi;
 
-            for (int done = 0; done < total; done += block)
+            for (int done = 0; done < count; done += block)
             {
                 io2.clear();
                 io.processBlock (io2, midi);
-                const auto n = std::min (block, total - done);
+                const auto n = std::min (block, count - done);
                 for (int ch = 0; ch < 2; ++ch)
-                    played.copyFrom (ch, done, io2, ch, 0, n);
+                    into.copyFrom (ch, from + done, io2, ch, 0, n);
             }
+        };
 
+        /** Exports `r` and plays the same range; they must null, sample for sample. */
+        const auto nullsAgainstPlayback = [&] (const exporting::Range& r, const juce::String& what)
+        {
+            const auto file = folder.getChildFile ("Null " + what + ".wav");
+            const auto rendered = exporting::render (*edit, r, { exporting::Format::wav32Float, rate }, file);
+            expect (rendered.wasOk(), rendered.getErrorMessage());
+            const auto reader = open (file);
+            expect (reader != nullptr, what + ": the file reads back");
+
+            if (reader == nullptr)
+                return;
+
+            const auto total = static_cast<int> (reader->lengthInSamples);
+            juce::AudioBuffer<float> exported (2, total);
+            exported.clear();
+            reader->read (&exported, 0, total, 0, true, true);
+
+            startPlaying (r.time.getStart().inSeconds());
+            juce::AudioBuffer<float> played (2, total);
+            pump (played, 0, total);
             transport.stop (false, false);
 
-            // Compare, allowing for a playback latency, and say what it was.
+            // Compare, allowing for a playback latency, and say what it was. Playback that starts
+            // right on a sound fades it in over a few dozen samples (Tracktion, against a click at
+            // the start); an export does not, nor should it. So the comparison starts after that.
+            constexpr int startRamp = 128;
             const auto residualAt = [&] (int offset)
             {
                 double sum = 0.0, signal = 0.0;
                 for (int ch = 0; ch < 2; ++ch)
-                    for (int i = std::max (0, -offset); i < total - std::max (0, offset); ++i)
+                    for (int i = std::max (startRamp, -offset); i < total - std::max (0, offset); ++i)
                     {
                         const auto d = static_cast<double> (played.getSample (ch, i + offset)) - exported.getSample (ch, i);
                         sum += d * d;
@@ -197,23 +211,74 @@ public:
             int bestOffset = 0;
             double best = 1.0e30, signal = 0.0;
             for (int offset = -2048; offset <= 2048; ++offset)
-                if (const auto [r, s] = residualAt (offset); r < best)
+                if (const auto [res, sig] = residualAt (offset); res < best)
                 {
-                    best = r;
-                    signal = s;
+                    best = res;
+                    signal = sig;
                     bestOffset = offset;
                 }
 
             const auto ratioDb = juce::Decibels::gainToDecibels (std::sqrt (best / std::max (signal, 1.0e-20)), -200.0);
-            logMessage ("Export against playback: residual " + juce::String (ratioDb, 1) + " dB below the signal, playback offset "
-                        + juce::String (bestOffset) + " samples; signal RMS " + juce::String (std::sqrt (signal / (2.0 * total)), 4));
-            expect (signal > 1.0, "the export has sound in it");
-            expect (ratioDb < -90.0, "the export nulls against playback: " + juce::String (ratioDb, 1) + " dB");
-            expectEquals (bestOffset, 0, "and lines up with it sample for sample");
+            logMessage (what + " against playback: residual " + juce::String (ratioDb, 1) + " dB below the signal, playback offset "
+                        + juce::String (bestOffset) + " samples, " + juce::String (total) + " samples long");
+            expect (signal > 1.0, what + ": the export has sound in it");
+            expect (ratioDb < -90.0, what + ": the export nulls against playback: " + juce::String (ratioDb, 1) + " dB");
+            expectEquals (bestOffset, 0, what + ": and lines up with it sample for sample");
+        };
 
-            dm.deviceManager.closeAudioDevice();
-            dm.removeHostedAudioDeviceInterface();
+        beginTest ("An export of the loop region nulls against the same range played back (phase 5 exit check)");
+        nullsAgainstPlayback (range, "The loop region");
+
+        beginTest ("So does an export of the whole project, from its first sound to its last (phase 5 exit check)");
+        {
+            editing::clearLoopRegion (*edit);
+            const auto whole = exporting::rangeOf (*edit);
+            expect (whole.has_value() && ! whole->isLoopRegion, "no loop region: the whole project");
+
+            if (whole.has_value())
+                nullsAgainstPlayback (*whole, "The whole project");
         }
+
+        beginTest ("A clip re-routed to another channel while playing keeps sounding, now through that channel (phase 5 exit check)");
+        {
+            // Into channel 3 at -6 dB (and a send), then moved to channel 7 at 0 dB mid-way.
+            constexpr int half = static_cast<int> (0.5 * rate);
+            const auto rms = [] (const juce::AudioBuffer<float>& b, int from, int count)
+            {
+                double sum = 0.0;
+                for (int ch = 0; ch < 2; ++ch)
+                    for (int i = from; i < from + count; ++i)
+                        sum += static_cast<double> (b.getSample (ch, i)) * b.getSample (ch, i);
+                return std::sqrt (sum / (2.0 * count));
+            };
+
+            startPlaying (1.2);
+            juce::AudioBuffer<float> played (2, 2 * half);
+            pump (played, 0, half);
+
+            editing::routeSample (*clip, channels[6]);
+            edit->dispatchPendingUpdatesSynchronously();
+            transport.ensureContextAllocated (true);   // the app's restartPlayback() does this on its next timer tick
+            pump (played, half, half);
+            transport.stop (false, false);
+
+            int silentBlocks = 0;
+            for (int at = half; at + block <= 2 * half; at += block)
+                silentBlocks += rms (played, at, block) < 1.0e-4 ? 1 : 0;
+
+            const auto before = rms (played, half - 8 * block, 8 * block);
+            const auto after = rms (played, 2 * half - 8 * block, 8 * block);
+            logMessage ("Re-routed while playing: " + juce::String (silentBlocks) + " silent blocks after the change; level "
+                        + juce::String (juce::Decibels::gainToDecibels (after / std::max (before, 1.0e-9)), 1) + " dB against before");
+            expect (before > 1.0e-3, "it sounded before the change");
+            expect (after > 1.0e-3, "and still sounds after it");
+            expect (silentBlocks <= 2, "with at most a block or two of quiet while the graph is rebuilt: " + juce::String (silentBlocks));
+            expect (after > before * 1.4, "louder now, through a channel at 0 dB instead of -6 dB");
+            editing::routeSample (*clip, channels[2]);
+        }
+
+        dm.deviceManager.closeAudioDevice();
+        dm.removeHostedAudioDeviceInterface();
 
         edit.reset();
     }

@@ -416,6 +416,8 @@ namespace carthage::ui
             askToRenameProject();
         };
         browser.onInsert = [this] (const PluginDescription& d) { mixer.addPluginToSelected (d); };   // onto the selected channel's Line (5b)
+        browser.presetsFor = [this] (const PluginDescription& d) { return mixer.presetsFor (d); };
+        browser.onInsertWithPreset = [this] (const PluginDescription& d, const File& f) { mixer.addPluginToSelected (d, f); };
         pluginWindows.keepOnTop = [this] { return keepPluginOnTop(); };
         session.onPluginsChanged = [this] { browser.refresh(); };
 

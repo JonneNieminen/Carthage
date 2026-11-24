@@ -1,4 +1,5 @@
 #include <engine/Editing.h>
+#include <engine/Presets.h>
 #include <engine/SampleEdits.h>
 
 using namespace carthage;
@@ -367,6 +368,49 @@ public:
             edit->getUndoManager().undo();
             expect (editing::outputOf (a) == chs[15] && editing::sendsOf (a).size() == 2, "one undo brings the routing back");
             edit->getUndoManager().redo();
+        }
+
+        beginTest ("One plugin's preset: saved, loaded onto the same plugin as one undo step, refused by another (W64)");
+        {
+            auto& ch = *editing::channels (*edit)[30];
+            auto made = edit->getPluginCache().createNewPlugin (tracktion::ReverbPlugin::xmlTypeName, {});
+            auto* reverb = dynamic_cast<tracktion::ReverbPlugin*> (made.get());
+            expect (reverb != nullptr);
+
+            if (reverb != nullptr)
+            {
+                editing::begin (*edit, "Add reverb");
+                ch.pluginList.insertPlugin (made, editing::listIndexForSlot (ch.pluginList, 0), nullptr);
+                reverb->setRoomSize (0.7f);
+
+                const auto root = juce::File::createTempFile ("presets");
+                const auto file = presets::folderFor (root, *reverb).getChildFile (juce::String ("Big room") + presets::extension);
+                expect (presets::save (*reverb, file).wasOk());
+                expect (presets::listFor (root, *reverb).contains (file), "listed under the plugin's own folder");
+
+                editing::begin (*edit, "Change");
+                reverb->setRoomSize (0.2f);
+
+                editing::begin (*edit, "Load preset");
+                const auto [loaded, result] = presets::load (*reverb, file);
+                expect (result.wasOk(), result.getErrorMessage());
+                auto* now = dynamic_cast<tracktion::ReverbPlugin*> (loaded.get());
+                expect (now != nullptr && std::abs (now->getRoomSize() - 0.7f) < 0.01f, "the preset's room size");
+                expect (editing::insertsOf (ch).size() == 1 && editing::insertsOf (ch).getFirst() == loaded.get(), "in the old one's place");
+
+                expect (editing::undo (*edit));
+                auto* back = dynamic_cast<tracktion::ReverbPlugin*> (editing::insertsOf (ch).getFirst());
+                expect (back != nullptr && std::abs (back->getRoomSize() - 0.2f) < 0.01f, "one undo: the settings before the load");
+
+                // A preset saved from one plugin is not offered to another.
+                auto other = edit->getPluginCache().createNewPlugin (tracktion::DelayPlugin::xmlTypeName, {});
+                expect (other != nullptr && ! presets::canOpen (*other, file), "a delay can not open a reverb's preset");
+                expect (! presets::canOpen (*back, root.getChildFile ("x.vstpreset")), "nor a built-in a VST3's");
+
+                editing::begin (*edit, "Clean up");
+                for (auto* p : editing::insertsOf (ch)) editing::removeInsert (*p);
+                root.deleteRecursively();
+            }
         }
 
         beginTest ("Mixer chains: copy a channel whole, save its plugins as a chain and load them elsewhere (owner)");

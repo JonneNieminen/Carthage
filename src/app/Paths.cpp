@@ -17,6 +17,7 @@ namespace carthage::app
     juce::File Paths::shortcuts()       { return settings().getChildFile ("Shortcuts.xml"); }
     juce::File Paths::templates()       { return settings().getChildFile ("Templates"); }
     juce::File Paths::mixerChains()     { return settings().getChildFile ("Mixer chains"); }
+    juce::File Paths::presets()         { return settings().getChildFile ("Presets"); }
 
     juce::File Paths::projects()
     {

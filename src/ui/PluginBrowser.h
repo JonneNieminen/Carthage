@@ -51,6 +51,10 @@ namespace carthage::ui
         /** Insert this plugin into the signal path. */
         std::function<void (const juce::PluginDescription&)> onInsert;
 
+        /** Presets under each plugin (5e): what a plugin has, and adding it with one of them. */
+        std::function<juce::Array<juce::File> (const juce::PluginDescription&)> presetsFor;
+        std::function<void (const juce::PluginDescription&, const juce::File&)> onInsertWithPreset;
+
         static constexpr int preferredWidth = 300;
 
         /** The width that shows the longest name in the list whole (double-click on the edge). */

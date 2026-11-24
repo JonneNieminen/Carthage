@@ -29,6 +29,7 @@ namespace carthage::ui
 
         /** Where mixer chains are saved and looked for (from the app's path provider). */
         void setChainsFolder (const juce::File& folder)   { chainsFolder = folder; }
+        void setPresetsFolder (const juce::File& folder)  { presetsRoot = folder; }
 
         /** How the Routing section draws the mix (Settings > Mixer). */
         void setRoutingStyle (routing::Style);
@@ -52,7 +53,8 @@ namespace carthage::ui
         void addPlugin (tracktion::AudioTrack* channel, int slot, const juce::PluginDescription&);
 
         /** The plugin browser's double-click: onto the selected channel's Line (channel 1 if none). */
-        void addPluginToSelected (const juce::PluginDescription&);
+        void addPluginToSelected (const juce::PluginDescription&, const juce::File& preset = {});
+        juce::Array<juce::File> presetsFor (const juce::PluginDescription&) const;
 
         /** The selected channel's (or master's) first plugin: the commands that open or bypass one. */
         tracktion::Plugin* firstPluginOfSelected();
@@ -152,7 +154,12 @@ namespace carthage::ui
 
         // Mixer chains (owner, 5e): load and save a channel's plugins; copy a whole channel.
         juce::TextButton loadChainButton { "Load" }, saveChainButton { "Save" }, copyChannelButton { "Copy to" };
-        juce::File chainsFolder;
+        juce::File chainsFolder, presetsRoot;
+        juce::File folderForPresets() const;
+        void savePresetOf (tracktion::Plugin&);
+        void openPresetFileFor (tracktion::Plugin&);
+        void loadPreset (tracktion::Plugin&, const juce::File&, bool ownUndoStep = true);
+        juce::PopupMenu presetMenu (tracktion::Plugin&);
         std::unique_ptr<juce::FileChooser> chainChooser;
         void loadChainOnto (tracktion::AudioTrack&);
         void saveChainOf (tracktion::AudioTrack&);

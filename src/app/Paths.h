@@ -32,6 +32,9 @@ namespace carthage::app
         /** Mixer chains the user saved (a channel's plugins, ".carthagechain"). <settings>/Mixer chains */
         static juce::File mixerChains();
 
+        /** One plugin's presets, a folder per plugin (W64). <settings>/Presets/<plugin> */
+        static juce::File presets();
+
         /** Shortcuts the user changed (only the changes). <settings>/Shortcuts.xml */
         static juce::File shortcuts();
 

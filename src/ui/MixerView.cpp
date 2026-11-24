@@ -1,5 +1,7 @@
 #include "MixerView.h"
 
+#include <engine/Presets.h>
+
 #include "PluginBrowser.h"
 
 #include <app/Commands.h>
@@ -1025,6 +1027,7 @@ namespace carthage::ui
                 m.addSubMenu ("Sidechain from", keys);
             }
 
+            m.addSubMenu ("Presets", view.presetMenu (plugin));
             m.addSeparator();
             m.addItem ("Delete", [this, &edit, held, windowsPtr]
             {
@@ -1353,14 +1356,30 @@ namespace carthage::ui
         channel != nullptr ? select (channel) : selectMaster();
     }
 
-    void MixerView::addPluginToSelected (const PluginDescription& description)
+    void MixerView::addPluginToSelected (const PluginDescription& description, const File& preset)
     {
         auto* channel = selectedChannel();
 
         if (channel == nullptr && ! masterSelected)
             channel = editing::channels (session.getEdit()).getFirst();
 
+        auto& list = editing::pluginListOf (session.getEdit(), channel);
+        const auto before = editing::insertsOf (list);
         addPlugin (channel, -1, description);
+
+        // With a preset (5e): the plugin just added takes it, in the same undo step.
+        if (preset != File())
+            for (auto* p : editing::insertsOf (list))
+                if (! before.contains (p))
+                {
+                    loadPreset (*p, preset, false);
+                    break;
+                }
+    }
+
+    Array<File> MixerView::presetsFor (const PluginDescription& description) const
+    {
+        return presets::listFor (folderForPresets(), description);
     }
 
     MixerView::Route MixerView::routeTo (tracktion::AudioTrack* to)
@@ -1923,6 +1942,87 @@ namespace carthage::ui
 
             if (safe->onStatus)
                 safe->onStatus (result.wasOk() ? "Saved " + source->getName() + "'s plugins as " + file.getFileNameWithoutExtension() : result.getErrorMessage());
+        });
+    }
+
+    File MixerView::folderForPresets() const
+    {
+        return presetsRoot != File() ? presetsRoot
+                                     : File::getSpecialLocation (File::userDocumentsDirectory).getChildFile ("Carthage presets");
+    }
+
+    PopupMenu MixerView::presetMenu (tracktion::Plugin& plugin)
+    {
+        PopupMenu m;
+        tracktion::Plugin::Ptr held (&plugin);
+        const auto found = presets::listFor (folderForPresets(), plugin);
+
+        for (const auto& f : found)
+            m.addItem (f.getFileNameWithoutExtension(), [this, held, f] { loadPreset (*held, f); });
+
+        if (found.isEmpty())
+            m.addItem ("No presets saved for " + plugin.getName() + " yet", false, false, [] {});
+
+        m.addSeparator();
+        m.addItem (String::fromUTF8 ("Save preset\xe2\x80\xa6"), [this, held] { savePresetOf (*held); });
+        m.addItem (String::fromUTF8 ("Open a preset file\xe2\x80\xa6"), [this, held] { openPresetFileFor (*held); });
+        return m;
+    }
+
+    void MixerView::loadPreset (tracktion::Plugin& plugin, const File& file, bool ownUndoStep)
+    {
+        const auto wasOpen = windows.isOpen (plugin);
+        windows.close (plugin);   // its window belongs to the plugin that is about to leave
+
+        if (ownUndoStep)
+            editing::begin (session.getEdit(), "Load " + file.getFileNameWithoutExtension() + " into " + plugin.getName());
+
+        const auto [loaded, result] = presets::load (plugin, file);
+
+        if (loaded != nullptr && wasOpen)
+            windows.open (*loaded);
+
+        if (onStatus)
+            onStatus (result.wasOk() ? "Loaded " + file.getFileNameWithoutExtension() + " into " + loaded->getName() : result.getErrorMessage());
+
+        refreshColumn();
+    }
+
+    void MixerView::savePresetOf (tracktion::Plugin& plugin)
+    {
+        const auto folder = presets::folderFor (folderForPresets(), plugin);
+        [[maybe_unused]] const auto made = folder.createDirectory();
+        chainChooser = std::make_unique<FileChooser> ("Save " + plugin.getName() + "'s settings as a preset",
+                                                      folder.getChildFile (String ("New preset") + presets::extension),
+                                                      String ("*") + presets::extension);
+        tracktion::Plugin::Ptr held (&plugin);
+
+        chainChooser->launchAsync (FileBrowserComponent::saveMode | FileBrowserComponent::canSelectFiles | FileBrowserComponent::warnAboutOverwriting,
+                                   [safe = SafePointer<MixerView> (this), held] (const FileChooser& chooser)
+        {
+            if (safe == nullptr || chooser.getResult() == File() || held->getOwnerList() == nullptr)
+                return;
+
+            const auto file = chooser.getResult().withFileExtension (presets::extension);
+            const auto result = presets::save (*held, file);
+
+            if (safe->onStatus)
+                safe->onStatus (result.wasOk() ? "Saved " + file.getFileNameWithoutExtension() + " for " + held->getName() : result.getErrorMessage());
+        });
+    }
+
+    void MixerView::openPresetFileFor (tracktion::Plugin& plugin)
+    {
+        const auto folder = presets::folderFor (folderForPresets(), plugin);
+        chainChooser = std::make_unique<FileChooser> ("Open a preset for " + plugin.getName(),
+                                                      folder.isDirectory() ? folder : folderForPresets(), presets::filePatterns());
+        tracktion::Plugin::Ptr held (&plugin);
+
+        chainChooser->launchAsync (FileBrowserComponent::openMode | FileBrowserComponent::canSelectFiles,
+                                   [safe = SafePointer<MixerView> (this), held] (const FileChooser& chooser)
+        {
+            if (safe != nullptr && chooser.getResult() != File() && held->getOwnerList() != nullptr)
+                safe->loadPreset (*held, chooser.getResult());
         });
     }
 

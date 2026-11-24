@@ -434,6 +434,17 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Manufacturer list: rows are components that choose on mouse-up (not tried in the app yet).
 - Not done: 5e's other presets; the stuck lane after switching windows (waiting on the owner);
   meters at display rate (phase 9); dropouts (phase 8).
+
+### 2026-11-24 (phase 5 exit checks, one plugin's presets, W64)
+
+- The owner asked to keep developing; testing comes later, all together.
+- Exit checks: the whole-project export nulls too (Tracktion fades a start-on-sound in over ~40
+  samples; the comparison skips 128); a clip re-routed while playing keeps sounding (no quiet
+  block); feedback refusal ticked from MixerTests; idle mixer measured on the iD44 (0.89%).
+- 5e: `engine/Presets` (W64), the Line's Presets menu, the browser's right-click "Add with a
+  preset", `Paths::presets`. Tested with Tracktion's reverb as a stand-in.
+- Next: try a real plugin's .vstpreset/.aupreset (e.g. a plugin on this Mac that ships presets),
+  then 5f (plugins in their own processes) and 5g.
 - Still asked for, not started: 5 Routing section designs, then UAT. The owner's dropouts are
   phase 8's first task; not looked into yet.
 

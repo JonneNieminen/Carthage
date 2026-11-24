@@ -9,6 +9,7 @@ add_library(carthage_engine STATIC
     Editing.cpp Editing.h
     Export.cpp Export.h
     Mixer.cpp Mixer.h
+    Presets.cpp Presets.h
     SampleEdits.cpp SampleEdits.h
     FormantPlugin.cpp FormantPlugin.h
     Project.cpp Project.h

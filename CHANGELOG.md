@@ -11,6 +11,10 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Plugin presets: right-click a plugin on a channel's Line > Presets to save its settings, load
+  one you saved, or open a preset file, Carthage's own or the plugin's (.vstpreset for VST3,
+  .aupreset for Audio Units). In the plugin browser, right-click a plugin to add it with one of
+  its presets. Loading a preset is one undo step.
 - Mixer chains: save a channel's plugins with their settings (Save on the mixer's Plugins row, or
   right-click a channel > Save mixer chain) and load them onto any channel (Load, or Load mixer
   chain). Chains are kept in Carthage's Mixer chains folder.
