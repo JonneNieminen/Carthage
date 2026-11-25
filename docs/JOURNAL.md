@@ -451,3 +451,12 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Still asked for, not started: 5 Routing section designs, then UAT. The owner's dropouts are
   phase 8's first task; not looked into yet.
 
+### 2026-11-26 (5f planned, W65)
+
+- CI green for ed2c6d4 (the Windows fix).
+- Preset files on this Mac: 1015 .fxp, 37 .fxs (VST2 presets and banks), 179 .vpreset. Reading .fxp
+  onto a VST3 would cover the most; noted under "other DAWs' formats", not built.
+- 5f planned with the owner (W65): a host process, one block of added latency, grouping by
+  manufacturer, silence and restart on a crash, plugin windows from the host. JUCE's AU
+  out-of-process loading is AUv3-only; Tracktion's `PluginManager::createPluginInstance` is the hook.
+- Next: 5f-1, the host and the transport, measured with the bench.
