@@ -75,7 +75,7 @@ namespace carthage::engine::plughost
         return buses;
     }
 
-    std::unique_ptr<PluginProxy> PluginProxy::create (const juce::PluginDescription& d, double sampleRate, int blockSize,
+    std::unique_ptr<PluginProxy> PluginProxy::create (const juce::PluginDescription& d, double sampleRate, int samplesPerBlock,
                                                       HostProcess* host, MakeLocal makeLocal, juce::String& error)
     {
         std::unique_ptr<RemotePlugin> remote;
@@ -84,7 +84,7 @@ namespace carthage::engine::plughost
 
         if (host != nullptr && (host->isRunning() || host->start().wasOk()))
         {
-            remote = host->load (d, sampleRate, blockSize, error);
+            remote = host->load (d, sampleRate, samplesPerBlock, error);
 
             if (remote != nullptr)
                 info = remote->getInfo();
@@ -93,7 +93,7 @@ namespace carthage::engine::plughost
         if (remote == nullptr)
         {
             juce::String localError;
-            local = makeLocal != nullptr ? makeLocal (d, sampleRate, blockSize, localError) : nullptr;
+            local = makeLocal != nullptr ? makeLocal (d, sampleRate, samplesPerBlock, localError) : nullptr;
 
             if (local == nullptr)
             {
@@ -108,7 +108,7 @@ namespace carthage::engine::plughost
 
         auto proxy = std::make_unique<PluginProxy> (d, busesFrom (info), info, host, std::move (makeLocal));
         proxy->rate = sampleRate;
-        proxy->block = blockSize;
+        proxy->block = samplesPerBlock;
 
         if (remote != nullptr)
         {
@@ -271,24 +271,24 @@ namespace carthage::engine::plughost
     }
 
     //==============================================================================================
-    void PluginProxy::prepareToPlay (double sampleRate, int blockSize)
+    void PluginProxy::prepareToPlay (double sampleRate, int samplesPerBlock)
     {
         rate = sampleRate;
-        block = blockSize;
+        block = samplesPerBlock;
         prepared = true;
 
         if (local != nullptr)
         {
-            local->setRateAndBufferSizeDetails (sampleRate, blockSize);
-            local->prepareToPlay (sampleRate, blockSize);
+            local->setRateAndBufferSizeDetails (sampleRate, samplesPerBlock);
+            local->prepareToPlay (sampleRate, samplesPerBlock);
         }
 
         // The hop's latency is the block size the link was made for: a new one for another.
-        if (remote != nullptr && (remote->sampleRate() != sampleRate || remote->linkLatency() != blockSize))
+        if (remote != nullptr && (remote->sampleRate() != sampleRate || remote->linkLatency() != samplesPerBlock))
         {
             juce::String error;
 
-            if (! remote->relink (sampleRate, blockSize, error))
+            if (! remote->relink (sampleRate, samplesPerBlock, error))
                 log::warning (description.name + " kept its old link to its process: " + error);
         }
 
@@ -326,12 +326,12 @@ namespace carthage::engine::plughost
             buffer.clear();
     }
 
-    void PluginProxy::setNonRealtime (bool nonRealtime) noexcept
+    void PluginProxy::setNonRealtime (bool offline) noexcept
     {
-        AudioPluginInstance::setNonRealtime (nonRealtime);
+        AudioPluginInstance::setNonRealtime (offline);
 
         if (local != nullptr)
-            local->setNonRealtime (nonRealtime);
+            local->setNonRealtime (offline);
     }
 
     double PluginProxy::getTailLengthSeconds() const
@@ -460,7 +460,7 @@ namespace carthage::engine::plughost
         }
     }
 
-    void PluginProxy::audioProcessorChanged (juce::AudioProcessor*, const ChangeDetails& details)
+    void PluginProxy::audioProcessorChanged (juce::AudioProcessor*, const juce::AudioProcessorListener::ChangeDetails& details)
     {
         juce::MessageManager::callAsync ([this, stillHere = alive]
         {

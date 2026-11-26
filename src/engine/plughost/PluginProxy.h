@@ -25,7 +25,7 @@ namespace carthage::engine::plughost
 
         /** Starts in `host` when it is given and can load the plugin, or else in this process.
             Null and `error` when neither can. `host` must outlive the proxy. */
-        static std::unique_ptr<PluginProxy> create (const juce::PluginDescription&, double sampleRate, int blockSize,
+        static std::unique_ptr<PluginProxy> create (const juce::PluginDescription&, double sampleRate, int samplesPerBlock,
                                                     HostProcess* host, MakeLocal makeLocal, juce::String& error);
 
         ~PluginProxy() override;
@@ -45,7 +45,7 @@ namespace carthage::engine::plughost
         // ---- juce::AudioPluginInstance ----
         void fillInPluginDescription (juce::PluginDescription& d) const override   { d = description; }
         const juce::String getName() const override   { return description.name; }
-        void prepareToPlay (double sampleRate, int blockSize) override;
+        void prepareToPlay (double sampleRate, int samplesPerBlock) override;
         void releaseResources() override;
         void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
         void setNonRealtime (bool) noexcept override;
@@ -101,7 +101,7 @@ namespace carthage::engine::plughost
         void refreshValues (const juce::Array<float>&);
 
         void audioProcessorParameterChanged (juce::AudioProcessor*, int index, float value) override;
-        void audioProcessorChanged (juce::AudioProcessor*, const ChangeDetails&) override;
+        void audioProcessorChanged (juce::AudioProcessor*, const juce::AudioProcessorListener::ChangeDetails&) override;
         void audioProcessorParameterChangeGestureBegin (juce::AudioProcessor*, int index) override;
         void audioProcessorParameterChangeGestureEnd (juce::AudioProcessor*, int index) override;
 

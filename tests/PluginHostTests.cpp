@@ -431,11 +431,12 @@ public:
         const auto& folder = holder.getFile();
         folder.createDirectory();
 
+        // Before the engine: Tracktion lets plugin instances go as late as its own destructor.
+        Processes processes { juce::File (CARTHAGE_PLUGHOST_PATH) };
         tracktion::Engine engine ("CarthageProxyTests", nullptr, std::make_unique<Headless>());
         auto& manager = engine.getPluginManager();
         manager.pluginFormatManager.addFormat (std::make_unique<TestPluginFormat>());   // "Half" here too, tests only
         manager.knownPluginList.addType (testPlugin ("Half"));
-        Processes processes { juce::File (CARTHAGE_PLUGHOST_PATH) };
         processes.install (engine);
 
         auto edit = tracktion::createEmptyEdit (engine, folder.getChildFile ("Proxy.tracktionedit"));

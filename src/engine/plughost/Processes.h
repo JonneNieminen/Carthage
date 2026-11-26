@@ -15,7 +15,8 @@ namespace carthage::engine::plughost
         in its maker's carthage-plughost (one process per manufacturer) and place() moves the
         plugins on a live path (an input being heard, and everything it plays into) into this
         process and the others back out. While off, plugins load in this process as before, and
-        place() brings any proxy home. Message thread. Must outlive the engine's edits. */
+        place() brings any proxy home. Message thread. Must outlive the engine: Tracktion lets plugin
+        instances go as late as its own destructor. */
     class Processes final
     {
     public:
