@@ -3,6 +3,7 @@
 #include "SampleEdits.h"
 #include "Trace.h"
 #include "Editing.h"
+#include "plughost/PluginProxy.h"
 
 #include <tracktion_graph/tracktion_graph.h>
 
@@ -77,6 +78,11 @@ namespace carthage::engine
 
         auto& pm = engine->getPluginManager();
         pm.createBuiltInType<FormantPlugin>();   // the sample editor's formant shift (4e)
+
+        // Plugins in their own processes (5f): carthage-plughost sits beside carthage-scan.
+        processes = std::make_unique<plughost::Processes> (scanner.getSiblingFile (scanner.getFileName().replace ("carthage-scan", "carthage-plughost")));
+        processes->install (*engine);
+        processes->setEnabled (getPluginProcesses());
         plugins = std::make_unique<PluginCatalogue> (pm.knownPluginList, pm.pluginFormatManager, folders.pluginCache);
         loadGate = plugins.get();
 
@@ -932,6 +938,7 @@ namespace carthage::engine
 
         // Lane mute and solo onto the carriers; only what could sound in the graph (W49).
         editing::syncMix (*edit, track);
+        session.placePlugins (*edit, track);
 
         if (&session.front() == this)
             session.applyLowLatency();   // arming, hearing and plugins change what it leaves out
@@ -992,6 +999,7 @@ namespace carthage::engine
         }
 
         editing::syncMix (edit, p->track);
+        placePlugins (edit, p->track);
 
         // A new project's metronome marks the first beat of the bar (the tick-tock's deeper tock).
         if (fresh)
@@ -1610,7 +1618,43 @@ namespace carthage::engine
         {
             editing::setUsesPreMaster (*p->edit, on);
             editing::syncMix (*p->edit, p->track);
+            placePlugins (*p->edit, p->track);
         }
+    }
+
+    bool Session::getPluginProcesses() const
+    {
+        return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("pluginProcesses", false);
+    }
+
+    void Session::setPluginProcesses (bool on)
+    {
+        engine->getPropertyStorage().getPropertiesFile().setValue ("pluginProcesses", on);
+        processes->setEnabled (on);
+
+        for (auto& p : projects)
+        {
+            // Plugins loaded before have no stand-in: they load again through one.
+            if (on)
+                for (auto* plugin : tracktion::getAllPlugins (*p->edit, false))
+                    if (auto* ext = dynamic_cast<tracktion::ExternalPlugin*> (plugin);
+                        ext != nullptr && plughost::Processes::canRunInHost (ext->desc)
+                        && dynamic_cast<plughost::PluginProxy*> (ext->getAudioPluginInstance()) == nullptr)
+                    {
+                        // Tracktion lets an instance go when processing stops and makes a new one
+                        // (through the stand-in) when it starts; not an undo step.
+                        ext->flushPluginStateToValueTree();
+                        ext->state.setProperty (tracktion::IDs::process, false, nullptr);
+                        ext->state.setProperty (tracktion::IDs::process, true, nullptr);
+                    }
+
+            placePlugins (*p->edit, p->track);
+        }
+    }
+
+    void Session::placePlugins (tracktion::Edit& edit, const tracktion::AudioTrack* liveChannel)
+    {
+        processes->place (edit, editing::livePath (edit, liveChannel));
     }
 
         bool Session::getFitLoopsToTempo() const

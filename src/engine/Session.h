@@ -9,6 +9,7 @@
 #include "PluginLibrary.h"
 #include "PluginScan.h"
 #include "Project.h"
+#include "plughost/Processes.h"
 #include "SampleAnalysis.h"
 #include "SampleLibrary.h"
 #include "SamplePreview.h"
@@ -182,6 +183,17 @@ namespace carthage::engine
         /** Settings: the Pre-Master channel (W51), on by default; applies to every open project. */
         bool getUsePreMaster() const;
         void setUsePreMaster (bool);
+
+        /** Plugins in their own processes (5f, W65). Off by default until their windows open from
+            there (5f-3). Turning it on reloads every plugin through a stand-in (a moment's
+            silence); turning it off brings them all into Carthage. */
+        bool getPluginProcesses() const;
+        void setPluginProcesses (bool);
+        plughost::Processes& getProcesses() noexcept   { return *processes; }
+
+        /** Puts each plugin of `edit` in its process: those a live input is heard through here,
+            the rest in their own (W65). After every mix change (syncMix). */
+        void placePlugins (tracktion::Edit&, const tracktion::AudioTrack* liveChannel);
 
         bool getFitLoopsToTempo() const;
         void setFitLoopsToTempo (bool);
@@ -395,6 +407,7 @@ namespace carthage::engine
         std::unique_ptr<PluginScanner> pluginScanner;   // after the catalogue: destroyed first
         std::unique_ptr<SampleLibrary> sampleLibrary;
         std::unique_ptr<SampleAnalyser> sampleAnalyser;   // after the library: stopped first
+        std::unique_ptr<plughost::Processes> processes;   // before the engine: outlives its plugins
         std::unique_ptr<tracktion::Engine> engine;
         std::array<TakeRecorder, AudioCallback::maxTakes> recorders;
         TakeRecorder& recorder { recorders[0] };   // the first take's, and the meters'

@@ -1381,6 +1381,17 @@ namespace carthage::editing
         ensurePreMaster (edit);
     }
 
+    std::set<const AudioTrack*> livePath (Edit& edit, const AudioTrack* inputChannel)
+    {
+        std::set<const AudioTrack*> live;
+
+        for (auto* ch : channels (edit))
+            if (ch == inputChannel || (inputOf (*ch).isSet() && isMonitoring (*ch)))
+                collectDownstream (ch, live);
+
+        return live;
+    }
+
     void syncMix (Edit& edit, const AudioTrack* inputChannel)
     {
         applyMutes (edit);

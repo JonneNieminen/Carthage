@@ -46,7 +46,10 @@ src/
     PluginLibrary    the plugin browser's data: fuzzy search, filters, favourites, last used
     plughost/        plugins in their own processes (5f, W65): Link (the shared-memory rings, one
                      block of latency), Protocol (the requests over JUCE's child-process pipe),
-                     HostProcess and RemotePlugin (the app's side)
+                     HostProcess and RemotePlugin (the app's side), PluginProxy (the plugin
+                     Tracktion sees: here or in a host, moving with its state), Processes (the
+                     hook into Tracktion's plugin creation, one host per maker, placement),
+                     TestPlugins ("Half", for the tests and the host)
     platform/        SharedMemory_posix.cpp, SharedMemory_win.cpp: shared memory and the wake signal
     time/Grid        the one grid and snap resolver (beats; divisions, triplet, dotted, adaptive)
     RealtimeCheck.h  RealTimeSanitizer scope and CARTHAGE_NONBLOCKING
@@ -335,8 +338,15 @@ Rules that follow:
   memory (`engine/plughost/Link`): the audio thread writes a block, posts a wake signal and takes the
   output that is ready, which is the output of the input one device block earlier; it never waits,
   and a block the host did not finish plays silence and counts as late. Export waits for each block
-  instead. The host's render thread per plugin is a real-time thread. Built so far: 5f-1 (the host,
-  the link, the app's side and the bench); the plugins in a project do not use it yet (5f-2).
+  instead. The host's render thread per plugin is a real-time thread.
+- **Into Tracktion** (5f-2, W67): `plughost::Processes` replaces `PluginManager::createPluginInstance`.
+  While Settings has it on (`pluginProcesses`, off until 5f-3), every AU and VST3 becomes a
+  `PluginProxy`, an `AudioPluginInstance` that runs the plugin in its maker's host or in this process
+  and moves between them with its state, parameters and buses unchanged; only its latency changes,
+  and Tracktion re-reads it. After every `syncMix` the Session calls `placePlugins`: plugins on the
+  live path (`editing::livePath`: channels with a heard input and everything downstream, master and
+  the Pre-Master included) run here, the rest in their hosts. A move waits on the message thread for
+  the block in flight; the audio thread never waits.
 - **The monitored insert** in phase 1 is one `tracktion::ExternalPlugin` at index 0 of the track's
   plugin list, before the track's own volume/pan and meter, which are channel features.
 - **The plugin list, blocklist, favourites and last-used list** are files in the settings folder, with a

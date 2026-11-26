@@ -3,6 +3,7 @@
 #include <tracktion_engine/tracktion_engine.h>
 
 #include <optional>
+#include <set>
 
 namespace carthage::editing
 {
@@ -302,6 +303,11 @@ namespace carthage::editing
         in the audio graph (an empty channel costs nothing, W49). `inputChannel` is processing
         while it has the live input (and so does any channel monitoring an input). Not an undo step. */
     void syncMix (tracktion::Edit&, const tracktion::AudioTrack* inputChannel);
+
+    /** The channels a live input is heard through (5f, W65): `inputChannel` and every channel
+        monitoring an input, with everything they play into (sends too). Their plugins stay in
+        Carthage's own process, so what is heard live never waits on another process (F8). */
+    std::set<const tracktion::AudioTrack*> livePath (tracktion::Edit&, const tracktion::AudioTrack* inputChannel);
 
     /** Channels created by default (brief, feature 3). */
     constexpr int defaultChannels = 50;

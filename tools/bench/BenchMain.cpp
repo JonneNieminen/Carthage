@@ -28,6 +28,12 @@
 //                          (a real plugin in carthage-plughost, 5f, W65: its output against the same plugin
 //                          in this process, shifted by one block, then real-time blocks for --seconds,
 //                          counting late ones and timing the audio thread's side; needs no audio device)
+//   carthage-bench proxy   --plugin-format VST3|AudioUnit --plugin FILE_OR_ID [--parameter N]
+//                          [--device NAME --rate HZ --buffer N --seconds 10]
+//                          (5f-2: the plugin inserted through the Session with plugins in their own
+//                          processes on: on the live channel it runs in Carthage; moved off the live
+//                          path it goes to its process with its setting, plays (with --device) without
+//                          late blocks, and comes back with the setting)
 //   carthage-bench projects
 //                          (through the app's Session: save as, reopen, save, autosave after a pause, a
 //                          crash left behind and its recovery; needs no particular device)
@@ -51,6 +57,7 @@
 #include <engine/Editing.h>
 #include <engine/Presets.h>
 #include <engine/plughost/HostProcess.h>
+#include <engine/plughost/PluginProxy.h>
 #include <engine/Session.h>
 #include <engine/SettingsTest.h>
 #include <engine/SampleEdits.h>
@@ -158,6 +165,7 @@ namespace
             else if (args.command == "idle-mixer") result = idleMixer();
             else if (args.command == "presets") result = presetRoundTrip();
             else if (args.command == "plughost") result = plugHost();
+            else if (args.command == "proxy") result = proxyRoundTrip();
             else say ("unknown command: " + args.command);
 
             onMessageThreadVoid ([this] { session.reset(); });
@@ -651,6 +659,94 @@ namespace
             check (! carthage::editing::addSend (*other, *channel).wasOk(), "a send back would loop: refused");
             say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
             return checksFailed == 0 ? 0 : 1;
+        }
+
+        /** A real plugin behind the stand-in, through the Session (5f-2). */
+        int proxyRoundTrip()
+        {
+            onMessageThreadVoid ([this] { session->setPluginProcesses (true); });
+
+            if (args.has ("device") && ! openDevice (args.getInt ("buffer", 128)))
+                return 1;
+
+            if (insertPlugin() != 0)
+                return 1;
+
+            int failures = 0;
+            const auto check = [&] (bool ok, const String& what)
+            {
+                say (String (ok ? "PASS " : "FAIL ") + what);
+                failures += ok ? 0 : 1;
+            };
+
+            auto* ext = onMessageThread ([this] { return dynamic_cast<tracktion::ExternalPlugin*> (session->getInsertedPlugin()); });
+            auto* proxy = ext != nullptr ? dynamic_cast<engine::plughost::PluginProxy*> (ext->getAudioPluginInstance()) : nullptr;
+
+            if (proxy == nullptr)
+            {
+                say ("FAIL the plugin has no stand-in");
+                return 1;
+            }
+
+            check (! proxy->isInHost(), "on the live channel, the plugin runs in Carthage");
+
+            const auto index = args.getInt ("parameter", 0);
+            auto* param = onMessageThread ([&]() -> tracktion::AutomatableParameter*
+            {
+                for (auto* p : ext->getAutomatableParameters())
+                    if (p->paramID == String (index))
+                        return p;
+
+                return nullptr;
+            });
+
+            if (param == nullptr)
+            {
+                say ("FAIL no parameter " + String (index) + "; the stand-in has " + String (proxy->getParameters().size())
+                     + ", Tracktion lists: " + onMessageThread ([&]
+                     {
+                         StringArray ids;
+
+                         for (auto* p : ext->getAutomatableParameters())
+                             ids.add (p->paramID + "=" + p->paramName);
+
+                         return ids.joinIntoString (", ");
+                     }));
+                return 1;
+            }
+
+            say ("parameter " + String (index) + ": " + param->paramName);
+            const auto wanted = 0.37f;
+            onMessageThreadVoid ([&] { param->setParameter (wanted, sendNotificationSync); });
+
+            const auto movedOut = Time::getMillisecondCounterHiRes();
+            onMessageThreadVoid ([&] { session->getProcesses().place (session->getEdit(), {}); });
+            say ("moved to its process in " + String (roundToInt (Time::getMillisecondCounterHiRes() - movedOut)) + " ms");
+            check (proxy->isInHost(), "off the live path, the plugin runs in its own process");
+            check (std::abs (proxy->getParameters()[index]->getValue() - wanted) < 1.0e-4f, "its setting went with it ("
+                   + String (proxy->getParameters()[index]->getValue(), 3) + ")");
+            say ("latency there: " + String (proxy->getLatencySamples()) + " samples");
+
+            if (args.has ("device"))
+            {
+                onMessageThreadVoid ([this] { session->getEdit().getTransport().play (false); });
+                const auto lateBefore = proxy->lateBlocks();
+                waitMs (args.getInt ("seconds", 10) * 1000);
+                onMessageThreadVoid ([this] { session->getEdit().getTransport().stop (false, false); });
+                const auto late = proxy->lateBlocks() - lateBefore;
+                check (late == 0, "playing in its process: " + String (static_cast<int> (late)) + " late blocks");
+            }
+
+            const auto movedIn = Time::getMillisecondCounterHiRes();
+            onMessageThreadVoid ([&] { session->placePlugins (session->getEdit(), &session->getTrack()); });
+            say ("moved back in " + String (roundToInt (Time::getMillisecondCounterHiRes() - movedIn)) + " ms");
+            check (! proxy->isInHost(), "back on the live path, it runs in Carthage again");
+            check (std::abs (proxy->getParameters()[index]->getValue() - wanted) < 1.0e-4f, "and its setting came back ("
+                   + String (proxy->getParameters()[index]->getValue(), 3) + ")");
+
+            onMessageThreadVoid ([this] { session->setPluginProcesses (false); });
+            say ("RESULT proxy: " + String (failures) + " failed");
+            return failures == 0 ? 0 : 1;
         }
 
         /** A real plugin in carthage-plughost (5f, W65). Needs no audio device. */

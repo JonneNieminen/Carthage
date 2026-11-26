@@ -13,6 +13,9 @@ add_library(carthage_engine STATIC
     plughost/Link.cpp plughost/Link.h
     plughost/Protocol.cpp plughost/Protocol.h
     plughost/HostProcess.cpp plughost/HostProcess.h
+    plughost/PluginProxy.cpp plughost/PluginProxy.h
+    plughost/Processes.cpp plughost/Processes.h
+    plughost/TestPlugins.cpp plughost/TestPlugins.h
     platform/SharedMemory.h
     SampleEdits.cpp SampleEdits.h
     FormantPlugin.cpp FormantPlugin.h

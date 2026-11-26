@@ -52,6 +52,16 @@ namespace carthage::engine::plughost
         /** Sends `request` and waits for its reply; an invalid tree if none came in time. */
         juce::ValueTree ask (juce::ValueTree request, int timeoutMs);
 
+        struct Linked
+        {
+            std::unique_ptr<platform::SharedMemory> memory;
+            std::unique_ptr<platform::WakeSignal> wake;
+            Link link;
+        };
+
+        /** A new link for a loaded plugin, and the host attached to it; empty and `error` if not. */
+        Linked linkUp (int slot, int ins, int outs, int params, double sampleRate, int maxBlock, juce::String& error, int timeoutMs);
+
         void handleMessageFromWorker (const juce::MemoryBlock&) override;
         void handleConnectionLost() override;
         void failAll();
@@ -66,6 +76,23 @@ namespace carthage::engine::plughost
         ~RemotePlugin();
 
         const juce::String& getName() const noexcept   { return name; }
+
+        /** The host's description of the plugin (Protocol.h, load's reply): buses, parameters. */
+        const juce::ValueTree& getInfo() const noexcept   { return info; }
+
+        /** A new link for another block size or sample rate. Never while process() may run. */
+        bool relink (double sampleRate, int maxBlock, juce::String& error);
+
+        double sampleRate() const noexcept   { return rate; }
+
+        /** Sets a parameter (0 to 1); any thread, never waits. The host applies it before its next block. */
+        void setParameter (int index, float value) noexcept   { link.setParameter (index, value); }
+
+        /** Every parameter's value as the host last reported it (after load, getState or setState). */
+        juce::Array<float> lastValues() const   { return values; }
+
+        /** False once the host has gone. */
+        bool isAlive() const noexcept   { return host.isRunning(); }
         int numIns() const noexcept    { return link.numIns(); }
         int numOuts() const noexcept   { return link.numOuts(); }
 
@@ -90,17 +117,21 @@ namespace carthage::engine::plughost
         /** Blocks whose output was not ready in time, since the plugin loaded. */
         std::uint32_t lateBlocks() const noexcept   { return link.state().late.load (std::memory_order_relaxed); }
 
-        RemotePlugin (HostProcess&, int slot, juce::String name, int ownLatency,
-                      std::unique_ptr<platform::SharedMemory>, std::unique_ptr<platform::WakeSignal>, Link);
+        RemotePlugin (HostProcess&, int slot, juce::ValueTree info, double sampleRate, HostProcess::Linked);
 
     private:
         HostProcess& host;
         const int slot;
+        const juce::ValueTree info;
         const juce::String name;
         int ownLatency;
+        double rate;
         std::unique_ptr<platform::SharedMemory> memory;
         std::unique_ptr<platform::WakeSignal> wake;
         Link link;
+        juce::Array<float> values;
+
+        void takeValues (const juce::ValueTree& reply);
 
         JUCE_DECLARE_NON_COPYABLE (RemotePlugin)
     };

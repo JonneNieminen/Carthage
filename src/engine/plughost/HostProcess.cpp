@@ -2,6 +2,8 @@
 
 #include "Protocol.h"
 
+#include <algorithm>
+
 namespace carthage::engine::plughost
 {
     HostProcess::HostProcess (juce::File exe) : executable (std::move (exe)) {}
@@ -88,6 +90,43 @@ namespace carthage::engine::plughost
         }
     }
 
+    HostProcess::Linked HostProcess::linkUp (int slot, int ins, int outs, int params, double sampleRate, int maxBlock,
+                                             juce::String& error, int timeoutMs)
+    {
+        Linked made;
+        const auto bytes = Link::bytesFor (ins, outs, Link::capacityFor (maxBlock), params);
+        const auto memoryName = platform::uniqueName ('m'), wakeName = platform::uniqueName ('w');
+        made.memory = platform::SharedMemory::create (memoryName, bytes);
+        made.wake = platform::WakeSignal::create (wakeName);
+        made.link = made.memory != nullptr ? Link::create (made.memory->data(), made.memory->size(), ins, outs, maxBlock, params) : Link();
+
+        if (made.wake == nullptr || ! made.link.isValid())
+        {
+            error = "Carthage could not make the link to the plugin";
+            return {};
+        }
+
+        juce::ValueTree connect (msg::connect);
+        connect.setProperty (msg::slot, slot, nullptr);
+        connect.setProperty (msg::memory, memoryName, nullptr);
+        connect.setProperty (msg::wake, wakeName, nullptr);
+        connect.setProperty (msg::bytes, static_cast<juce::int64> (bytes), nullptr);
+        connect.setProperty (msg::sampleRate, sampleRate, nullptr);
+        const auto connected = ask (connect, timeoutMs);
+
+        // Both sides have them open now (or never will): the names can go.
+        made.memory->removeName();
+        made.wake->removeName();
+
+        if (! static_cast<bool> (connected[msg::ok]))
+        {
+            error = errorIn (connected, "linking the plugin");
+            return {};
+        }
+
+        return made;
+    }
+
     std::unique_ptr<RemotePlugin> HostProcess::load (const juce::PluginDescription& d, double sampleRate, int maxBlock,
                                                      juce::String& error, int timeoutMs)
     {
@@ -105,55 +144,57 @@ namespace carthage::engine::plughost
         }
 
         const int slot = loaded[msg::slot];
-        const int ins = loaded[msg::numIns], outs = loaded[msg::numOuts];
-        const auto bytes = Link::bytesFor (ins, outs, Link::capacityFor (maxBlock));
-        const auto memoryName = platform::uniqueName ('m'), wakeName = platform::uniqueName ('w');
-        auto memory = platform::SharedMemory::create (memoryName, bytes);
-        auto wake = platform::WakeSignal::create (wakeName);
-        const auto link = memory != nullptr ? Link::create (memory->data(), memory->size(), ins, outs, maxBlock) : Link();
+        const auto params = loaded.getNumChildren() > 0 ? static_cast<int> (std::count_if (loaded.begin(), loaded.end(),
+                                                              [] (const auto& c) { return c.hasType (msg::parameter); }))
+                                                        : 0;
+        auto linked = linkUp (slot, loaded[msg::numIns], loaded[msg::numOuts], juce::jmin (params, maxLinkParameters),
+                              sampleRate, maxBlock, error, timeoutMs);
 
-        auto forget = [&]
+        if (! linked.link.isValid())
         {
             juce::ValueTree unload (msg::unload);
             unload.setProperty (msg::slot, slot, nullptr);
             ask (unload, 2000);
-        };
-
-        if (wake == nullptr || ! link.isValid())
-        {
-            error = "Carthage could not make the link to " + d.name;
-            forget();
+            error = d.name + ": " + error;
             return {};
         }
 
-        juce::ValueTree connect (msg::connect);
-        connect.setProperty (msg::slot, slot, nullptr);
-        connect.setProperty (msg::memory, memoryName, nullptr);
-        connect.setProperty (msg::wake, wakeName, nullptr);
-        connect.setProperty (msg::bytes, static_cast<juce::int64> (bytes), nullptr);
-        connect.setProperty (msg::sampleRate, sampleRate, nullptr);
-        const auto connected = ask (connect, timeoutMs);
-
-        // Both sides have them open now (or never will): the names can go.
-        memory->removeName();
-        wake->removeName();
-
-        if (! static_cast<bool> (connected[msg::ok]))
-        {
-            error = errorIn (connected, "linking " + d.name);
-            forget();
-            return {};
-        }
-
-        return std::make_unique<RemotePlugin> (*this, slot, loaded[msg::name].toString(), static_cast<int> (loaded[msg::latency]),
-                                               std::move (memory), std::move (wake), link);
+        return std::make_unique<RemotePlugin> (*this, slot, loaded, sampleRate, std::move (linked));
     }
 
-    RemotePlugin::RemotePlugin (HostProcess& h, int s, juce::String n, int latencyOfItsOwn,
-                                std::unique_ptr<platform::SharedMemory> m, std::unique_ptr<platform::WakeSignal> w, Link l)
-        : host (h), slot (s), name (std::move (n)), ownLatency (latencyOfItsOwn),
-          memory (std::move (m)), wake (std::move (w)), link (l)
-    {}
+    RemotePlugin::RemotePlugin (HostProcess& h, int s, juce::ValueTree i, double sampleRate, HostProcess::Linked linked)
+        : host (h), slot (s), info (std::move (i)), name (info[msg::name].toString()),
+          ownLatency (info[msg::latency]), rate (sampleRate),
+          memory (std::move (linked.memory)), wake (std::move (linked.wake)), link (linked.link)
+    {
+        for (const auto& c : info)
+            if (c.hasType (msg::parameter))
+                values.add (static_cast<float> (c[msg::value]));
+    }
+
+    bool RemotePlugin::relink (double sampleRate, int maxBlock, juce::String& error)
+    {
+        auto linked = host.linkUp (slot, link.numIns(), link.numOuts(), link.numParams(), sampleRate, maxBlock, error, 10000);
+
+        if (! linked.link.isValid())
+            return false;
+
+        // The host has let go of the old link (it stops before attaching to a new one).
+        memory = std::move (linked.memory);
+        wake = std::move (linked.wake);
+        link = linked.link;
+        rate = sampleRate;
+        return true;
+    }
+
+    void RemotePlugin::takeValues (const juce::ValueTree& reply)
+    {
+        if (reply.hasProperty (msg::values))
+            values = valuesFromText (reply[msg::values].toString());
+
+        if (reply.hasProperty (msg::latency))
+            ownLatency = reply[msg::latency];
+    }
 
     RemotePlugin::~RemotePlugin()
     {
@@ -206,6 +247,7 @@ namespace carthage::engine::plughost
         if (! static_cast<bool> (reply[msg::ok]) || ! data.fromBase64Encoding (reply[msg::state].toString()))
             return std::nullopt;
 
+        takeValues (reply);
         return data;
     }
 
@@ -214,6 +256,12 @@ namespace carthage::engine::plughost
         juce::ValueTree request (msg::setState);
         request.setProperty (msg::slot, slot, nullptr);
         request.setProperty (msg::state, data.toBase64Encoding(), nullptr);
-        return static_cast<bool> (host.ask (request, timeoutMs)[msg::ok]);
+        const auto reply = host.ask (request, timeoutMs);
+
+        if (! static_cast<bool> (reply[msg::ok]))
+            return false;
+
+        takeValues (reply);
+        return true;
     }
 }

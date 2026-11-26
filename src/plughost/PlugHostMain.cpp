@@ -9,6 +9,7 @@
 #include <engine/platform/SharedMemory.h>
 #include <engine/plughost/Link.h>
 #include <engine/plughost/Protocol.h>
+#include <engine/plughost/TestPlugins.h>
 
 #include <map>
 
@@ -17,59 +18,31 @@ namespace
     using namespace carthage::engine;
     using namespace carthage::engine::plughost;
 
-    /** "Half" (Protocol.h): the host's own test plugin. */
-    class HalfProcessor final : public juce::AudioProcessor
-    {
-    public:
-        HalfProcessor()
-            : juce::AudioProcessor (BusesProperties().withInput ("In", juce::AudioChannelSet::stereo())
-                                                     .withOutput ("Out", juce::AudioChannelSet::stereo()))
-        {}
-
-        const juce::String getName() const override   { return "Half"; }
-        void prepareToPlay (double, int) override {}
-        void releaseResources() override {}
-
-        void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override
-        {
-            buffer.applyGain (0.5f);
-
-            for (const auto m : midi)
-                if (m.getMessage().isNoteOn() && buffer.getNumChannels() > 0)
-                    buffer.addSample (0, m.samplePosition, 1.0f);
-        }
-
-        double getTailLengthSeconds() const override   { return 0.0; }
-        bool acceptsMidi() const override              { return true; }
-        bool producesMidi() const override             { return false; }
-        juce::AudioProcessorEditor* createEditor() override   { return nullptr; }
-        bool hasEditor() const override                { return false; }
-        int getNumPrograms() override                  { return 1; }
-        int getCurrentProgram() override               { return 0; }
-        void setCurrentProgram (int) override {}
-        const juce::String getProgramName (int) override   { return {}; }
-        void changeProgramName (int, const juce::String&) override {}
-
-        void getStateInformation (juce::MemoryBlock& data) override   { data = state; }
-        void setStateInformation (const void* data, int size) override   { state.replaceAll (data, static_cast<size_t> (size)); }
-
-    private:
-        juce::MemoryBlock state;
-    };
-
     /** One loaded plugin: its processor, link and render thread. */
     class Slot final : private juce::Thread
     {
     public:
-        explicit Slot (std::unique_ptr<juce::AudioProcessor> p)
-            : juce::Thread ("Carthage plugin host render"), processor (std::move (p)) {}
+        explicit Slot (std::unique_ptr<juce::AudioPluginInstance> p)
+            : juce::Thread ("Carthage plugin host render"), processor (std::move (p)), parameters (processor->getParameters()) {}
 
         ~Slot() override   { stop(); }
 
-        juce::AudioProcessor& plugin()   { return *processor; }
+        juce::AudioPluginInstance& plugin()   { return *processor; }
+
+        /** Every parameter's value now. */
+        juce::Array<float> values() const
+        {
+            juce::Array<float> v;
+
+            for (auto* p : parameters)
+                v.add (p->getValue());
+
+            return v;
+        }
 
         juce::String connect (const juce::String& memoryName, const juce::String& wakeName, size_t bytes, double rate)
         {
+            stop();   // a new link (block size or rate) replaces the old one
             memory = platform::SharedMemory::open (memoryName, bytes);
             wake = platform::WakeSignal::open (wakeName);
 
@@ -81,7 +54,7 @@ namespace
             if (! link.isValid())
                 return "the link's memory does not hold a link";
 
-            link.prepareHost (audio, midi);
+            link.prepareHost (side);
             processor->setRateAndBufferSizeDetails (rate, link.maxBlock());
             processor->prepareToPlay (rate, link.maxBlock());
 
@@ -103,12 +76,12 @@ namespace
         }
 
     private:
-        std::unique_ptr<juce::AudioProcessor> processor;
+        std::unique_ptr<juce::AudioPluginInstance> processor;
+        juce::Array<juce::AudioProcessorParameter*> parameters;
         std::unique_ptr<platform::SharedMemory> memory;
         std::unique_ptr<platform::WakeSignal> wake;
         Link link;
-        juce::AudioBuffer<float> audio;
-        juce::MidiBuffer midi;
+        HostSide side;
 
         void run() override
         {
@@ -119,10 +92,13 @@ namespace
                 if (threadShouldExit() || link.state().quit.load (std::memory_order_acquire) != 0)
                     return;
 
-                link.serve (audio, midi, [this] (juce::AudioBuffer<float>& a, juce::MidiBuffer& m)
-                {
-                    processor->processBlock (a, m);
-                });
+                link.serve (side,
+                            [this] (juce::AudioBuffer<float>& a, juce::MidiBuffer& m) { processor->processBlock (a, m); },
+                            [this] (int index, float value)
+                            {
+                                if (juce::isPositiveAndBelow (index, parameters.size()))
+                                    parameters.getUnchecked (index)->setValue (value);
+                            });
             }
         }
     };
@@ -176,18 +152,15 @@ namespace
             return found != slots.end() ? found->second.get() : nullptr;
         }
 
-        std::unique_ptr<juce::AudioProcessor> make (const juce::PluginDescription& d, double rate, int maxBlock, juce::String& error)
+        std::unique_ptr<juce::AudioPluginInstance> make (const juce::PluginDescription& d, double rate, int maxBlock, juce::String& error)
         {
-            if (d.pluginFormatName == testFormat)
-            {
-                if (d.name == "Half")
-                    return std::make_unique<HalfProcessor>();
+            auto instance = d.pluginFormatName == testFormat ? createTestPlugin (d, error)
+                                                             : formats.createPluginInstance (d, rate, maxBlock, error);
 
-                error = "no test plugin called " + d.name;
-                return {};
-            }
+            if (instance != nullptr)
+                instance->enableAllBuses();   // as Tracktion does with the plugins in the app
 
-            return formats.createPluginInstance (d, rate, maxBlock, error);
+            return instance;
         }
 
         juce::String answer (const juce::ValueTree& request, juce::ValueTree& reply)
@@ -209,10 +182,7 @@ namespace
                     return error.isNotEmpty() ? error : "the plugin did not load";
 
                 reply.setProperty (msg::slot, nextSlot, nullptr);
-                reply.setProperty (msg::name, processor->getName(), nullptr);
-                reply.setProperty (msg::numIns, processor->getTotalNumInputChannels(), nullptr);
-                reply.setProperty (msg::numOuts, processor->getTotalNumOutputChannels(), nullptr);
-                reply.setProperty (msg::latency, processor->getLatencySamples(), nullptr);
+                describe (*processor, reply);
                 slots[nextSlot++] = std::make_unique<Slot> (std::move (processor));
                 return {};
             }
@@ -232,6 +202,7 @@ namespace
                 juce::MemoryBlock data;
                 slot->plugin().getStateInformation (data);
                 reply.setProperty (msg::state, data.toBase64Encoding(), nullptr);
+                reply.setProperty (msg::values, valuesToText (slot->values()), nullptr);
                 return {};
             }
 
@@ -243,6 +214,8 @@ namespace
                     return "the state could not be read";
 
                 slot->plugin().setStateInformation (data.getData(), static_cast<int> (data.getSize()));
+                reply.setProperty (msg::values, valuesToText (slot->values()), nullptr);
+                reply.setProperty (msg::latency, slot->plugin().getLatencySamples(), nullptr);
                 return {};
             }
 

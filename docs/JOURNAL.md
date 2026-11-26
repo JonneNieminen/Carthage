@@ -466,3 +466,13 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   application now. The Mac was locked this session, so the `engine` tests hung in CoreAudio; run
   `carthage_tests plughost` alone then.
 - Next: 5f-2, a proxy AudioPluginInstance through `PluginManager::createPluginInstance`.
+
+### 2026-11-27 (5f-2, W67)
+
+- `PluginProxy`, `Processes`, `TestPlugins`; the link carries parameters; the host describes buses
+  and parameters and relinks for a new block size; `editing::livePath`; `Session::placePlugins`
+  and `get/setPluginProcesses` (off by default, no switch shown).
+- Found: Tracktion keys plugin parameters by index; JUCE's format manager also asks a format
+  whether the file holds the plugin; a VST3's state lacks settings changed while not playing, so a
+  move into Carthage sets the values again.
+- Next: 5f-3, plugin windows from the host (then the switch can be on by default).

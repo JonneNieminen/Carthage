@@ -10,10 +10,10 @@ namespace carthage::engine::plughost
 
         struct Layout
         {
-            size_t header, inputs, outputs, midi, total;
+            size_t header, inputs, outputs, midi, parameters, total;
         };
 
-        Layout layoutFor (int numIns, int numOuts, int capacity) noexcept
+        Layout layoutFor (int numIns, int numOuts, int capacity, int numParams) noexcept
         {
             const auto ring = static_cast<size_t> (capacity) * sizeof (float);
             Layout l {};
@@ -21,7 +21,8 @@ namespace carthage::engine::plughost
             l.inputs = alignUp (sizeof (LinkHeader));
             l.outputs = l.inputs + alignUp (ring * static_cast<size_t> (numIns));
             l.midi = l.outputs + alignUp (ring * static_cast<size_t> (numOuts));
-            l.total = l.midi + alignUp (sizeof (LinkMidi) * static_cast<size_t> (midiCapacity));
+            l.parameters = l.midi + alignUp (sizeof (LinkMidi) * static_cast<size_t> (midiCapacity));
+            l.total = l.parameters + alignUp (sizeof (LinkParameter) * static_cast<size_t> (numParams));
             return l;
         }
 
@@ -51,17 +52,17 @@ namespace carthage::engine::plughost
         }
     }
 
-    size_t Link::bytesFor (int numIns, int numOuts, int capacity)
+    size_t Link::bytesFor (int numIns, int numOuts, int capacity, int numParams)
     {
-        return layoutFor (numIns, numOuts, capacity).total;
+        return layoutFor (numIns, numOuts, capacity, numParams).total;
     }
 
-    Link Link::create (void* memory, size_t bytes, int numIns, int numOuts, int maxBlock)
+    Link Link::create (void* memory, size_t bytes, int numIns, int numOuts, int maxBlock, int numParams)
     {
         const auto capacity = capacityFor (maxBlock);
 
         if (memory == nullptr || numIns < 0 || numOuts < 0 || numIns > maxLinkChannels || numOuts > maxLinkChannels
-            || maxBlock <= 0 || bytes < bytesFor (numIns, numOuts, capacity))
+            || maxBlock <= 0 || numParams < 0 || numParams > maxLinkParameters || bytes < bytesFor (numIns, numOuts, capacity, numParams))
             return {};
 
         auto* h = new (memory) LinkHeader {};
@@ -71,6 +72,7 @@ namespace carthage::engine::plughost
         h->numOuts = numOuts;
         h->capacity = capacity;
         h->maxBlock = maxBlock;
+        h->numParams = numParams;
         h->latency = maxBlock;   // the output rings start as `latency` frames of silence (zeroed memory)
         return attach (memory, bytes);
     }
@@ -85,16 +87,18 @@ namespace carthage::engine::plughost
         if (h->magic != linkMagic || h->version != linkVersion || h->numIns < 0 || h->numOuts < 0
             || h->numIns > maxLinkChannels || h->numOuts > maxLinkChannels || h->maxBlock <= 0
             || h->capacity < 4 * h->maxBlock || h->latency != h->maxBlock
-            || bytes < bytesFor (h->numIns, h->numOuts, h->capacity))
+            || h->numParams < 0 || h->numParams > maxLinkParameters
+            || bytes < bytesFor (h->numIns, h->numOuts, h->capacity, h->numParams))
             return {};
 
-        const auto l = layoutFor (h->numIns, h->numOuts, h->capacity);
+        const auto l = layoutFor (h->numIns, h->numOuts, h->capacity, h->numParams);
         auto* base = static_cast<char*> (memory);
         Link link;
         link.header = h;
         link.inputs = reinterpret_cast<float*> (base + l.inputs);
         link.outputs = reinterpret_cast<float*> (base + l.outputs);
         link.midiRing = reinterpret_cast<LinkMidi*> (base + l.midi);
+        link.parameters = reinterpret_cast<LinkParameter*> (base + l.parameters);
         return link;
     }
 
@@ -173,11 +177,24 @@ namespace carthage::engine::plughost
         return header->inRead.load (std::memory_order_acquire) >= header->inWrite.load (std::memory_order_acquire);
     }
 
-    void Link::prepareHost (juce::AudioBuffer<float>& audio, juce::MidiBuffer& midi) const
+    void Link::prepareHost (HostSide& side) const
     {
         // At least one channel (attach() checked the counts); the analyzer can not see that through jmax.
-        audio.setSize (juce::jmax (1, header->numIns, header->numOuts), header->maxBlock);   // NOLINT(clang-analyzer-security.ArrayBound)
-        midi.ensureSize (static_cast<size_t> (midiCapacity) * 16);
+        side.audio.setSize (juce::jmax (1, header->numIns, header->numOuts), header->maxBlock);   // NOLINT(clang-analyzer-security.ArrayBound)
+        side.midi.ensureSize (static_cast<size_t> (midiCapacity) * 16);
+        side.applied.assign (static_cast<size_t> (header->numParams), 0);
+        side.changesSeen = 0;
+    }
+
+    void Link::setParameter (int index, float value) noexcept
+    {
+        if (! juce::isPositiveAndBelow (index, header->numParams))
+            return;
+
+        auto& p = parameters[index];
+        p.value.store (value, std::memory_order_relaxed);
+        p.generation.fetch_add (1, std::memory_order_release);
+        header->parameterChanges.fetch_add (1, std::memory_order_acq_rel);
     }
 
     void Link::readInput (juce::AudioBuffer<float>& audio, std::uint64_t first, int n) const noexcept
