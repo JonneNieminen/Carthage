@@ -287,4 +287,18 @@ private:
     std::unique_ptr<Host> host;
 };
 
-START_JUCE_APPLICATION (PlugHostApplication)
+JUCE_CREATE_APPLICATION_DEFINE (PlugHostApplication)
+
+// Not START_JUCE_APPLICATION: it picks main (argc, argv) from this target's _CONSOLE, but the shared
+// JUCE library is built without it, so on Windows only the main() that reads the command line
+// itself is there.
+int main (int argc, char* argv[])
+{
+    juce::JUCEApplicationBase::createInstance = &juce_CreateApplication;
+   #if JUCE_WINDOWS
+    juce::ignoreUnused (argc, argv);
+    return juce::JUCEApplicationBase::main();
+   #else
+    return juce::JUCEApplicationBase::main (argc, const_cast<const char**> (argv));
+   #endif
+}
