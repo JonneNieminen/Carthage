@@ -10,6 +10,10 @@ add_library(carthage_engine STATIC
     Export.cpp Export.h
     Mixer.cpp Mixer.h
     Presets.cpp Presets.h
+    plughost/Link.cpp plughost/Link.h
+    plughost/Protocol.cpp plughost/Protocol.h
+    plughost/HostProcess.cpp plughost/HostProcess.h
+    platform/SharedMemory.h
     SampleEdits.cpp SampleEdits.h
     FormantPlugin.cpp FormantPlugin.h
     Project.cpp Project.h
@@ -26,6 +30,13 @@ add_library(carthage_engine STATIC
     TakePlacement.h
     TakePlan.cpp TakePlan.h
     TakeRecorder.cpp TakeRecorder.h)
+
+# Plugins in their own processes (5f, W65): the only OS calls are in these files.
+if(WIN32)
+    target_sources(carthage_engine PRIVATE platform/SharedMemory_win.cpp)
+else()
+    target_sources(carthage_engine PRIVATE platform/SharedMemory_posix.cpp)
+endif()
 
 target_include_directories(carthage_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(carthage_engine PUBLIC carthage_juce PRIVATE carthage_warnings)

@@ -699,7 +699,8 @@ Deliver:
       right-click adds a plugin with one of its presets); the master volume becomes the
       master fader's twin
       (5f planned 2026-11-26, W65: `carthage-plughost`, one block of added latency compensated,
-      grouped by manufacturer, a crash silences and restarts; parts 5f-1 to 5f-5)
+      grouped by manufacturer, a crash silences and restarts; parts 5f-1 to 5f-5; 5f-1 built
+      2026-11-26, W66: the host and its link, nulling bit for bit on Pro-C 2, Pro-Q 3 and AUDelay)
 - [x] **Export (owner, 2026-11-19; moved here from phase 7):** Cmd+R opens Export: the loop region if
       there is one, or the whole project from its first sound to its last; WAV 16/24/32-float and
       FLAC, with the quality settings from feature 8; it renders the mix through the mixer and master

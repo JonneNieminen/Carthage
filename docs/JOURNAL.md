@@ -460,3 +460,9 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   manufacturer, silence and restart on a crash, plugin windows from the host. JUCE's AU
   out-of-process loading is AUv3-only; Tracktion's `PluginManager::createPluginInstance` is the hook.
 - Next: 5f-1, the host and the transport, measured with the bench.
+- 5f-1 built (W66): `carthage-plughost`, `engine/plughost` (Link, Protocol, HostProcess),
+  `engine/platform/SharedMemory_*`, PluginHostTests (category `plughost`), bench `plughost`.
+- Found: as a console program the host's message loop returned at once on macOS; it is a JUCE
+  application now. The Mac was locked this session, so the `engine` tests hung in CoreAudio; run
+  `carthage_tests plughost` alone then.
+- Next: 5f-2, a proxy AudioPluginInstance through `PluginManager::createPluginInstance`.

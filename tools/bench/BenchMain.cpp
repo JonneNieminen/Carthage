@@ -23,6 +23,11 @@
 //                          (a real plugin's presets, W64: a setting changed, saved as a Carthage preset and
 //                          in the plugin's own format (.vstpreset or .aupreset), changed again, then each
 //                          loaded back through Carthage; the setting must return, and undo take it away)
+//   carthage-bench plughost --plugin-format VST3|AudioUnit --plugin FILE_OR_ID [--rate 48000] [--buffer 128]
+//                          [--seconds 10]
+//                          (a real plugin in carthage-plughost, 5f, W65: its output against the same plugin
+//                          in this process, shifted by one block, then real-time blocks for --seconds,
+//                          counting late ones and timing the audio thread's side; needs no audio device)
 //   carthage-bench projects
 //                          (through the app's Session: save as, reopen, save, autosave after a pause, a
 //                          crash left behind and its recovery; needs no particular device)
@@ -45,6 +50,7 @@
 
 #include <engine/Editing.h>
 #include <engine/Presets.h>
+#include <engine/plughost/HostProcess.h>
 #include <engine/Session.h>
 #include <engine/SettingsTest.h>
 #include <engine/SampleEdits.h>
@@ -151,6 +157,7 @@ namespace
             else if (args.command == "carrier") result = carrier();
             else if (args.command == "idle-mixer") result = idleMixer();
             else if (args.command == "presets") result = presetRoundTrip();
+            else if (args.command == "plughost") result = plugHost();
             else say ("unknown command: " + args.command);
 
             onMessageThreadVoid ([this] { session.reset(); });
@@ -644,6 +651,154 @@ namespace
             check (! carthage::editing::addSend (*other, *channel).wasOk(), "a send back would loop: refused");
             say (checksFailed == 0 ? "PASSED" : "FAILED: " + String (checksFailed));
             return checksFailed == 0 ? 0 : 1;
+        }
+
+        /** A real plugin in carthage-plughost (5f, W65). Needs no audio device. */
+        int plugHost()
+        {
+            const auto scanner = File::getSpecialLocation (File::currentExecutableFile).getSiblingFile ("carthage-scan");
+            const auto outcome = engine::scan::runScanner (scanner, args.get ("plugin-format"), args.get ("plugin"), 60000);
+
+            if (outcome.kind != engine::scan::Outcome::Kind::found)
+            {
+                say ("FAIL scan: " + outcome.detail);
+                return 1;
+            }
+
+            const auto d = outcome.descriptions.getFirst();
+            const auto rate = static_cast<double> (args.getInt ("rate", 48000));
+            const auto block = args.getInt ("buffer", 128);
+            say ("plugin: " + d.name + " " + d.version + " by " + d.manufacturerName + " (" + d.pluginFormatName + ")");
+
+            // The same plugin here, for comparison.
+            AudioPluginFormatManager formats;
+            addDefaultFormatsToManager (formats);
+            String error;
+            auto local = onMessageThread ([&] { return formats.createPluginInstance (d, rate, block, error); });
+
+            if (local == nullptr)
+            {
+                say ("FAIL in-process load: " + error);
+                return 1;
+            }
+
+            onMessageThreadVoid ([&] { local->prepareToPlay (rate, block); });
+
+            engine::plughost::HostProcess host (File::getSpecialLocation (File::currentExecutableFile).getSiblingFile ("carthage-plughost"));
+            const auto startedAt = Time::getMillisecondCounterHiRes();
+            const auto started = host.start();
+
+            if (started.failed())
+            {
+                say ("FAIL " + started.getErrorMessage());
+                return 1;
+            }
+
+            auto remote = host.load (d, rate, block, error);
+            say ("host started and plugin loaded in " + String (roundToInt (Time::getMillisecondCounterHiRes() - startedAt)) + " ms");
+
+            if (remote == nullptr)
+            {
+                say ("FAIL remote load: " + error);
+                return 1;
+            }
+
+            say ("channels " + String (remote->numIns()) + " in, " + String (remote->numOuts()) + " out; latency "
+                 + String (remote->pluginLatency()) + " (plugin) + " + String (remote->linkLatency()) + " (hop) samples");
+
+            MemoryBlock state;
+            onMessageThreadVoid ([&] { local->getStateInformation (state); });
+            const auto stateSet = remote->setState (state);
+            say (String (stateSet ? "PASS" : "FAIL") + " the remote plugin took the local one's state (" + String (state.getSize()) + " bytes)");
+
+            // Offline: both get the same noise; the remote output must be the local one a block later.
+            const auto channels = jmax (local->getTotalNumInputChannels(), local->getTotalNumOutputChannels(), 1);
+            Random random (1234);
+            AudioBuffer<float> in (channels, block), mine (channels, block), theirs (channels, block);
+            std::vector<std::vector<float>> localOut (static_cast<size_t> (remote->numOuts())), remoteOut (static_cast<size_t> (remote->numOuts()));
+            MidiBuffer none;
+            const int blocks = static_cast<int> (rate * 2.0 / block);   // two seconds
+            bool answered = true;
+
+            for (int b = 0; b < blocks; ++b)
+            {
+                for (int c = 0; c < channels; ++c)
+                    for (int i = 0; i < block; ++i)
+                        in.setSample (c, i, (random.nextFloat() * 2.0f - 1.0f) * 0.25f);
+
+                mine.makeCopyOf (in, true);
+                theirs.makeCopyOf (in, true);
+                local->processBlock (mine, none);
+                answered = answered && remote->processWaiting (theirs, none, 5000);
+
+                for (int c = 0; c < remote->numOuts() && c < channels; ++c)
+                {
+                    localOut[static_cast<size_t> (c)].insert (localOut[static_cast<size_t> (c)].end(), mine.getReadPointer (c), mine.getReadPointer (c) + block);
+                    remoteOut[static_cast<size_t> (c)].insert (remoteOut[static_cast<size_t> (c)].end(), theirs.getReadPointer (c), theirs.getReadPointer (c) + block);
+                }
+            }
+
+            float worst = 0.0f, peak = 0.0f;
+
+            for (size_t c = 0; c < localOut.size(); ++c)
+                for (size_t i = 0; i + static_cast<size_t> (block) < localOut[c].size(); ++i)
+                {
+                    worst = jmax (worst, std::abs (remoteOut[c][i + static_cast<size_t> (block)] - localOut[c][i]));
+                    peak = jmax (peak, std::abs (localOut[c][i]));
+                }
+
+            say (String (answered ? "PASS" : "FAIL") + " the host answered every offline block");
+            say (String (worst <= 1.0e-6f ? "PASS" : "FAIL") + " remote output is the local one a block later: largest difference "
+                 + String (Decibels::gainToDecibels (worst, -200.0f), 1) + " dB (signal peak " + String (Decibels::gainToDecibels (peak), 1) + " dB)");
+
+            // Real time: a block every period, from a real-time thread, never waiting.
+            const auto seconds = args.getInt ("seconds", 10);
+            const auto period = block / rate * 1000.0;
+            std::vector<double> took;
+            const auto lateBefore = remote->lateBlocks();
+
+            struct Pacer final : Thread
+            {
+                std::function<void()> body;
+                Pacer() : Thread ("bench pacer") {}
+                void run() override { body(); }
+            } pacer;
+
+            auto& buffer = in;   // allocated before the real-time thread starts
+
+            pacer.body = [&]
+            {
+                auto next = Time::getMillisecondCounterHiRes();
+                took.reserve (static_cast<size_t> (seconds * 1000.0 / period) + 8);
+
+                while (took.size() < static_cast<size_t> (seconds * 1000.0 / period))
+                {
+                    for (int c = 0; c < channels; ++c)
+                        for (int i = 0; i < block; ++i)
+                            buffer.setSample (c, i, (random.nextFloat() * 2.0f - 1.0f) * 0.25f);
+
+                    const auto t0 = Time::getMillisecondCounterHiRes();
+                    remote->process (buffer, none);
+                    took.push_back (Time::getMillisecondCounterHiRes() - t0);
+                    next += period;
+                    const auto wait = next - Time::getMillisecondCounterHiRes();
+
+                    if (wait > 0.0)
+                        Thread::sleep (static_cast<int> (wait));
+                }
+            };
+
+            pacer.startRealtimeThread (Thread::RealtimeOptions{}.withApproximateAudioProcessingTime (block, rate));
+            pacer.waitForThreadToExit (-1);
+
+            std::sort (took.begin(), took.end());
+            const auto late = remote->lateBlocks() - lateBefore;
+            say ("real time: " + String (static_cast<int> (took.size())) + " blocks of " + String (period, 2) + " ms; audio thread's side median "
+                 + String (took[took.size() / 2] * 1000.0, 1) + " us, slowest " + String (took.back() * 1000.0, 1) + " us");
+            say (String (late == 0 ? "PASS" : "FAIL") + " late blocks: " + String (static_cast<int> (late)));
+            remote.reset();
+            onMessageThreadVoid ([&] { local.reset(); });
+            return (stateSet && answered && worst <= 1.0e-6f && late == 0) ? 0 : 1;
         }
 
         /** A real plugin's presets (W64): save, change, load back, undo. Needs no audio device. */

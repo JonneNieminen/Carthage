@@ -20,6 +20,7 @@ What Carthage must do is in [BRIEF.md](BRIEF.md). This file is about how.
 │  Tracktion Engine  →  JUCE  →  CoreAudio / ASIO / WASAPI,  AU / VST3         │
 └──────────────────────────────────────────────────────────────────────────────┘
         carthage-scan (separate process): loads one plugin at a time, reports, exits
+        carthage-plughost (separate processes): runs plugins for the app, audio over shared memory (5f)
         carthage-bench, carthage-snapshot (developer tools): measure engine/ on real hardware; render ui/ to PNG
 ```
 
@@ -43,6 +44,10 @@ src/
     PluginScan       carthage-scan protocol, the known-plugin list, the blocklist (with why: incompatible,
                      crashed, hung, unusable), PluginScanner (background scan, several processes)
     PluginLibrary    the plugin browser's data: fuzzy search, filters, favourites, last used
+    plughost/        plugins in their own processes (5f, W65): Link (the shared-memory rings, one
+                     block of latency), Protocol (the requests over JUCE's child-process pipe),
+                     HostProcess and RemotePlugin (the app's side)
+    platform/        SharedMemory_posix.cpp, SharedMemory_win.cpp: shared memory and the wake signal
     time/Grid        the one grid and snap resolver (beats; divisions, triplet, dotted, adaptive)
     RealtimeCheck.h  RealTimeSanitizer scope and CARTHAGE_NONBLOCKING
   app/               Carthage.app: application, window, menu bar, command table, path provider,
@@ -56,6 +61,7 @@ src/
     Motion.h         motion that answers an action: Host, allowedFor, Tween (W45)
     platform/        the system's reduce-motion setting (Motion_mac.mm, Motion_win.cpp)
   scan/              carthage-scan
+  plughost/          carthage-plughost: a JUCE application; each plugin a slot with its own link and render thread
 tools/bench/         carthage-bench: latency, soak, align, takes, wgprobe, devices, plugins;
                      libcarthage_bench_workgroups counts os_workgroup_join (bench only)
 tools/snapshot/      carthage-snapshot: the window content rendered to PNG in fixed states
@@ -323,6 +329,14 @@ Rules that follow:
   The engine's `shouldLoadPlugin` refuses anything the scanner has not confirmed (DECISIONS W15).
   Tracktion's own hook (`EngineBehaviour::canScanPluginsOutOfProcess`) is not used in phase 1; phase 3
   reads what it does in the pinned version and decides whether to build the manager on it or on this.
+- **Plugins in their own processes** (5f, W65): `carthage-plughost` runs next to the app's executable.
+  The app starts it through JUCE's `ChildProcessCoordinator`; requests (load, connect, state, unload)
+  wait on the message thread for their answer. Each plugin's audio and MIDI go through its own shared
+  memory (`engine/plughost/Link`): the audio thread writes a block, posts a wake signal and takes the
+  output that is ready, which is the output of the input one device block earlier; it never waits,
+  and a block the host did not finish plays silence and counts as late. Export waits for each block
+  instead. The host's render thread per plugin is a real-time thread. Built so far: 5f-1 (the host,
+  the link, the app's side and the bench); the plugins in a project do not use it yet (5f-2).
 - **The monitored insert** in phase 1 is one `tracktion::ExternalPlugin` at index 0 of the track's
   plugin list, before the track's own volume/pan and meter, which are channel features.
 - **The plugin list, blocklist, favourites and last-used list** are files in the settings folder, with a

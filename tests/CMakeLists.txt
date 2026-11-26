@@ -23,11 +23,13 @@ target_sources(carthage_tests PRIVATE
     ExportTests.cpp
     DelayCompensationTests.cpp
     TakePlanTests.cpp
-    OutputGainTests.cpp)
+    OutputGainTests.cpp
+    PluginHostTests.cpp)
 target_include_directories(carthage_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_definitions(carthage_tests PRIVATE CARTHAGE_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    CARTHAGE_SCANNER_PATH="$<TARGET_FILE:carthage_scan>")
-add_dependencies(carthage_tests carthage_scan)
+    CARTHAGE_SCANNER_PATH="$<TARGET_FILE:carthage_scan>"
+    CARTHAGE_PLUGHOST_PATH="$<TARGET_FILE:carthage_plughost>")
+add_dependencies(carthage_tests carthage_scan carthage_plughost)
 if(APPLE)
     target_compile_definitions(carthage_tests PRIVATE CARTHAGE_TEST_PLUGIN_DIR="${CARTHAGE_TEST_PLUGIN_DIR}")
     add_dependencies(carthage_tests carthage_test_plugin_Crash carthage_test_plugin_Hang)

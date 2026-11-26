@@ -13,9 +13,11 @@ endif()
 target_link_libraries(carthage_bench_workgroups PRIVATE carthage_warnings)
 target_link_libraries(carthage_bench PRIVATE carthage_bench_workgroups)
 target_link_libraries(carthage_bench PRIVATE carthage_engine carthage_warnings)
-add_dependencies(carthage_bench carthage_scan)
+add_dependencies(carthage_bench carthage_scan carthage_plughost)
 add_custom_command(TARGET carthage_bench POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:carthage_scan>
             $<TARGET_FILE_DIR:carthage_bench>/carthage-scan$<$<PLATFORM_ID:Windows>:.exe>
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:carthage_plughost>
+            $<TARGET_FILE_DIR:carthage_bench>/carthage-plughost$<$<PLATFORM_ID:Windows>:.exe>
     COMMAND ${CMAKE_COMMAND} -E $<IF:$<BOOL:${APPLE}>,copy_if_different,true> $<TARGET_FILE:carthage_bench_workgroups>
             $<TARGET_FILE_DIR:carthage_bench>/)

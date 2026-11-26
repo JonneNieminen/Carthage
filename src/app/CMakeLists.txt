@@ -79,6 +79,13 @@ add_custom_command(TARGET Carthage POST_BUILD
             $<TARGET_FILE_DIR:Carthage>/carthage-scan$<$<PLATFORM_ID:Windows>:.exe>
     COMMENT "Placing carthage-scan next to the app")
 
+# carthage-plughost too: plugins in their own processes (5f, W65).
+add_dependencies(Carthage carthage_plughost)
+add_custom_command(TARGET Carthage POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:carthage_plughost>
+            $<TARGET_FILE_DIR:Carthage>/carthage-plughost$<$<PLATFORM_ID:Windows>:.exe>
+    COMMENT "Placing carthage-plughost next to the app")
+
 # The embedded typefaces' SIL Open Font License texts ship with the app (DECISIONS W45):
 # Contents/Resources/Fonts on macOS, a Fonts folder next to Carthage.exe on Windows.
 set(carthage_font_licences

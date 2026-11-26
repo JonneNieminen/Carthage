@@ -101,6 +101,11 @@ build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench takes 
     --rate 48000 --buffer 512 --plugin-format AudioUnit --plugin "AudioUnit:Effects/aufx,Akrc,Bgrn"
 build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench presets --play --device "Audient iD44" \
     --rate 48000 --plugin-format VST3 --plugin "/Library/Audio/Plug-Ins/VST3/FabFilter Pro-C 2.vst3" --parameter 1
+# A real plugin in carthage-plughost (5f): null against the same plugin in-process, then real-time blocks
+build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench plughost --plugin-format VST3 \
+    --plugin "/Library/Audio/Plug-Ins/VST3/FabFilter Pro-C 2.vst3" --buffer 128 --seconds 10
+# Only the plugin-process tests (no audio device; the engine category hangs while the Mac is locked)
+build/release/tests/carthage_tests_artefacts/Release/carthage_tests plughost
 ```
 
 - clangd reads `build/debug/compile_commands.json` (see `.clangd`); configure the `debug` preset once.
@@ -115,6 +120,7 @@ build/release/tools/bench/carthage_bench_artefacts/Release/carthage_bench preset
   windows, command table (`Commands.h`), path provider (`Paths.cpp`), platform files
   (`platform/*_mac.mm`). `src/ui/` — components (the `carthage_ui` library);
   `src/ui/theme/Theme.h` mirrors `design/tokens.css`. `src/scan/` — `carthage-scan`.
+  `src/plughost/` — `carthage-plughost`, which runs plugins in their own processes (5f).
 - `tools/bench/` — `carthage-bench`, the hardware measuring tool. `tools/snapshot/` — `carthage-snapshot`,
   renders the window content to PNG. `tests/` — unit/engine tests and the
   RTSan baseline. `scripts/` — `rtsan_check.py`.
