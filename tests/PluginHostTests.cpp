@@ -640,8 +640,8 @@ public:
         auto& manager = engine.getPluginManager();
         manager.pluginFormatManager.addFormat (std::make_unique<TestPluginFormat>());
 
-        for (const auto* name : { "Half", "Crasher", "CrashOnLoad" })
-            manager.knownPluginList.addType (testPlugin (name));
+        for (const auto* plugin : { "Half", "Crasher", "CrashOnLoad" })
+            manager.knownPluginList.addType (testPlugin (plugin));
 
         processes.install (engine);
         processes.setEnabled (true);
@@ -652,9 +652,9 @@ public:
         editing::prepareMix (*edit, true);
         const auto channels = editing::channels (*edit);
 
-        const auto insert = [&] (const juce::String& name, tracktion::AudioTrack* channel) -> tracktion::ExternalPlugin*
+        const auto insert = [&] (const juce::String& pluginName, tracktion::AudioTrack* channel) -> tracktion::ExternalPlugin*
         {
-            auto plugin = edit->getPluginCache().createNewPlugin (tracktion::ExternalPlugin::create (engine, testPlugin (name)));
+            auto plugin = edit->getPluginCache().createNewPlugin (tracktion::ExternalPlugin::create (engine, testPlugin (pluginName)));
             editing::placeInsert (editing::pluginListOf (*edit, channel), -1, plugin);
             edit->dispatchPendingUpdatesSynchronously();
             return dynamic_cast<tracktion::ExternalPlugin*> (plugin.get());
