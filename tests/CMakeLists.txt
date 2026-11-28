@@ -37,4 +37,7 @@ endif()
 target_link_libraries(carthage_tests PRIVATE carthage_engine carthage_ui carthage_warnings)
 
 add_test(NAME unit COMMAND carthage_tests)
+# The whole output of a failing run, not CTest's first few kB: CI's log is all there is to read.
+file(WRITE "${CMAKE_BINARY_DIR}/CTestCustom.cmake"
+     "set(CTEST_CUSTOM_MAXIMUM_FAILED_TEST_OUTPUT_SIZE 4000000)\nset(CTEST_CUSTOM_MAXIMUM_PASSED_TEST_OUTPUT_SIZE 4000000)\n")
 add_test(NAME no-shared-mutex COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_SOURCE_DIR} -P ${CMAKE_CURRENT_SOURCE_DIR}/NoSharedMutex.cmake)

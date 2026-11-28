@@ -11,3 +11,9 @@ namespace carthage::plughost
         [NSApp setActivationPolicy: NSApplicationActivationPolicyAccessory];
     }
 }
+
+namespace carthage::plughost
+{
+    // macOS shows no dialog for a helper without a bundle that crashes; nothing to do.
+    void dieQuietly() {}
+}

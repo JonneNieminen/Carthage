@@ -36,4 +36,8 @@ namespace carthage::plughost
     /** macOS: the host is an accessory, so it has no Dock icon or menu of its own and its windows
         sit with Carthage's (platform/HostApp_mac.mm); elsewhere nothing to do. */
     void becomeAccessory();
+
+    /** A plugin that crashes takes this process down at once, with no dialog of the system's
+        holding it open (Windows: no error box or report); the app notices and carries on. */
+    void dieQuietly();
 }

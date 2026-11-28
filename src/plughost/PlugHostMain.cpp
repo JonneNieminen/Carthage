@@ -443,6 +443,7 @@ public:
     void initialise (const juce::String& commandLine) override
     {
         carthage::plughost::becomeAccessory();
+        carthage::plughost::dieQuietly();
         host = std::make_unique<Host>();
 
         if (! host->initialiseFromCommandLine (commandLine, commandLineID))
