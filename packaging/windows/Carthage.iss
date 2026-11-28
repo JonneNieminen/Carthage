@@ -48,6 +48,7 @@ LicenseFile=..\..\LICENSE
 [Files]
 Source: "{#AppDir}\Carthage.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppDir}\carthage-scan.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#AppDir}\carthage-plughost.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppDir}\WinSparkle.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]

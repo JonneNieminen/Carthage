@@ -617,3 +617,181 @@ public:
 };
 
 static PluginProxyTests pluginProxyTests;
+
+/** 5f-4: a plugin that crashes its process. Its process goes, the channel goes quiet, the crash is
+    counted and kept, and its plugins start again with their settings, the one to blame in a
+    process of its own; three crashes in a run and it stays off. */
+class PluginCrashTests final : public juce::UnitTest
+{
+public:
+    PluginCrashTests() : juce::UnitTest ("Plugins that crash their process", "plughost") {}
+
+    void runTest() override
+    {
+       #ifdef CARTHAGE_PLUGHOST_PATH
+        using namespace carthage;
+        juce::TemporaryFile holder;
+        const auto& folder = holder.getFile();
+        folder.createDirectory();
+        const auto historyFile = folder.getChildFile ("Plugin crashes.xml");
+
+        Processes processes { juce::File (CARTHAGE_PLUGHOST_PATH), historyFile };   // before the engine
+        tracktion::Engine engine ("CarthageCrashTests", nullptr, std::make_unique<Headless>());
+        auto& manager = engine.getPluginManager();
+        manager.pluginFormatManager.addFormat (std::make_unique<TestPluginFormat>());
+
+        for (const auto* name : { "Half", "Crasher", "CrashOnLoad" })
+            manager.knownPluginList.addType (testPlugin (name));
+
+        processes.install (engine);
+        processes.setEnabled (true);
+        std::vector<Processes::Crash> crashes;
+        processes.onCrash = [&] (const Processes::Crash& c) { crashes.push_back (c); };
+
+        auto edit = tracktion::createEmptyEdit (engine, folder.getChildFile ("Crash.tracktionedit"));
+        editing::prepareMix (*edit, true);
+        const auto channels = editing::channels (*edit);
+
+        const auto insert = [&] (const juce::String& name, tracktion::AudioTrack* channel) -> tracktion::ExternalPlugin*
+        {
+            auto plugin = edit->getPluginCache().createNewPlugin (tracktion::ExternalPlugin::create (engine, testPlugin (name)));
+            editing::placeInsert (editing::pluginListOf (*edit, channel), -1, plugin);
+            edit->dispatchPendingUpdatesSynchronously();
+            return dynamic_cast<tracktion::ExternalPlugin*> (plugin.get());
+        };
+
+        const auto proxyOf = [] (tracktion::ExternalPlugin* p)
+        {
+            return p != nullptr ? dynamic_cast<PluginProxy*> (p->getAudioPluginInstance()) : nullptr;
+        };
+
+        // A block through the plugin as playback would: real time, never waiting.
+        const auto play = [] (PluginProxy& p, int note)
+        {
+            juce::AudioBuffer<float> buffer (2, p.getBlockSize() > 0 ? p.getBlockSize() : 512);
+            buffer.clear();
+            juce::MidiBuffer midi;
+
+            if (note > 0)
+                midi.addEvent (juce::MidiMessage::noteOn (1, note, 1.0f), 0);
+
+            p.setNonRealtime (false);
+            p.processBlock (buffer, midi);
+        };
+
+        // The level a plugin gives a steady 1, after the hop (export's way: it waits).
+        const auto levelOf = [] (PluginProxy& p)
+        {
+            juce::AudioBuffer<float> buffer (2, p.getBlockSize() > 0 ? p.getBlockSize() : 512);
+            juce::MidiBuffer none;
+            p.setNonRealtime (true);
+
+            for (int b = 0; b < 3; ++b)
+            {
+                for (int c = 0; c < 2; ++c)
+                    juce::FloatVectorOperations::fill (buffer.getWritePointer (c), 1.0f, buffer.getNumSamples());
+
+                p.processBlock (buffer, none);
+            }
+
+            p.setNonRealtime (false);
+            return buffer.getSample (0, 10);
+        };
+
+        // Waits for a process to go, as Carthage notices it (no message loop here: checkHosts).
+        const auto crash = [&] (PluginProxy& p)
+        {
+            auto* host = p.runningIn();
+            play (p, 99);
+
+            for (int i = 0; i < 500 && host != nullptr && host->isRunning(); ++i)
+                juce::Thread::sleep (20);
+
+            expect (host != nullptr && ! host->isRunning(), "the process went");
+            processes.checkHosts();
+        };
+
+        auto* crasher = insert ("Crasher", channels[0]);
+        auto* half = insert ("Half", channels[1]);
+        auto* crasherProxy = proxyOf (crasher);
+        auto* halfProxy = proxyOf (half);
+        expect (crasherProxy != nullptr && halfProxy != nullptr);
+
+        if (crasherProxy == nullptr || halfProxy == nullptr)
+            return;
+
+        beginTest ("Plugins by one maker share a process");
+        expect (crasherProxy->runningIn() != nullptr && crasherProxy->runningIn() == halfProxy->runningIn());
+        expectEquals (processes.numHosts(), 1);
+        crasherProxy->getParameters()[0]->setValue (0.3f);
+        halfProxy->getParameters()[0]->setValue (0.2f);
+        expectWithinAbsoluteError (levelOf (*halfProxy), 0.2f, 1.0e-6f);
+
+        beginTest ("A crash silences its plugins, is counted against the one running, and kept");
+        crash (*crasherProxy);
+        expectEquals (static_cast<int> (crashes.size()), 1);
+
+        if (! crashes.empty())
+        {
+            expect (crashes.back().crashed == juce::StringArray ("Crasher"), crashes.back().crashed.joinIntoString (", "));
+            expectEquals (crashes.back().others, 1, "Half was in the same process");
+        }
+
+        expectEquals (levelOf (*halfProxy), 0.0f, "its process gone, Half is silent until it starts again");
+        expectEquals (processes.crashesOf (testPlugin ("Crasher")), 1);
+        expectEquals (processes.crashesOf (testPlugin ("Half")), 0);
+        expect (historyFile.existsAsFile() && historyFile.loadFileAsString().contains ("Crasher"), "the crash is kept on disk");
+
+        beginTest ("They start again with their settings, the one to blame in a process of its own");
+        processes.place (*edit, {});
+        expect (crasherProxy->runningIn() != nullptr && crasherProxy->runningIn()->isRunning());
+        expect (halfProxy->runningIn() != nullptr && halfProxy->runningIn()->isRunning());
+        expect (crasherProxy->runningIn() != halfProxy->runningIn(), "Crasher has a process of its own now");
+        expectWithinAbsoluteError (levelOf (*halfProxy), 0.2f, 1.0e-6f, "Half kept its setting");
+        expectWithinAbsoluteError (levelOf (*crasherProxy), 0.3f, 1.0e-6f, "Crasher kept its setting");
+
+        beginTest ("A plugin that crashes three times in a run stays off");
+        crash (*crasherProxy);
+        processes.place (*edit, {});
+        expect (! crasherProxy->isStopped());
+        crash (*crasherProxy);
+        expect (crasherProxy->isStopped(), "the third crash");
+        expect (! crashes.empty() && crashes.back().stoppedForGood == juce::StringArray ("Crasher"));
+        processes.place (*edit, {});
+        expectEquals (levelOf (*crasherProxy), 0.0f, "silent from then on");
+        expect (halfProxy->runningIn() != nullptr && halfProxy->runningIn()->isRunning(), "Half was not in its process, so it plays on");
+        expectWithinAbsoluteError (levelOf (*halfProxy), 0.2f, 1.0e-6f);
+
+        beginTest ("A plugin that crashes as it loads is never loaded in Carthage");
+        {
+            auto* onLoad = insert ("CrashOnLoad", channels[2]);
+            expect (onLoad != nullptr && onLoad->getAudioPluginInstance() == nullptr, "it did not load anywhere (and this process lives)");
+            expect (onLoad != nullptr && onLoad->getLoadError().contains ("crashed"), onLoad != nullptr ? onLoad->getLoadError() : juce::String());
+            processes.checkHosts();
+            expectEquals (processes.crashesOf (testPlugin ("CrashOnLoad")), 1, "counted, though it never ran");
+        }
+
+        beginTest ("The crash history is read back the next time");
+        {
+            Processes again { juce::File (CARTHAGE_PLUGHOST_PATH), historyFile };
+            expectEquals (again.crashesOf (testPlugin ("Crasher")), 3);
+            again.forgetCrashes();
+            expectEquals (again.crashesOf (testPlugin ("Crasher")), 0);
+        }
+
+        beginTest ("Grouped by hand, a plugin goes where its menu says");
+        processes.setAutomaticGrouping (false);
+        Processes::setChoice (*half, Processes::Choice::inCarthage);
+        processes.place (*edit, {});
+        expect (halfProxy->runningIn() == nullptr, "inside Carthage");
+        Processes::setChoice (*half, Processes::Choice::ownProcess);
+        processes.place (*edit, {});
+        expect (halfProxy->runningIn() != nullptr, "in a process of its own");
+        expectWithinAbsoluteError (levelOf (*halfProxy), 0.2f, 1.0e-6f, "its setting along every move");
+
+        edit.reset();
+       #endif
+    }
+};
+
+static PluginCrashTests pluginCrashTests;

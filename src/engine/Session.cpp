@@ -80,9 +80,18 @@ namespace carthage::engine
         pm.createBuiltInType<FormantPlugin>();   // the sample editor's formant shift (4e)
 
         // Plugins in their own processes (5f): carthage-plughost sits beside carthage-scan.
-        processes = std::make_unique<plughost::Processes> (scanner.getSiblingFile (scanner.getFileName().replace ("carthage-scan", "carthage-plughost")));
+        processes = std::make_unique<plughost::Processes> (scanner.getSiblingFile (scanner.getFileName().replace ("carthage-scan", "carthage-plughost")),
+                                                            folders.settings.getChildFile ("Plugin crashes.xml"));
         processes->install (*engine);
         processes->setEnabled (getPluginProcesses());
+        processes->setAutomaticGrouping (getAutomaticPluginGrouping());
+        processes->onCrash = [this] (const plughost::Processes::Crash& crash)
+        {
+            placeAllPlugins();   // they start again, the one to blame in a process of its own
+
+            if (onPluginsCrashed)
+                onPluginsCrashed (crash);
+        };
         plugins = std::make_unique<PluginCatalogue> (pm.knownPluginList, pm.pluginFormatManager, folders.pluginCache);
         loadGate = plugins.get();
 
@@ -1624,7 +1633,19 @@ namespace carthage::engine
 
     bool Session::getPluginProcesses() const
     {
-        return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("pluginProcesses", false);
+        return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("pluginProcesses", true);
+    }
+
+    bool Session::getAutomaticPluginGrouping() const
+    {
+        return engine->getPropertyStorage().getPropertiesFile().getBoolValue ("automaticPluginGrouping", true);
+    }
+
+    void Session::setAutomaticPluginGrouping (bool on)
+    {
+        engine->getPropertyStorage().getPropertiesFile().setValue ("automaticPluginGrouping", on);
+        processes->setAutomaticGrouping (on);
+        placeAllPlugins();
     }
 
     void Session::setPluginProcesses (bool on)

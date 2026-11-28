@@ -18,6 +18,7 @@ namespace carthage::engine::plughost
         unload (slot)                            → reply
         openEditor (slot, name, colour, onTop)   → reply: the plugin's window is showing (5f-3)
         closeEditor (slot)                       → reply
+        vst3Preset (slot, state: a .vstpreset)   → reply: the VST3 took it (values after it)
         windows (onTop, foreground)              → reply: every window's level, and whether
                                                     Carthage is the app in front (a host's windows
                                                     hide while neither it nor Carthage is)
@@ -33,6 +34,7 @@ namespace carthage::engine::plughost
         inline const juce::Identifier load ("load"), connect ("connect"), getState ("getState"),
                                       setState ("setState"), unload ("unload"), reply ("reply"),
                                       openEditor ("openEditor"), closeEditor ("closeEditor"), windows ("windows"),
+                                      vst3Preset ("vst3Preset"),
                                       notice ("notice");
 
         inline const juce::Identifier editorClosed ("editorClosed"), gestureBegin ("gestureBegin"),

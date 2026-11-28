@@ -36,6 +36,29 @@ namespace carthage::engine::plughost
             Message thread. False and `error` when it can not (it stays where it was). */
         bool moveToHost (bool toHost, juce::String& error);
 
+        /** Moves the plugin into `target` (null: into Carthage), keeping its state; from a host
+            that has gone, with the newest settings Carthage has (a restart, 5f-4). */
+        bool moveTo (HostProcess* target, juce::String& error);
+
+        /** The host it runs in now (null: in Carthage). */
+        HostProcess* runningIn() const noexcept;
+
+        /** Whether its host was inside its processing when that host went (it crashed it). */
+        bool crashedItsHost() const noexcept   { return inHost.load() && remote != nullptr && remote->wasProcessing(); }
+
+        /** Its slot in the host it runs in (0: none). */
+        int slotInHost() const noexcept   { return inHost.load() && remote != nullptr ? remote->slotID() : 0; }
+
+        /** A VST3's own preset file (.vstpreset), read by the plugin wherever it runs (W64). */
+        bool loadVST3Preset (const juce::MemoryBlock&);
+
+        /** Called as the proxy goes (its registry forgets it). */
+        std::function<void()> onDestroyed;
+
+        /** Silent from now on: it crashed its process too often to start again (5f-4). */
+        void stopForGood() noexcept   { stopped.store (true); }
+        bool isStopped() const noexcept   { return stopped.load(); }
+
         /** Blocks whose output the host did not have ready, while in the host it has now. */
         std::uint32_t lateBlocks() const noexcept   { return inHost.load() && remote != nullptr ? remote->lateBlocks() : 0; }
 
@@ -91,7 +114,7 @@ namespace carthage::engine::plughost
         static BusesProperties busesFrom (const juce::ValueTree& info);
 
         const juce::PluginDescription description;
-        HostProcess* const host;
+        HostProcess* const host;   // where it goes by default
         const MakeLocal makeLocal;
         bool midiIn = false, midiOut = false;
         double tail = 0.0;
@@ -106,6 +129,10 @@ namespace carthage::engine::plughost
         juce::MemoryBlock lastState;       // the newest state seen, for a host that has gone
         juce::Array<Parameter*> parameters;
         bool windowInHost = false;
+        juce::String windowTitle;
+        juce::Colour windowColour;
+        bool windowOnTop = true;
+        std::atomic<bool> stopped { false };
 
         /** Listens to what the plugin in the host does by itself. */
         void hear (RemotePlugin&);

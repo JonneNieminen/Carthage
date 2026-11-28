@@ -5,7 +5,7 @@
 //   carthage-snapshot OUTPUT_FOLDER [--device NAME] [--output-device NAME]
 //                     [--plugin-format VST3 --plugin FILE_OR_ID] [--record-seconds 3] [--scan]
 //
-// Writes main.png, samples*.png (with --samples FOLDER), start*.png (start.png with --project FILE), tabs.png, settings.png, settings-updates.png, settings-shortcuts.png, mixer.png, mixer-in.png, mixer-routing-*.png (each Routing style), mixer-buses.png, settings-mixer.png, export.png, update*.png (the update banner with sample text), plugin.png
+// Writes main.png, samples*.png (with --samples FOLDER), start*.png (start.png with --project FILE), tabs.png, settings.png, settings-updates.png, settings-shortcuts.png, mixer.png, mixer-in.png, mixer-routing-*.png (each Routing style), mixer-buses.png, settings-mixer.png, export.png, update*.png (the update banner with sample text), settings-browser.png, crash*.png (a plugin's process stopping), plugin.png
 // (with --plugin) and take.png (after recording).
 
 #include <app/Commands.h>
@@ -410,7 +410,27 @@ namespace
             capture (outDir.getChildFile ("settings-shortcuts.png"));
             onMessageThreadVoid ([this] { content->getSettings().showPage (ui::SettingsPanel::Page::mixer); });
             capture (outDir.getChildFile ("settings-mixer.png"));
+            onMessageThreadVoid ([this] { content->getSettings().showPage (ui::SettingsPanel::Page::browser); });
+            capture (outDir.getChildFile ("settings-browser.png"));
             onMessageThreadVoid ([this] { content->toggleSettings(); });
+
+            // A plugin's process stopping (5f-4), with sample names.
+            onMessageThreadVoid ([this]
+            {
+                engine::plughost::Processes::Crash crash;
+                crash.crashed.add ("Pro-C 2");
+                crash.others = 2;
+                content->showPluginCrash (crash);
+            });
+            capture (outDir.getChildFile ("crash.png"));
+            onMessageThreadVoid ([this]
+            {
+                engine::plughost::Processes::Crash crash;
+                crash.crashed.add ("Saturn 2");
+                crash.stoppedForGood.add ("Saturn 2");
+                content->showPluginCrash (crash);
+            });
+            capture (outDir.getChildFile ("crash-twice.png"));
 
             // The update banner in its states, with sample text (no release is fetched).
             ui::UpdateBanner::Model update { "0.1.1", "Takes stay in time when the buffer changes\n"

@@ -6,7 +6,8 @@ namespace carthage::engine::plughost
 {
     /** The test plugins (Protocol.h, testPlugin), so the tests can run the same plugin in this
         process and in carthage-plughost without any third-party plugin. Never offered to users:
-        only the host and the tests register the format. */
+        only the host and the tests register the format. "Crasher" and "CrashOnLoad" take their
+        process down (5f-4's tests): never load them anywhere but in a host. */
     std::unique_ptr<juce::AudioPluginInstance> createTestPlugin (const juce::PluginDescription&, juce::String& error);
 
     /** The format "CarthageTest", for an AudioPluginFormatManager (tests). */
@@ -15,7 +16,7 @@ namespace carthage::engine::plughost
     public:
         juce::String getName() const override   { return "CarthageTest"; }
         void findAllTypesForFile (juce::OwnedArray<juce::PluginDescription>&, const juce::String&) override;
-        bool fileMightContainThisPluginType (const juce::String& id) override   { return id == "Half"; }
+        bool fileMightContainThisPluginType (const juce::String& id) override   { return id == "Half" || id == "Crasher" || id == "CrashOnLoad"; }
         juce::String getNameOfPluginFromIdentifier (const juce::String& id) override   { return id; }
         bool pluginNeedsRescanning (const juce::PluginDescription&) override   { return false; }
         bool doesPluginStillExist (const juce::PluginDescription&) override   { return true; }

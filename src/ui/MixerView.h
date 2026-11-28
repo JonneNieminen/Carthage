@@ -160,6 +160,9 @@ namespace carthage::ui
         void openPresetFileFor (tracktion::Plugin&);
         void loadPreset (tracktion::Plugin&, const juce::File&, bool ownUndoStep = true);
         juce::PopupMenu presetMenu (tracktion::Plugin&);
+
+        /** Where the plugin runs (5f-4): now, and the person's choice while grouping by hand. */
+        juce::PopupMenu runsInMenu (tracktion::Plugin&);
         std::unique_ptr<juce::FileChooser> chainChooser;
         void loadChainOnto (tracktion::AudioTrack&);
         void saveChainOf (tracktion::AudioTrack&);

@@ -142,6 +142,10 @@ namespace carthage::ui
         void chooseRoutingStyle (routing::Style);
         juce::ComboBox busEvery;
         Switch checkPlugins { "Check for new plugins at every launch" };
+        juce::Label processesHeading, processesHint;   // plugins in their own processes (5f-4)
+        Switch pluginProcesses { "Run plugins in their own processes" };
+        Switch groupAutomatically { "Group plugins automatically" };
+        juce::TextButton forgetCrashes { "Forget crash history" };
         ShortcutEditor shortcuts;
         juce::Viewport viewport;
         juce::Component body;

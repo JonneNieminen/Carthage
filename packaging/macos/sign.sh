@@ -3,8 +3,8 @@
 # self-signed certificate, or a Developer ID once the APPLE_* secrets exist (docs/RELEASING.md,
 # "Signing and Gatekeeper"). Only a Developer ID gets the hardened runtime and a timestamp, which
 # notarisation needs; a self-signed build is signed like an ad-hoc one, so plugins load the same.
-# Inside-out, as Sparkle's documentation asks: Sparkle's helpers, the framework, carthage-scan, then
-# the app.
+# Inside-out, as Sparkle's documentation asks: Sparkle's helpers, the framework, carthage-scan and
+# carthage-plughost, then the app.
 #
 # Usage: packaging/macos/sign.sh <Carthage.app> [IDENTITY]
 set -euo pipefail
@@ -22,6 +22,7 @@ for helper in "$fw/XPCServices/Installer.xpc" "$fw/XPCServices/Downloader.xpc" "
 done
 sign "$app/Contents/Frameworks/Sparkle.framework"
 sign "$app/Contents/MacOS/carthage-scan"
+sign "$app/Contents/MacOS/carthage-plughost"
 sign "$app"
 
 codesign --verify --deep --strict --verbose=1 "$app"

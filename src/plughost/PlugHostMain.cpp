@@ -390,6 +390,18 @@ namespace
                 return {};
             }
 
+            if (type == msg::vst3Preset)
+            {
+                juce::MemoryBlock data;
+                auto* vst3 = slot->plugin().getVST3Client();
+
+                if (vst3 == nullptr || ! data.fromBase64Encoding (request[msg::state].toString()) || ! vst3->setPreset (data))
+                    return slot->plugin().getName() + " did not take the preset";
+
+                reply.setProperty (msg::values, valuesToText (slot->values()), nullptr);
+                return {};
+            }
+
             if (type == msg::openEditor)
             {
                 slot->openEditor (request[msg::name].toString(),

@@ -420,6 +420,8 @@ namespace carthage::ui
         browser.onInsertWithPreset = [this] (const PluginDescription& d, const File& f) { mixer.addPluginToSelected (d, f); };
         pluginWindows.keepOnTop = [this] { return keepPluginOnTop(); };
         pluginWindows.onClosed = [this] { session.placeAllPlugins(); };   // a plugin may now go to its own process
+        addChildComponent (crashBanner);
+        session.onPluginsCrashed = [this] (const engine::plughost::Processes::Crash& crash) { showPluginCrash (crash); };
         pluginWindows.onKey = [this] (const KeyPress& key) { commands.getKeyMappings()->keyPressed (key, this); };
         session.getProcesses().setWindowsOnTop (keepPluginOnTop());
         session.onPluginsChanged = [this] { browser.refresh(); };
@@ -1959,6 +1961,13 @@ namespace carthage::ui
         layoutUpdateBanner();
     }
 
+    void MainComponent::showPluginCrash (const engine::plughost::Processes::Crash& crash)
+    {
+        pluginWindows.closeMissing();
+        crashBanner.add (crash.crashed, crash.stoppedForGood, crash.others);
+        layoutUpdateBanner();
+    }
+
     void MainComponent::layoutUpdateBanner()
     {
         // Floats over the bottom right of the lane, above the status line and left of the settings
@@ -1968,6 +1977,13 @@ namespace carthage::ui
         const auto h = updateBanner.getPreferredHeight (w);
         updateBanner.setBounds (right - w - theme::space2, getHeight() - 28 - h, w, h);
         updateBanner.toFront (false);
+
+        // A crash's card sits above the update's when both show.
+        const auto cw = CrashBanner::preferredWidth;
+        const auto ch = crashBanner.getPreferredHeight (cw);
+        const auto bottom = updateBanner.isVisible() ? updateBanner.getY() : getHeight() - 28;
+        crashBanner.setBounds (right - cw - theme::space2, bottom - ch, cw, ch);
+        crashBanner.toFront (false);
     }
 
     //==============================================================================================

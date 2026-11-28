@@ -142,7 +142,7 @@ prints the public key again at any time.
 ## Signing and Gatekeeper
 
 - Without a Developer ID, macOS builds are ad-hoc signed (`packaging/macos/sign.sh`, inside-out:
-  Sparkle's helpers, the framework, `carthage-scan`, the app). A first install from a downloaded
+  Sparkle's helpers, the framework, `carthage-scan` and `carthage-plughost`, the app). A first install from a downloaded
   `.dmg` needs the one-time Gatekeeper step, which is in every release's notes and in the DMG's
   "Read me first.txt": open Carthage once, choose Done, then System Settings > Privacy & Security >
   Open Anyway; or `xattr -dr com.apple.quarantine /Applications/Carthage.app`. Tested on v0.1.0 with

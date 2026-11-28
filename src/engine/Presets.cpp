@@ -1,5 +1,7 @@
 #include "Presets.h"
 
+#include "plughost/PluginProxy.h"
+
 namespace carthage::presets
 {
     using namespace tracktion;
@@ -156,7 +158,9 @@ namespace carthage::presets
         const auto before = p.state.createCopy();
         bool read = false;
 
-        if (auto* vst3 = instance->getVST3Client())
+        if (auto* proxy = dynamic_cast<engine::plughost::PluginProxy*> (instance))
+            read = proxy->loadVST3Preset (data);   // in its own process, the plugin there reads it
+        else if (auto* vst3 = instance->getVST3Client())
             read = vst3->setPreset (data);
 
         if (! read)

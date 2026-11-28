@@ -703,7 +703,8 @@ Deliver:
       2026-11-26, W66: the host and its link, nulling bit for bit on Pro-C 2, Pro-Q 3 and AUDelay;
       5f-2 built 2026-11-27, W67: a project's plugins through a stand-in, live path in Carthage,
       export nulling exactly; 5f-3 built 2026-11-28, W68: their windows from their own process;
-      off by default until 5f-4 restarts a crashed process and adds the switch)
+      5f-4 built 2026-11-28, W69: crashes restart, crash history, grouping, the Settings switch;
+      on by default; 5f-5 (Windows checks) left)
 - [x] **Export (owner, 2026-11-19; moved here from phase 7):** Cmd+R opens Export: the loop region if
       there is one, or the whole project from its first sound to its last; WAV 16/24/32-float and
       FLAC, with the quality settings from feature 8; it renders the mix through the mixer and master

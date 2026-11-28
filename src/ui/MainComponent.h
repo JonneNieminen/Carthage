@@ -12,6 +12,7 @@
 #include "MixerView.h"
 #include "Timeline.h"
 #include "UpdateBanner.h"
+#include "CrashBanner.h"
 
 #include <app/Commands.h>
 #include <engine/Session.h>
@@ -70,6 +71,9 @@ namespace carthage::ui
 
         /** The update banner and the settings' update toggle, for the app's updater. */
         void showUpdate (std::optional<UpdateBanner::Model>);
+
+        /** A plugin's process stopped: the card that says so (5f-4). */
+        void showPluginCrash (const engine::plughost::Processes::Crash&);
         UpdateBanner& getUpdateBanner() noexcept    { return updateBanner; }
         SettingsPanel& getSettings() noexcept       { return settings; }
         PluginBrowser& getPluginBrowser() noexcept  { return browser; }
@@ -181,6 +185,7 @@ namespace carthage::ui
         SettingsPanel settings;
         bool settingsOpen = false;
         UpdateBanner updateBanner;
+        CrashBanner crashBanner;   // a plugin's process stopped (5f-4)
         PluginBrowser browser;
         SampleBrowser samples;
         StartScreen startScreen { session };

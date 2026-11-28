@@ -353,6 +353,13 @@ Rules that follow:
   The host sends notices back over the same pipe: values its window changed (at most 30 a second),
   gestures, latency, state changes, the window closing, and keys it did not use, which go to
   Carthage's commands. Its windows hide while neither Carthage nor the host is the app in front.
+- **Crashes** (5f-4, W69): a host that goes is noticed on its connection's thread and dealt with on
+  the message thread (`Processes::checkHosts`). The plugin to blame is the one whose link was busy
+  (the host sets `busy` around each plugin's processing), the one a request was waiting on, or one
+  that was loading; it counts a crash in `<settings>/Plugin crashes.xml` and gets a process of its
+  own from then on. `Session::onPluginsCrashed` shows `ui/CrashBanner`, and `placeAllPlugins`
+  starts the plugins again with their newest state and parameter values. A plugin that crashed
+  its host while loading is never loaded in Carthage instead. Three crashes in a run: stopped.
 - **The monitored insert** in phase 1 is one `tracktion::ExternalPlugin` at index 0 of the track's
   plugin list, before the track's own volume/pan and meter, which are channel features.
 - **The plugin list, blocklist, favourites and last-used list** are files in the settings folder, with a

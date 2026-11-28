@@ -21,7 +21,7 @@ namespace carthage::engine::plughost
         Only `inWrite` (the app) and `inRead` (the host) move; everything else is set once by the
         app before the host attaches. */
     inline constexpr std::uint32_t linkMagic = 0x4354484cU;   // "CTHL"
-    inline constexpr std::uint32_t linkVersion = 2;
+    inline constexpr std::uint32_t linkVersion = 3;
     inline constexpr int maxLinkParameters = 16384;
     inline constexpr int maxLinkChannels = 32;
     inline constexpr int midiCapacity = 2048;
@@ -56,6 +56,8 @@ namespace carthage::engine::plughost
         std::atomic<std::uint32_t> midiDropped;         // MIDI the link could not carry
         std::atomic<std::uint32_t> quit;                // set by the app before the last wake
         std::atomic<std::uint64_t> parameterChanges;    // bumped after any parameter is set
+        std::atomic<std::uint32_t> busy;                // 1 while the host is inside the plugin's processing:
+                                                        // if the host dies, this plugin was running (5f-4)
     };
 
     static_assert (std::atomic<float>::is_always_lock_free, "parameters are shared between processes");
@@ -144,7 +146,9 @@ namespace carthage::engine::plughost
                 side.audio.setSize (side.audio.getNumChannels(), n, false, false, true);
                 readInput (side.audio, read, n);
                 readMidi (side.midi, read, n);
+                h.busy.store (1, std::memory_order_relaxed);
                 render (side.audio, side.midi);
+                h.busy.store (0, std::memory_order_relaxed);
                 writeOutput (side.audio, read + static_cast<std::uint64_t> (h.latency), n);
                 read += static_cast<std::uint64_t> (n);
                 h.inRead.store (read, std::memory_order_release);

@@ -482,6 +482,15 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Plugin windows from the host: `plughost/PluginWindow`, notices from the host (values, gestures,
   latency, state, window closed, keys), `PluginWindows` opening them through the proxy, the hosts'
   windows following Carthage's on-top setting and hiding when another app is in front.
-- Still off by default: 5f-4 next (crash restart, crash history, grouping, the Settings switch).
 - Not seen by eye (screen locked): the window's look, focus and the forwarded keys go on the
   owner's consolidated test list.
+
+### 2026-11-28 (5f-4, W69)
+
+- Crashes: blame (busy flag, pending request, loading), history file, own process after a crash,
+  restart with state and values, stop after three; the crash card; Settings > Browser > Plugin
+  processes; Runs in per plugin; .vstpreset read in the host; installers carry carthage-plughost.
+- Plugins in their own processes is now on by default.
+- Next: 5f-5 (Windows: run the plugin-process tests there, MMCSS for the host's render threads,
+  letting the host's window come forward), then 5g. Owner's consolidated test list grows: plugin
+  windows from their process, keys from them, the crash card, Settings, Runs in.

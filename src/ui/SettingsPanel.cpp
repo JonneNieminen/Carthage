@@ -147,7 +147,7 @@ namespace carthage::ui
             case Page::projects:  return "What Carthage opens with, what tempo changes do to clips, and where samples are kept.";
             case Page::timeline:  return "How the lanes look and what the mouse does on them.";
             case Page::mixer:     return "How channels reach master, and which channels are buses.";
-            case Page::browser:   return "The samples and plugins panel beside the lanes.";
+            case Page::browser:   return "The samples and plugins panel beside the lanes, and where plugins run.";
             case Page::display:   return "How large everything is, and the window layouts you can recall.";
             case Page::shortcuts: return "Every command and the keys that run it. Click a key to change it.";
             case Page::updates:   return "Which version this is, and which new versions you get.";
@@ -342,7 +342,7 @@ namespace carthage::ui
         body.addChildComponent (noMatch);
 
         for (auto [label, text] : { std::pair { &interfaceHeading, "Interface" }, { &recordingHeading, "Recording" },
-                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" }, { &timelineHeading, "Timeline" }, { &mixerHeading, "Mixer" }, { &routingHeading, "Routing" }, { &metronomeHeading, "Metronome" }, { &windowsHeading, "Windows" },
+                                    { &latencyHeading, "Latency" }, { &loadHeading, "Load" }, { &projectsHeading, "Projects" }, { &browserHeading, "Browser" }, { &timelineHeading, "Timeline" }, { &mixerHeading, "Mixer" }, { &routingHeading, "Routing" }, { &metronomeHeading, "Metronome" }, { &windowsHeading, "Windows" }, { &processesHeading, "Plugin processes" },
                                     { &updatesHeading, "Updates" },
                                     { &shortcutsHeading, "Keyboard shortcuts" } })
         {
@@ -640,6 +640,31 @@ namespace carthage::ui
                                  "On: new or updated plugins are checked each time Carthage opens.");
         checkPlugins.onClick = [this] { session.setCheckPluginsAtLaunch (checkPlugins.getToggleState()); };
         body.addAndMakeVisible (checkPlugins);
+
+        // Plugins in their own processes (5f-4, W69).
+        styleLabel (processesHint, theme::textSm, theme::muted);
+        processesHint.setJustificationType (Justification::topLeft);
+        processesHint.setText ("A plugin that crashes then stops only its own process: Carthage keeps playing and starts it "
+                               "again. Plugins you hear live, through a channel whose input is on, always run inside Carthage.",
+                               dontSendNotification);
+        pluginProcesses.setToggleState (session.getPluginProcesses(), dontSendNotification);
+        pluginProcesses.setTooltip ("On: each plugin runs outside Carthage, so a crashing plugin can not take Carthage down. "
+                                    "Off: every plugin runs inside Carthage. Changing it reloads the plugins, with their settings.");
+        pluginProcesses.onClick = [this]
+        {
+            session.setPluginProcesses (pluginProcesses.getToggleState());
+            groupAutomatically.setEnabled (pluginProcesses.getToggleState());
+        };
+        groupAutomatically.setToggleState (session.getAutomaticPluginGrouping(), dontSendNotification);
+        groupAutomatically.setEnabled (session.getPluginProcesses());
+        groupAutomatically.setTooltip ("On: plugins by the same maker share a process, and a plugin that has crashed gets one of its own. "
+                                       "Off: right-click a plugin > Runs in to choose where each one runs.");
+        groupAutomatically.onClick = [this] { session.setAutomaticPluginGrouping (groupAutomatically.getToggleState()); };
+        forgetCrashes.setTooltip ("Plugins that have crashed share their maker's process again, from the next time they load");
+        forgetCrashes.onClick = [this] { session.getProcesses().forgetCrashes(); };
+
+        for (auto* c : std::initializer_list<Component*> { &processesHeading, &processesHint, &pluginProcesses, &groupAutomatically, &forgetCrashes })
+            body.addAndMakeVisible (c);
 
         styleLabel (beatShadingLabel, theme::textMd, theme::muted);
         beatShadingLabel.setText ("Shade inside the beat", dontSendNotification);
@@ -1148,6 +1173,12 @@ namespace carthage::ui
         sections.push_back ({ Page::display, &windowsHeading, { row (slotsLabel, slots), row (uiScaleLabel, uiScale) } });
         sections.push_back ({ Page::browser, &browserHeading, { row (panelWidthLabel, panelWidth), row (textSizeLabel, textSize),
                                                  whole (playWhileHeld, rowHeight), whole (fitLoops, rowHeight), whole (checkPlugins, rowHeight) } });
+        sections.push_back ({ Page::browser, &processesHeading, { whole (pluginProcesses, rowHeight), whole (groupAutomatically, rowHeight),
+                                                   whole (processesHint, 50),
+                                                   Line { { &forgetCrashes }, rowHeight, [this] (Rectangle<int> line)
+                                                          {
+                                                              forgetCrashes.setBounds (line.removeFromLeft (160));
+                                                          } } } });
         sections.push_back ({ Page::recording, &metronomeHeading, { row (clickSoundLabel, clickSound), row (clickLevelLabel, clickLevel),
                                                    whole (clickAccent, rowHeight), whole (clickWhileRecording, rowHeight) } });
         sections.push_back ({ Page::timeline, &timelineHeading, { row (beatShadingLabel, beatShading), whole (clickPlaces, rowHeight), whole (rightClickDeletes, rowHeight) } });

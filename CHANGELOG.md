@@ -11,6 +11,13 @@ Fixed or Removed. Write what the user can now do, not what the code does.
 ## Unreleased
 
 ### Added
+- Plugins run in their own processes, so a plugin that crashes no longer takes Carthage down.
+  Its channel goes quiet for a moment, Carthage starts it again with its settings, and a card
+  says which plugin it was; a plugin that crashes 3 times stays off until you open the project
+  again. Plugins by the same maker share a process, and a plugin that has crashed gets one of its
+  own. Plugins you hear live, through a channel whose input is on, run inside Carthage as before,
+  so monitoring has no extra delay. Settings > Browser > Plugin processes switches it off, or
+  turns automatic grouping off so you can choose per plugin (right-click it > Runs in).
 - Plugin presets: right-click a plugin on a channel's Line > Presets to save its settings, load
   one you saved, or open a preset file, Carthage's own or the plugin's (.vstpreset for VST3,
   .aupreset for Audio Units). In the plugin browser, right-click a plugin to add it with one of

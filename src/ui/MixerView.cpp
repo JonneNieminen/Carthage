@@ -1,6 +1,7 @@
 #include "MixerView.h"
 
 #include <engine/Presets.h>
+#include <engine/plughost/PluginProxy.h>
 
 #include "PluginBrowser.h"
 
@@ -1028,6 +1029,10 @@ namespace carthage::ui
             }
 
             m.addSubMenu ("Presets", view.presetMenu (plugin));
+
+            if (auto runsIn = view.runsInMenu (plugin); runsIn.getNumItems() > 0)
+                m.addSubMenu ("Runs in", runsIn);
+
             m.addSeparator();
             m.addItem ("Delete", [this, &edit, held, windowsPtr]
             {
@@ -1949,6 +1954,46 @@ namespace carthage::ui
     {
         return presetsRoot != File() ? presetsRoot
                                      : File::getSpecialLocation (File::userDocumentsDirectory).getChildFile ("Carthage presets");
+    }
+
+    PopupMenu MixerView::runsInMenu (tracktion::Plugin& plugin)
+    {
+        using engine::plughost::Processes;
+        PopupMenu m;
+        auto* ext = dynamic_cast<tracktion::ExternalPlugin*> (&plugin);
+        auto* proxy = ext != nullptr ? dynamic_cast<engine::plughost::PluginProxy*> (ext->getAudioPluginInstance()) : nullptr;
+
+        if (ext == nullptr || ! session.getPluginProcesses() || ! Processes::canRunInHost (ext->desc))
+            return m;
+
+        const auto now = proxy == nullptr ? String ("Now inside Carthage")
+                       : proxy->isStopped() ? String ("Off: it crashed too often")
+                       : proxy->isInHost() ? String ("Now in a process of its own")
+                       : String ("Now inside Carthage");
+        m.addItem (now, false, false, [] {});
+
+        const auto automatic = session.getAutomaticPluginGrouping();
+
+        if (automatic)
+            m.addItem ("Grouped automatically: switch that off in Settings to choose", false, false, [] {});
+
+        m.addSeparator();
+        const auto choice = Processes::choiceOf (*ext);
+        const tracktion::Plugin::Ptr held (&plugin);
+
+        for (const auto& [label, option] : { std::pair { "With other plugins by its maker", Processes::Choice::withMaker },
+                                             std::pair { "In a process of its own", Processes::Choice::ownProcess },
+                                             std::pair { "Inside Carthage", Processes::Choice::inCarthage } })
+            m.addItem (label, ! automatic, choice == option, [this, held, chosen = option]
+            {
+                if (auto* e = dynamic_cast<tracktion::ExternalPlugin*> (held.get()))
+                {
+                    Processes::setChoice (*e, chosen);
+                    session.placeAllPlugins();
+                }
+            });
+
+        return m;
     }
 
     PopupMenu MixerView::presetMenu (tracktion::Plugin& plugin)

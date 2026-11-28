@@ -88,6 +88,13 @@ namespace carthage::engine::plughost
 
             if (remote != nullptr)
                 info = remote->getInfo();
+
+            // It took its process down while loading: it does not get to take Carthage down too.
+            if (remote == nullptr && ! host->isRunning())
+            {
+                error = d.name + " crashed while loading in its own process";
+                return {};
+            }
         }
 
         if (remote == nullptr)
@@ -145,6 +152,9 @@ namespace carthage::engine::plughost
     {
         alive->store (false);
 
+        if (onDestroyed)
+            onDestroyed();
+
         if (local != nullptr)
             local->removeListener (this);
     }
@@ -185,46 +195,90 @@ namespace carthage::engine::plughost
     //==============================================================================================
     bool PluginProxy::moveToHost (bool toHost, juce::String& error)
     {
-        if (toHost == inHost.load())
+        return moveTo (toHost ? host : nullptr, error);
+    }
+
+    HostProcess* PluginProxy::runningIn() const noexcept
+    {
+        return inHost.load() && remote != nullptr ? &remote->getHost() : nullptr;
+    }
+
+    bool PluginProxy::moveTo (HostProcess* target, juce::String& error)
+    {
+        const auto from = runningIn();
+
+        if (target == from && (target == nullptr || target->isRunning()))
             return true;
 
-        if (toHost)
+        if (target != nullptr)
         {
-            if (host == nullptr || (! host->isRunning() && host->start().failed()))
+            if (! target->isRunning() && target->start().failed())
             {
                 error = "the plugin's process could not start";
                 return false;
             }
 
+            // Its settings: from the plugin here, from its other process, or (that process gone)
+            // the newest Carthage has.
             juce::MemoryBlock state;
-            local->getStateInformation (state);
-            auto moved = host->load (description, rate, block, error);
 
-            if (moved == nullptr || ! moved->setState (state))
+            if (! inHost.load() && local != nullptr)
+                local->getStateInformation (state);
+            else if (auto s = remote != nullptr && remote->isAlive() ? remote->getState() : std::nullopt)
+                state = std::move (*s);
+            else
+                state = lastState;
+
+            auto moved = target->load (description, rate, block, error);
+
+            if (moved == nullptr || (state.getSize() > 0 && ! moved->setState (state)))
             {
                 error = error.isNotEmpty() ? error : description.name + " did not take its settings in its process";
                 return false;
             }
 
-            // Values the state did not carry go over one by one.
+            // Values the state did not carry go over one by one (a VST3's state lacks settings
+            // changed while it was not playing, W64; a crashed process's newest values are here).
             const auto values = moved->lastValues();
 
-            for (int i = 0; i < parameters.size() && i < values.size(); ++i)
-                if (const auto v = local->getParameters()[i]->getValue(); v != values.getUnchecked (i))
-                    moved->setParameter (i, v);
-
             for (int i = 0; i < parameters.size(); ++i)
-                parameters.getUnchecked (i)->value().store (local->getParameters()[i]->getValue());
+            {
+                const auto v = ! inHost.load() && local != nullptr && i < local->getParameters().size()
+                                   ? local->getParameters()[i]->getValue()
+                                   : parameters.getUnchecked (i)->value().load();
+                parameters.getUnchecked (i)->value().store (v);
 
+                if (i < values.size() && v != values.getUnchecked (i))
+                    moved->setParameter (i, v);
+            }
+
+            const auto reopen = windowInHost;
+
+            if (windowInHost && remote != nullptr && remote->isAlive())
+                remote->closeEditor();
+
+            windowInHost = false;
             hear (*moved);
+            auto old = std::move (remote);
             remote = std::move (moved);
             lastState = std::move (state);
-            inHost.store (true);
-            waitForIdle();   // no block or parameter call is still on the plugin here
-            local->removeListener (this);
-            local.reset();
+            const auto wasHere = ! inHost.exchange (true);
+            waitForIdle();   // no block or parameter call is still on the plugin it left
+
+            if (wasHere && local != nullptr)
+            {
+                local->removeListener (this);
+                local.reset();
+            }
+
+            old.reset();
+            updateLatency();
+
+            if (reopen)
+                openWindowInHost (windowTitle, windowColour, windowOnTop);
+
+            return true;
         }
-        else
         {
             if (makeLocal == nullptr)
             {
@@ -286,6 +340,10 @@ namespace carthage::engine::plughost
     //==============================================================================================
     bool PluginProxy::openWindowInHost (const juce::String& title, juce::Colour background, bool onTop)
     {
+        windowTitle = title;
+        windowColour = background;
+        windowOnTop = onTop;
+
         if (! inHost.load() || remote == nullptr || ! remote->openEditor (title, background, onTop))
             return false;
 
@@ -404,6 +462,13 @@ namespace carthage::engine::plughost
     {
         const InUse using_ (inFlight);
 
+        if (stopped.load())
+        {
+            buffer.clear();
+            midi.clear();
+            return;
+        }
+
         if (inHost.load())
         {
             if (remote == nullptr)
@@ -487,6 +552,21 @@ namespace carthage::engine::plughost
             refreshValues (remote->lastValues());
             updateLatency();
         }
+    }
+
+    bool PluginProxy::loadVST3Preset (const juce::MemoryBlock& data)
+    {
+        if (! inHost.load())
+        {
+            auto* vst3 = local != nullptr ? local->getVST3Client() : nullptr;
+            return vst3 != nullptr && vst3->setPreset (data);
+        }
+
+        if (remote == nullptr || ! remote->loadVST3Preset (data))
+            return false;
+
+        refreshValues (remote->lastValues());
+        return true;
     }
 
     juce::AudioPluginExtensions::VST3Client* PluginProxy::getVST3Client()

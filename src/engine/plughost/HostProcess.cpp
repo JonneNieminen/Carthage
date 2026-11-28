@@ -10,6 +10,7 @@ namespace carthage::engine::plughost
 
     HostProcess::~HostProcess()
     {
+        closing.store (true);
         running.store (false, std::memory_order_release);
         killWorkerProcess();
         failAll();
@@ -24,6 +25,7 @@ namespace carthage::engine::plughost
             return juce::Result::fail ("carthage-plughost did not start");
 
         running.store (true, std::memory_order_release);
+        started.store (true);
         return juce::Result::ok();
     }
 
@@ -39,6 +41,10 @@ namespace carthage::engine::plughost
         {
             const std::scoped_lock lock (pendingLock);
             pending[id] = waiting;
+            askingSlot.store (request.hasProperty (msg::slot) ? static_cast<int> (request[msg::slot]) : -1);
+
+            if (request.hasType (msg::load))
+                loading = request[msg::description].toString();
         }
 
         const auto sent = sendMessageToWorker (toBlock (request));
@@ -46,6 +52,8 @@ namespace carthage::engine::plughost
 
         const std::scoped_lock lock (pendingLock);
         pending.erase (id);
+        askingSlot.store (0);
+        loading.clear();
         return answered ? waiting->reply : juce::ValueTree();
     }
 
@@ -100,8 +108,23 @@ namespace carthage::engine::plughost
 
     void HostProcess::handleConnectionLost()
     {
+        {
+            const std::scoped_lock lock (pendingLock);
+            lostSlot.store (askingSlot.load());
+            loadingWhenLost = loading;
+        }
+
         running.store (false, std::memory_order_release);
         failAll();
+
+        if (! closing.load() && onLost)
+            onLost();
+    }
+
+    juce::String HostProcess::pluginLoadingWhenLost() const
+    {
+        const std::scoped_lock lock (pendingLock);
+        return loadingWhenLost;
     }
 
     void HostProcess::failAll()
@@ -308,6 +331,20 @@ namespace carthage::engine::plughost
 
         takeValues (reply);
         return data;
+    }
+
+    bool RemotePlugin::loadVST3Preset (const juce::MemoryBlock& data, int timeoutMs)
+    {
+        juce::ValueTree request (msg::vst3Preset);
+        request.setProperty (msg::slot, slot, nullptr);
+        request.setProperty (msg::state, data.toBase64Encoding(), nullptr);
+        const auto reply = host.ask (request, timeoutMs);
+
+        if (! static_cast<bool> (reply[msg::ok]))
+            return false;
+
+        takeValues (reply);
+        return true;
     }
 
     bool RemotePlugin::setState (const juce::MemoryBlock& data, int timeoutMs)

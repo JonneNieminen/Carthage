@@ -27,7 +27,7 @@ namespace carthage::engine::plughost
         };
 
         /** "Half" (Protocol.h). */
-        class Half final : public juce::AudioPluginInstance
+        class Half : public juce::AudioPluginInstance
         {
         public:
             Half()
@@ -39,7 +39,7 @@ namespace carthage::engine::plughost
                 addHostedParameter (std::move (param));
             }
 
-            void fillInPluginDescription (juce::PluginDescription& d) const override   { d = testPlugin ("Half"); }
+            void fillInPluginDescription (juce::PluginDescription& d) const override   { d = testPlugin (getName()); }
 
             const juce::String getName() const override   { return "Half"; }
             void prepareToPlay (double, int) override {}
@@ -91,9 +91,27 @@ namespace carthage::engine::plughost
                 extra.replaceAll (static_cast<const char*> (data) + sizeof (float), static_cast<size_t> (size) - sizeof (float));
             }
 
-        private:
+        protected:
             Gain* gain = nullptr;
+
+        private:
             juce::MemoryBlock extra;
+        };
+
+        /** "Crasher": Half that takes its process down at a note-on of note 99 (5f-4's tests). */
+        class Crasher final : public Half
+        {
+        public:
+            const juce::String getName() const override   { return "Crasher"; }
+
+            void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override
+            {
+                for (const auto m : midi)
+                    if (m.getMessage().isNoteOn() && m.getMessage().getNoteNumber() == 99)
+                        std::abort();   // as a plugin's crash: the process goes, nothing is cleaned up
+
+                Half::processBlock (buffer, midi);
+            }
         };
     }
 
@@ -102,14 +120,20 @@ namespace carthage::engine::plughost
         if (d.pluginFormatName == testFormat && d.name == "Half")
             return std::make_unique<Half>();
 
+        if (d.pluginFormatName == testFormat && d.name == "Crasher")
+            return std::make_unique<Crasher>();
+
+        if (d.pluginFormatName == testFormat && d.name == "CrashOnLoad")
+            std::abort();   // a plugin that takes its process down as it loads
+
         error = "no test plugin called " + d.name;
         return {};
     }
 
     void TestPluginFormat::findAllTypesForFile (juce::OwnedArray<juce::PluginDescription>& found, const juce::String& id)
     {
-        if (id == "Half")
-            found.add (new juce::PluginDescription (testPlugin ("Half")));
+        if (id == "Half" || id == "Crasher" || id == "CrashOnLoad")
+            found.add (new juce::PluginDescription (testPlugin (id)));
     }
 
     void TestPluginFormat::createPluginInstance (const juce::PluginDescription& d, double, int, PluginCreationCallback callback)

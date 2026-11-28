@@ -28,6 +28,18 @@ namespace carthage::engine::plughost
         juce::Result start (int timeoutMs = 10000);
         bool isRunning() const noexcept   { return running.load (std::memory_order_acquire); }
 
+        /** Whether it ever ran (a process that never started has not gone). */
+        bool hasStarted() const noexcept   { return started.load(); }
+
+        /** Called when the process goes (a plugin crashed in it, or it was killed), on the
+            connection's own thread: hand it on. Not called when this object closes it. */
+        std::function<void()> onLost;
+
+        /** The plugin a request was waiting on when the process went, if any: its slot, or for a
+            load, -1 with the plugin's identifier (5f-4, to know which plugin to blame). */
+        int slotAskedWhenLost() const noexcept       { return lostSlot.load(); }
+        juce::String pluginLoadingWhenLost() const;
+
         /** Loads a plugin in the host and links it: the plugin's processing from then on is the
             returned object's process(). Null and `error` if it could not. The plugin must not
             outlive this host. */
@@ -49,9 +61,11 @@ namespace carthage::engine::plughost
         };
 
         juce::File executable;
-        std::atomic<bool> running { false };
+        std::atomic<bool> running { false }, closing { false }, started { false };
+        std::atomic<int> askingSlot { 0 }, lostSlot { 0 };   // 0: none
+        juce::String loading, loadingWhenLost;              // guarded by pendingLock
         std::atomic<int> nextID { 1 };
-        std::mutex pendingLock;   // never the audio thread
+        mutable std::mutex pendingLock;   // never the audio thread
         std::map<int, std::shared_ptr<Pending>> pending;
         std::mutex listenersLock;   // the plugins hearing notices, by slot
         std::map<int, RemotePlugin*> listeners;
@@ -86,6 +100,7 @@ namespace carthage::engine::plughost
 
         const juce::String& getName() const noexcept   { return name; }
         int slotID() const noexcept   { return slot; }
+        HostProcess& getHost() const noexcept   { return host; }
 
         /** The host's description of the plugin (Protocol.h, load's reply): buses, parameters. */
         const juce::ValueTree& getInfo() const noexcept   { return info; }
@@ -134,7 +149,13 @@ namespace carthage::engine::plughost
         bool processWaiting (juce::AudioBuffer<float>&, const juce::MidiBuffer&, int timeoutMs);
 
         std::optional<juce::MemoryBlock> getState (int timeoutMs = 10000);
+
+        /** A VST3's own preset file (.vstpreset), read by the plugin there (W64). */
+        bool loadVST3Preset (const juce::MemoryBlock&, int timeoutMs = 10000);
         bool setState (const juce::MemoryBlock&, int timeoutMs = 10000);
+
+        /** Whether the host was inside this plugin's processing (when it died). */
+        bool wasProcessing() const noexcept   { return link.state().busy.load() != 0; }
 
         /** Blocks whose output was not ready in time, since the plugin loaded. */
         std::uint32_t lateBlocks() const noexcept   { return link.state().late.load (std::memory_order_relaxed); }

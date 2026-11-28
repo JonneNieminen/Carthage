@@ -184,11 +184,19 @@ namespace carthage::engine
         bool getUsePreMaster() const;
         void setUsePreMaster (bool);
 
-        /** Plugins in their own processes (5f, W65). Off by default until their windows open from
-            there (5f-3). Turning it on reloads every plugin through a stand-in (a moment's
-            silence); turning it off brings them all into Carthage. */
+        /** Plugins in their own processes (5f, W65, W69). On by default. Turning it on reloads
+            every plugin through a stand-in (a moment's silence); turning it off brings them all
+            into Carthage. */
         bool getPluginProcesses() const;
         void setPluginProcesses (bool);
+
+        /** Grouping them automatically, by maker and crash history (on by default, W38); off,
+            each plugin goes where its menu says (Processes::Choice). */
+        bool getAutomaticPluginGrouping() const;
+        void setAutomaticPluginGrouping (bool);
+
+        /** A plugin's process stopped; its plugins have started again where they could. */
+        std::function<void (const plughost::Processes::Crash&)> onPluginsCrashed;
         plughost::Processes& getProcesses() noexcept   { return *processes; }
 
         /** Puts each plugin of `edit` in its process: those a live input is heard through here,
