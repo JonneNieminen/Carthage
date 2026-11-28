@@ -1,6 +1,7 @@
 // Plugins in their own processes (5f, W65): the shared-memory link, and carthage-plughost with its
 // own test plugin ("Half": half the level, a note-on adds 1 at its sample).
 #include <engine/RealtimeCheck.h>
+#include <engine/platform/SharedMemory.h>
 #include <engine/plughost/HostProcess.h>
 #include <engine/plughost/Link.h>
 #include <engine/plughost/PluginProxy.h>
@@ -374,6 +375,8 @@ public:
                 expect (heard.wait (5000), "the change came back");
                 expectWithinAbsoluteError (heardValue.load(), 1.0f, 1.0e-6f);
 
+                expect (host.processID() > 0 && host.processID() != platform::currentProcessID(),
+                        "the host says which process it is, so Carthage can let its windows come forward");
                 expect (plugin->openEditor ("Half", juce::Colours::black, false), "its window opened in its process");
                 plugin->closeEditor();
                 plugin->setNoticeHandler (nullptr);

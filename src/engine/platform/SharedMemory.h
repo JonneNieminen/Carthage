@@ -58,4 +58,12 @@ namespace carthage::engine::platform
     /** A name no other object on this computer has, short enough for every platform (macOS allows
         31 characters): the process id, a counter and `suffix` (one letter). */
     juce::String uniqueName (char suffix);
+
+    /** This process's id. */
+    int currentProcessID();
+
+    /** Lets process `pid` bring its window in front of Carthage's (5f-5): macOS 14 and later
+        yield Carthage's activation to it; Windows allows it to set the foreground window.
+        Carthage must be in front; the other process then takes the keyboard. Foreground_*. */
+    void letComeForward (int pid);
 }

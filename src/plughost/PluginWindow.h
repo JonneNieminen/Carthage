@@ -40,4 +40,13 @@ namespace carthage::plughost
     /** A plugin that crashes takes this process down at once, with no dialog of the system's
         holding it open (Windows: no error box or report); the app notices and carries on. */
     void dieQuietly();
+
+    /** Takes the keyboard from Carthage, which has just let it (engine::platform::letComeForward). */
+    void comeForward();
+
+    /** The render thread a plugin's audio runs on joins the system's audio scheduling where it
+        has one (Windows: MMCSS "Pro Audio"; macOS: JUCE's real-time thread already has its time
+        constraints). Returns what leaveProAudio needs. */
+    void* enterProAudio();
+    void leaveProAudio (void*);
 }

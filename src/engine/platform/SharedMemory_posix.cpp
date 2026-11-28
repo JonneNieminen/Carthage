@@ -139,6 +139,8 @@ namespace carthage::engine::platform
         impl->named = false;
     }
 
+    int currentProcessID()   { return static_cast<int> (getpid()); }
+
     juce::String uniqueName (char suffix)
     {
         static std::atomic<int> counter { 0 };

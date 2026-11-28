@@ -10,6 +10,7 @@
  #define NOMINMAX
 #endif
 #include <windows.h>
+#include <avrt.h>
 #include <werapi.h>
 
 #include <cstdlib>
@@ -23,5 +24,26 @@ namespace carthage::plughost
         SetErrorMode (SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
         WerSetFlags (WER_FAULT_REPORTING_NO_UI);
         _set_abort_behavior (0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    }
+
+    // SetForegroundWindow, in the window's toFront, works because Carthage allowed this process.
+    void comeForward() {}
+
+    // The scheduling Windows gives audio threads (what WASAPI's own threads use).
+    void* enterProAudio()
+    {
+        DWORD task = 0;
+        HANDLE h = AvSetMmThreadCharacteristicsW (L"Pro Audio", &task);
+
+        if (h != nullptr)
+            AvSetMmThreadPriority (h, AVRT_PRIORITY_HIGH);
+
+        return h;
+    }
+
+    void leaveProAudio (void* h)
+    {
+        if (h != nullptr)
+            AvRevertMmThreadCharacteristics (h);
     }
 }

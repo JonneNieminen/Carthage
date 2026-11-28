@@ -41,5 +41,13 @@ else()
     target_sources(carthage_engine PRIVATE platform/SharedMemory_posix.cpp)
 endif()
 
+if(APPLE)
+    target_sources(carthage_engine PRIVATE platform/Foreground_mac.mm)
+    set_source_files_properties(platform/Foreground_mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    target_link_libraries(carthage_engine PRIVATE "-framework AppKit")
+elseif(NOT WIN32)
+    target_sources(carthage_engine PRIVATE platform/Foreground_other.cpp)
+endif()
+
 target_include_directories(carthage_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(carthage_engine PUBLIC carthage_juce PRIVATE carthage_warnings)

@@ -66,7 +66,7 @@ namespace
 
             window->setAlwaysOnTop (onTop);
             window->setVisible (true);
-            juce::Process::makeForegroundProcess();
+            carthage::plughost::comeForward();
             window->toFront (true);
         }
 
@@ -222,6 +222,9 @@ namespace
 
         void run() override
         {
+            void* proAudio = carthage::plughost::enterProAudio();
+            const juce::ScopeGuard leave { [proAudio] { carthage::plughost::leaveProAudio (proAudio); } };
+
             while (true)
             {
                 wake->wait();
@@ -292,6 +295,7 @@ namespace
         {
             juce::ValueTree reply (msg::reply);
             reply.setProperty (msg::id, request[msg::id], nullptr);
+            reply.setProperty (msg::pid, platform::currentProcessID(), nullptr);   // so Carthage can let it come forward
             const auto error = answer (request, reply);
             reply.setProperty (msg::ok, error.isEmpty(), nullptr);
 

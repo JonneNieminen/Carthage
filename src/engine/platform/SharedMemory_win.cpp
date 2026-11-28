@@ -131,6 +131,14 @@ namespace carthage::engine::platform
     void WakeSignal::wait() noexcept   { WaitForSingleObject (impl->semaphore, INFINITE); }
     void WakeSignal::removeName()      {}
 
+    int currentProcessID()   { return static_cast<int> (GetCurrentProcessId()); }
+
+    void letComeForward (int pid)
+    {
+        if (pid > 0)
+            AllowSetForegroundWindow (static_cast<DWORD> (pid));
+    }
+
     juce::String uniqueName (char suffix)
     {
         static std::atomic<int> counter { 0 };

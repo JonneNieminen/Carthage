@@ -11,6 +11,6 @@ if(APPLE)
     target_link_libraries(carthage_plughost PRIVATE "-framework AppKit")
 endif()
 if(WIN32)
-    target_link_libraries(carthage_plughost PRIVATE wer)   # platform/HostApp_win.cpp
+    target_link_libraries(carthage_plughost PRIVATE wer avrt)   # platform/HostApp_win.cpp
 endif()
 target_link_libraries(carthage_plughost PRIVATE carthage_engine carthage_warnings)

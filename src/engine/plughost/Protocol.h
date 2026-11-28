@@ -6,7 +6,8 @@ namespace carthage::engine::plughost
 {
     /** What the app and `carthage-plughost` say to each other over JUCE's child-process pipe (5f,
         W65). Every message is a ValueTree of one type; a request carries an `id` and its answer
-        is a `reply` with the same id, `ok` and, when not, an `error`.
+        is a `reply` with the same id, `ok` and, when not, an `error`; every reply carries the
+        host's process id (`pid`), so Carthage can let its windows come forward.
 
         load (description, sampleRate, maxBlock) → reply (slot, name, numIns, numOuts, latency, tail,
                                                     acceptsMidi, producesMidi; a `bus` child per bus
@@ -50,7 +51,7 @@ namespace carthage::engine::plughost
                                       boolean ("boolean"), label ("label"), automatable ("automatable"), values ("values"),
                                       kind ("kind"), index ("index"), indices ("indices"), colour ("colour"), onTop ("onTop"),
                                       foreground ("foreground"), keyCode ("keyCode"), modifiers ("modifiers"),
-                                      character ("character"), hasEditor ("hasEditor");
+                                      character ("character"), hasEditor ("hasEditor"), pid ("pid");
     }
 
     juce::MemoryBlock toBlock (const juce::ValueTree&);

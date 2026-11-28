@@ -75,6 +75,9 @@ namespace carthage::engine::plughost
         if (! reply.hasType (msg::reply))
             return;
 
+        if (reply.hasProperty (msg::pid))
+            pid.store (reply[msg::pid]);
+
         const std::scoped_lock lock (pendingLock);
 
         if (const auto found = pending.find (static_cast<int> (reply[msg::id])); found != pending.end())
@@ -238,6 +241,8 @@ namespace carthage::engine::plughost
 
     bool RemotePlugin::openEditor (const juce::String& title, juce::Colour background, bool onTop)
     {
+        platform::letComeForward (host.processID());   // Carthage is in front: it lets the window come forward
+
         juce::ValueTree request (msg::openEditor);
         request.setProperty (msg::slot, slot, nullptr);
         request.setProperty (msg::name, title, nullptr);

@@ -50,7 +50,8 @@ src/
                      Tracktion sees: here or in a host, moving with its state), Processes (the
                      hook into Tracktion's plugin creation, one host per maker, placement),
                      TestPlugins ("Half", for the tests and the host)
-    platform/        SharedMemory_posix.cpp, SharedMemory_win.cpp: shared memory and the wake signal
+    platform/        SharedMemory_posix.cpp, SharedMemory_win.cpp: shared memory, the wake signal, the process
+                     id; Foreground_mac.mm (Windows: in SharedMemory_win.cpp): letting a host's window come forward
     time/Grid        the one grid and snap resolver (beats; divisions, triplet, dotted, adaptive)
     RealtimeCheck.h  RealTimeSanitizer scope and CARTHAGE_NONBLOCKING
   app/               Carthage.app: application, window, menu bar, command table, path provider,
@@ -65,7 +66,8 @@ src/
     platform/        the system's reduce-motion setting (Motion_mac.mm, Motion_win.cpp)
   scan/              carthage-scan
   plughost/          carthage-plughost: a JUCE application; each plugin a slot with its own link and render thread;
-                     PluginWindow (its window, like the app's); platform/HostApp_mac.mm (an accessory app: no Dock icon)
+                     PluginWindow (its window, like the app's); platform/HostApp_mac.mm (an accessory app: no Dock
+                     icon; activates when Carthage yields), HostApp_win.cpp (MMCSS Pro Audio, no crash dialogs)
 tools/bench/         carthage-bench: latency, soak, align, takes, wgprobe, devices, plugins;
                      libcarthage_bench_workgroups counts os_workgroup_join (bench only)
 tools/snapshot/      carthage-snapshot: the window content rendered to PNG in fixed states

@@ -494,3 +494,13 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
 - Next: 5f-5 (Windows: run the plugin-process tests there, MMCSS for the host's render threads,
   letting the host's window come forward), then 5g. Owner's consolidated test list grows: plugin
   windows from their process, keys from them, the crash card, Settings, Runs in.
+
+### 2026-11-28 (5f-5, W70)
+
+- After the OS update and restart: main clean, CI green on 6079116 (the Windows crash dialog was
+  what failed the crash tests there).
+- 5f-5: MMCSS "Pro Audio" for the hosts' render threads on Windows; every host reply carries its
+  process id, and Carthage lets the host's window come forward (macOS 14 yield, Windows
+  AllowSetForegroundWindow).
+- Open for the owner, O8: the hosts' threads are outside the macOS audio workgroup (F8).
+- Next: the owner's answer on O8, then 5g.

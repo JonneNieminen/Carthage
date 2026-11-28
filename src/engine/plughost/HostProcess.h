@@ -40,6 +40,9 @@ namespace carthage::engine::plughost
         int slotAskedWhenLost() const noexcept       { return lostSlot.load(); }
         juce::String pluginLoadingWhenLost() const;
 
+        /** The host's process id, from its first answer (0 until then). */
+        int processID() const noexcept   { return pid.load(); }
+
         /** Loads a plugin in the host and links it: the plugin's processing from then on is the
             returned object's process(). Null and `error` if it could not. The plugin must not
             outlive this host. */
@@ -63,6 +66,7 @@ namespace carthage::engine::plughost
         juce::File executable;
         std::atomic<bool> running { false }, closing { false }, started { false };
         std::atomic<int> askingSlot { 0 }, lostSlot { 0 };   // 0: none
+        std::atomic<int> pid { 0 };
         juce::String loading, loadingWhenLost;              // guarded by pendingLock
         std::atomic<int> nextID { 1 };
         mutable std::mutex pendingLock;   // never the audio thread
