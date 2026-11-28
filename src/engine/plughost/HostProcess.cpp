@@ -53,6 +53,17 @@ namespace carthage::engine::plughost
     {
         const auto reply = fromBlock (block);
 
+        if (reply.hasType (msg::notice))
+        {
+            const std::scoped_lock lock (listenersLock);
+
+            if (const auto found = listeners.find (static_cast<int> (reply[msg::slot])); found != listeners.end())
+                if (found->second->onNotice)
+                    found->second->onNotice (reply);
+
+            return;
+        }
+
         if (! reply.hasType (msg::reply))
             return;
 
@@ -63,6 +74,28 @@ namespace carthage::engine::plughost
             found->second->reply = reply;
             found->second->done.signal();
         }
+    }
+
+    void HostProcess::listen (int slot, RemotePlugin* plugin)
+    {
+        const std::scoped_lock lock (listenersLock);
+
+        if (plugin != nullptr)
+            listeners[slot] = plugin;
+        else
+            listeners.erase (slot);
+    }
+
+    void HostProcess::setWindows (bool onTop, bool carthageInFront)
+    {
+        juce::ValueTree request (msg::windows);
+        request.setProperty (msg::onTop, onTop, nullptr);
+        request.setProperty (msg::foreground, carthageInFront, nullptr);
+
+        // Not waited for: a host busy loading a plugin must not hold up the message thread. Its
+        // reply carries id 0, which no request waits on.
+        if (isRunning())
+            sendMessageToWorker (toBlock (request));
     }
 
     void HostProcess::handleConnectionLost()
@@ -170,6 +203,31 @@ namespace carthage::engine::plughost
         for (const auto& c : info)
             if (c.hasType (msg::parameter))
                 values.add (static_cast<float> (c[msg::value]));
+
+        host.listen (slot, this);
+    }
+
+    void RemotePlugin::setNoticeHandler (std::function<void (const juce::ValueTree&)> handler)
+    {
+        const std::scoped_lock lock (host.listenersLock);
+        onNotice = std::move (handler);
+    }
+
+    bool RemotePlugin::openEditor (const juce::String& title, juce::Colour background, bool onTop)
+    {
+        juce::ValueTree request (msg::openEditor);
+        request.setProperty (msg::slot, slot, nullptr);
+        request.setProperty (msg::name, title, nullptr);
+        request.setProperty (msg::colour, static_cast<juce::int64> (background.getARGB()), nullptr);
+        request.setProperty (msg::onTop, onTop, nullptr);
+        return static_cast<bool> (host.ask (request, 10000)[msg::ok]);
+    }
+
+    void RemotePlugin::closeEditor()
+    {
+        juce::ValueTree request (msg::closeEditor);
+        request.setProperty (msg::slot, slot, nullptr);
+        host.ask (request, 5000);
     }
 
     bool RemotePlugin::relink (double sampleRate, int maxBlock, juce::String& error)
@@ -198,6 +256,7 @@ namespace carthage::engine::plughost
 
     RemotePlugin::~RemotePlugin()
     {
+        host.listen (slot, nullptr);   // no notice reaches this plugin from here on
         link.state().quit.store (1, std::memory_order_release);
         wake->post();
 

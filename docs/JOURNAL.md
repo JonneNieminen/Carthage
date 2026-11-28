@@ -476,3 +476,12 @@ done, what is in hand, what is next. Keep it short; the details live in the comm
   whether the file holds the plugin; a VST3's state lacks settings changed while not playing, so a
   move into Carthage sets the values again.
 - Next: 5f-3, plugin windows from the host (then the switch can be on by default).
+
+### 2026-11-28 (5f-3, W68)
+
+- Plugin windows from the host: `plughost/PluginWindow`, notices from the host (values, gestures,
+  latency, state, window closed, keys), `PluginWindows` opening them through the proxy, the hosts'
+  windows following Carthage's on-top setting and hiding when another app is in front.
+- Still off by default: 5f-4 next (crash restart, crash history, grouping, the Settings switch).
+- Not seen by eye (screen locked): the window's look, focus and the forwarded keys go on the
+  owner's consolidated test list.

@@ -112,6 +112,7 @@ namespace carthage::engine::plughost
 
         if (remote != nullptr)
         {
+            proxy->hear (*remote);
             proxy->remote = std::move (remote);
             proxy->inHost.store (true);
         }
@@ -215,6 +216,7 @@ namespace carthage::engine::plughost
             for (int i = 0; i < parameters.size(); ++i)
                 parameters.getUnchecked (i)->value().store (local->getParameters()[i]->getValue());
 
+            hear (*moved);
             remote = std::move (moved);
             lastState = std::move (state);
             inHost.store (true);
@@ -229,6 +231,17 @@ namespace carthage::engine::plughost
                 error = "this plugin runs only in its own process";
                 return false;
             }
+
+            // Its window there closes; the app shows it again here.
+            const auto reopen = windowInHost;
+
+            if (windowInHost && remote != nullptr)
+                remote->closeEditor();
+
+            windowInHost = false;
+
+            if (reopen && onWindowClosed)
+                juce::MessageManager::callAsync ([this, stillHere = alive] { if (stillHere->load() && onWindowClosed) onWindowClosed (true); });
 
             auto state = remote != nullptr && remote->isAlive() ? remote->getState() : std::nullopt;
             auto made = makeLocal (description, rate, block, error);
@@ -268,6 +281,90 @@ namespace carthage::engine::plughost
 
         updateLatency();
         return true;
+    }
+
+    //==============================================================================================
+    bool PluginProxy::openWindowInHost (const juce::String& title, juce::Colour background, bool onTop)
+    {
+        if (! inHost.load() || remote == nullptr || ! remote->openEditor (title, background, onTop))
+            return false;
+
+        windowInHost = true;
+        return true;
+    }
+
+    void PluginProxy::closeWindowInHost()
+    {
+        if (windowInHost && remote != nullptr)
+            remote->closeEditor();
+
+        windowInHost = false;
+    }
+
+    void PluginProxy::hear (RemotePlugin& plugin)
+    {
+        // On the host connection's thread: everything is done on the message thread.
+        plugin.setNoticeHandler ([this, stillHere = alive] (const juce::ValueTree& notice)
+        {
+            juce::MessageManager::callAsync ([this, stillHere, notice]
+            {
+                if (stillHere->load())
+                    handleNotice (notice);
+            });
+        });
+    }
+
+    void PluginProxy::handleNotice (const juce::ValueTree& notice)
+    {
+        if (! inHost.load() || remote == nullptr || static_cast<int> (notice[msg::slot]) != remote->slotID())
+            return;   // from a host it has left
+
+        const auto kind = juce::Identifier (notice[msg::kind].toString());
+
+        if (kind == msg::values)
+        {
+            const auto indices = juce::StringArray::fromTokens (notice[msg::indices].toString(), " ", {});
+            const auto values = valuesFromText (notice[msg::values].toString());
+
+            for (int i = 0; i < indices.size() && i < values.size(); ++i)
+                if (const auto index = indices[i].getIntValue(); juce::isPositiveAndBelow (index, parameters.size()))
+                {
+                    parameters.getUnchecked (index)->value().store (values.getUnchecked (i));
+                    parameters.getUnchecked (index)->sendValueChangedMessageToListeners (values.getUnchecked (i));
+                }
+        }
+        else if (kind == msg::gestureBegin || kind == msg::gestureEnd)
+        {
+            if (const int index = notice[msg::index]; juce::isPositiveAndBelow (index, parameters.size()))
+            {
+                if (kind == msg::gestureBegin)
+                    parameters.getUnchecked (index)->beginChangeGesture();
+                else
+                    parameters.getUnchecked (index)->endChangeGesture();
+            }
+        }
+        else if (kind == msg::latency)
+        {
+            remote->setPluginLatency (notice[msg::latency]);
+            updateLatency();
+        }
+        else if (kind == msg::changed)
+        {
+            updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
+        }
+        else if (kind == msg::editorClosed)
+        {
+            windowInHost = false;
+
+            if (onWindowClosed)
+                onWindowClosed (false);
+        }
+        else if (kind == msg::key)
+        {
+            if (onWindowKey)
+                onWindowKey (juce::KeyPress (notice[msg::keyCode], juce::ModifierKeys (notice[msg::modifiers]),
+                                             notice[msg::character].toString()[0]));
+        }
     }
 
     //==============================================================================================

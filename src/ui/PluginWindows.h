@@ -11,7 +11,9 @@ namespace carthage::ui
     /** The windows of the plugins on every channel's Line (5b). Any number open at once, one per
         plugin; opening one that is open brings it forward. A window holds its plugin, so the
         plugin (and its editor) live as long as the window; a plugin removed from its Line has its
-        window closed (closeMissing). Message thread. */
+        window closed (closeMissing). A plugin running in its own process (5f-3, W68) has its
+        window opened by that process instead, made to look the same; it is tracked here all the
+        same. Message thread. */
     class PluginWindows
     {
     public:
@@ -34,10 +36,21 @@ namespace carthage::ui
         /** Above Carthage's own windows unless switched off (F21); asked when a window opens. */
         std::function<bool()> keepOnTop;
 
+        /** A window closed (a plugin may now move to its own process). */
+        std::function<void()> onClosed;
+
+        /** A key a plugin's window in its own process did not use, for Carthage's commands. */
+        std::function<void (const juce::KeyPress&)> onKey;
+
         class Window;
 
     private:
         std::map<tracktion::EditItemID, std::unique_ptr<Window>> windows;
+        std::map<tracktion::EditItemID, tracktion::Plugin::Ptr> elsewhere;   // windows shown by their plugin's process
+
+        bool openElsewhere (tracktion::Plugin&);
+        void closeElsewhere (const tracktion::EditItemID&);
+        void closed();
         std::shared_ptr<int> alive = std::make_shared<int> (0);   // a closing window's async step checks it
     };
 

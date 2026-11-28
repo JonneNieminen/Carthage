@@ -419,6 +419,9 @@ namespace carthage::ui
         browser.presetsFor = [this] (const PluginDescription& d) { return mixer.presetsFor (d); };
         browser.onInsertWithPreset = [this] (const PluginDescription& d, const File& f) { mixer.addPluginToSelected (d, f); };
         pluginWindows.keepOnTop = [this] { return keepPluginOnTop(); };
+        pluginWindows.onClosed = [this] { session.placeAllPlugins(); };   // a plugin may now go to its own process
+        pluginWindows.onKey = [this] (const KeyPress& key) { commands.getKeyMappings()->keyPressed (key, this); };
+        session.getProcesses().setWindowsOnTop (keepPluginOnTop());
         session.onPluginsChanged = [this] { browser.refresh(); };
 
         // The toolbar: a button per tool, labelled with its current key, and the grid.
@@ -1084,6 +1087,7 @@ namespace carthage::ui
             case cmd::keepPluginOnTop:
                 props().setValue ("keepPluginOnTop", ! keepPluginOnTop());
                 pluginWindows.setAlwaysOnTop (keepPluginOnTop());
+                session.getProcesses().setWindowsOnTop (keepPluginOnTop());
                 commands.commandStatusChanged();
                 return true;
             case cmd::deleteClips:      timeline.deleteSelection(); return true;

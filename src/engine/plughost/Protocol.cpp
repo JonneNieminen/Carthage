@@ -43,6 +43,7 @@ namespace carthage::engine::plughost
         reply.setProperty (msg::tail, p.getTailLengthSeconds(), nullptr);
         reply.setProperty (msg::acceptsMidi, p.acceptsMidi(), nullptr);
         reply.setProperty (msg::producesMidi, p.producesMidi(), nullptr);
+        reply.setProperty (msg::hasEditor, p.hasEditor(), nullptr);
 
         for (const bool isInput : { true, false })
             for (int i = 0; i < p.getBusCount (isInput); ++i)

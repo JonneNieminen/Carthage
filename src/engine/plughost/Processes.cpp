@@ -9,9 +9,37 @@ namespace carthage::engine::plughost
 {
     using namespace tracktion;
 
-    Processes::Processes (juce::File hostExecutable) : executable (std::move (hostExecutable)) {}
+    Processes::Processes (juce::File hostExecutable) : executable (std::move (hostExecutable))
+    {
+        startTimer (250);
+    }
 
-    Processes::~Processes() = default;
+    void Processes::setWindowsOnTop (bool on)
+    {
+        windowsOnTop = on;
+        tellHosts();
+    }
+
+    void Processes::timerCallback()
+    {
+        if (const auto inFront = juce::Process::isForegroundProcess(); inFront != carthageInFront)
+        {
+            carthageInFront = inFront;
+            tellHosts();
+        }
+    }
+
+    void Processes::tellHosts()
+    {
+        for (auto& [maker, host] : hosts)
+            if (host != nullptr && host->isRunning())
+                host->setWindows (windowsOnTop, carthageInFront);
+    }
+
+    Processes::~Processes()
+    {
+        stopTimer();
+    }
 
     bool Processes::canRunInHost (const juce::PluginDescription& d)
     {
@@ -77,8 +105,8 @@ namespace carthage::engine::plughost
             if (proxy->isInHost() == toHost)
                 continue;
 
-            // Its window belongs to the plugin here: it moves once the window is closed.
-            if (toHost && ext->windowState != nullptr && ext->windowState->isWindowShowing())
+            // Its editor belongs to the plugin here: it moves once the editor is closed.
+            if (toHost && proxy->isEditorOpenHere())
                 continue;
 
             juce::String error;

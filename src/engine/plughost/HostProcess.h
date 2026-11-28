@@ -34,6 +34,11 @@ namespace carthage::engine::plughost
         std::unique_ptr<RemotePlugin> load (const juce::PluginDescription&, double sampleRate, int maxBlock,
                                             juce::String& error, int timeoutMs = 30000);
 
+        /** Every plugin window of this host: kept above other windows or not, and whether
+            Carthage is the app in front (they hide while neither it nor the host is, 5f-3).
+            Sent without waiting. */
+        void setWindows (bool onTop, bool carthageInFront);
+
     private:
         friend class RemotePlugin;
 
@@ -48,6 +53,10 @@ namespace carthage::engine::plughost
         std::atomic<int> nextID { 1 };
         std::mutex pendingLock;   // never the audio thread
         std::map<int, std::shared_ptr<Pending>> pending;
+        std::mutex listenersLock;   // the plugins hearing notices, by slot
+        std::map<int, RemotePlugin*> listeners;
+
+        void listen (int slot, RemotePlugin*);
 
         /** Sends `request` and waits for its reply; an invalid tree if none came in time. */
         juce::ValueTree ask (juce::ValueTree request, int timeoutMs);
@@ -76,6 +85,7 @@ namespace carthage::engine::plughost
         ~RemotePlugin();
 
         const juce::String& getName() const noexcept   { return name; }
+        int slotID() const noexcept   { return slot; }
 
         /** The host's description of the plugin (Protocol.h, load's reply): buses, parameters. */
         const juce::ValueTree& getInfo() const noexcept   { return info; }
@@ -93,6 +103,18 @@ namespace carthage::engine::plughost
 
         /** False once the host has gone. */
         bool isAlive() const noexcept   { return host.isRunning(); }
+
+        /** What the plugin did by itself (Protocol.h, `notice`) goes to `handler`, on the host
+            connection's own thread, never the message thread: hand anything more on. It is
+            called under a lock, so it must not call back into this plugin's host. Null stops it. */
+        void setNoticeHandler (std::function<void (const juce::ValueTree&)> handler);
+
+        /** The plugin's window in its host (5f-3). Message thread; they wait for the host. */
+        bool openEditor (const juce::String& title, juce::Colour background, bool onTop);
+        void closeEditor();
+
+        /** The latency the host last reported for the plugin itself. */
+        void setPluginLatency (int samples) noexcept   { ownLatency = samples; }
         int numIns() const noexcept    { return link.numIns(); }
         int numOuts() const noexcept   { return link.numOuts(); }
 
@@ -120,6 +142,8 @@ namespace carthage::engine::plughost
         RemotePlugin (HostProcess&, int slot, juce::ValueTree info, double sampleRate, HostProcess::Linked);
 
     private:
+        friend class HostProcess;   // calls onNotice
+
         HostProcess& host;
         const int slot;
         const juce::ValueTree info;
@@ -130,6 +154,7 @@ namespace carthage::engine::plughost
         std::unique_ptr<platform::WakeSignal> wake;
         Link link;
         juce::Array<float> values;
+        std::function<void (const juce::ValueTree&)> onNotice;   // guarded by the host's listenersLock
 
         void takeValues (const juce::ValueTree& reply);
 

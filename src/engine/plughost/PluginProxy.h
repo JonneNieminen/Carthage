@@ -39,6 +39,23 @@ namespace carthage::engine::plughost
         /** Blocks whose output the host did not have ready, while in the host it has now. */
         std::uint32_t lateBlocks() const noexcept   { return inHost.load() && remote != nullptr ? remote->lateBlocks() : 0; }
 
+        // ---- its window while it runs in its host (5f-3, W68) ----
+
+        /** Shows the plugin's window from its host, or brings it forward. False if it can not. */
+        bool openWindowInHost (const juce::String& title, juce::Colour background, bool onTop);
+        void closeWindowInHost();
+        bool isWindowOpenInHost() const noexcept   { return windowInHost; }
+
+        /** Whether its own editor is showing in Carthage (a window of the app's). */
+        bool isEditorOpenHere() const noexcept   { return ! inHost.load() && local != nullptr && local->getActiveEditor() != nullptr; }
+
+        /** The window in the host closed: by itself (false), or because the plugin moved into
+            Carthage with it open (true: the app shows it again, its own way). Message thread. */
+        std::function<void (bool reopenHere)> onWindowClosed;
+
+        /** A key the window in the host did not use, for Carthage's commands. Message thread. */
+        std::function<void (const juce::KeyPress&)> onWindowKey;
+
         /** The host this plugin goes to (null: none, it stays here). */
         HostProcess* getHost() const noexcept   { return host; }
 
@@ -88,6 +105,11 @@ namespace carthage::engine::plughost
         std::atomic<int> inFlight { 0 };   // blocks and parameter calls using local or remote now
         juce::MemoryBlock lastState;       // the newest state seen, for a host that has gone
         juce::Array<Parameter*> parameters;
+        bool windowInHost = false;
+
+        /** Listens to what the plugin in the host does by itself. */
+        void hear (RemotePlugin&);
+        void handleNotice (const juce::ValueTree&);
         std::shared_ptr<std::atomic<bool>> alive = std::make_shared<std::atomic<bool>> (true);   // for calls posted to later
 
         float valueOf (int index) const noexcept;

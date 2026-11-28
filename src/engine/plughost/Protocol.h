@@ -15,13 +15,28 @@ namespace carthage::engine::plughost
                                                     rendering (again, for a new block size or rate)
         getState (slot)                          → reply (state, base64; values)
         setState (slot, state)                   → reply (values: every parameter after it)
-        unload (slot)                            → reply */
+        unload (slot)                            → reply
+        openEditor (slot, name, colour, onTop)   → reply: the plugin's window is showing (5f-3)
+        closeEditor (slot)                       → reply
+        windows (onTop, foreground)              → reply: every window's level, and whether
+                                                    Carthage is the app in front (a host's windows
+                                                    hide while neither it nor Carthage is)
+
+        And unasked, from the host, a `notice` (slot, kind) for what a plugin did by itself:
+        editorClosed; values (indices, values: what its window changed); gestureBegin and
+        gestureEnd (index); latency (latency); changed (its state, not a parameter); key
+        (keyCode, modifiers, character: a key its window did not use, for Carthage's commands). */
     inline constexpr const char* commandLineID = "carthage-plughost";
 
     namespace msg
     {
         inline const juce::Identifier load ("load"), connect ("connect"), getState ("getState"),
-                                      setState ("setState"), unload ("unload"), reply ("reply");
+                                      setState ("setState"), unload ("unload"), reply ("reply"),
+                                      openEditor ("openEditor"), closeEditor ("closeEditor"), windows ("windows"),
+                                      notice ("notice");
+
+        inline const juce::Identifier editorClosed ("editorClosed"), gestureBegin ("gestureBegin"),
+                                      gestureEnd ("gestureEnd"), changed ("changed"), key ("key");
 
         inline const juce::Identifier id ("id"), ok ("ok"), error ("error"), slot ("slot"), description ("description"),
                                       sampleRate ("sampleRate"), maxBlock ("maxBlock"), name ("name"), numIns ("numIns"),
@@ -30,7 +45,10 @@ namespace carthage::engine::plughost
                                       producesMidi ("producesMidi"), bus ("bus"), input ("input"), channels ("channels"),
                                       enabled ("enabled"), parameter ("parameter"), paramID ("paramID"),
                                       defaultValue ("defaultValue"), value ("value"), steps ("steps"), discrete ("discrete"),
-                                      boolean ("boolean"), label ("label"), automatable ("automatable"), values ("values");
+                                      boolean ("boolean"), label ("label"), automatable ("automatable"), values ("values"),
+                                      kind ("kind"), index ("index"), indices ("indices"), colour ("colour"), onTop ("onTop"),
+                                      foreground ("foreground"), keyCode ("keyCode"), modifiers ("modifiers"),
+                                      character ("character"), hasEditor ("hasEditor");
     }
 
     juce::MemoryBlock toBlock (const juce::ValueTree&);
@@ -46,8 +64,9 @@ namespace carthage::engine::plughost
 
     /** The host's own test plugins, so the tests need no third-party plugin: format "CarthageTest".
         "Half": stereo in and out at the level of its one parameter, "Gain" (0.5 by default), and
-        each note-on adds 1 to the first output at its sample (MIDI timing). Its state is the gain
-        followed by whatever was last set. */
+        each note-on adds 1 to the first output at its sample (MIDI timing); controller 7 sets the
+        gain as the plugin's own window would (it tells its host). Its state is the gain followed
+        by whatever was last set. */
     inline constexpr const char* testFormat = "CarthageTest";
     juce::PluginDescription testPlugin (const juce::String& name);
 }

@@ -727,6 +727,14 @@ namespace
                    + String (proxy->getParameters()[index]->getValue(), 3) + ")");
             say ("latency there: " + String (proxy->getLatencySamples()) + " samples");
 
+            // Its own window, from its process (5f-3).
+            const auto opening = Time::getMillisecondCounterHiRes();
+            const auto opened = onMessageThread ([&] { return proxy->openWindowInHost (ext->getName(), Colours::black, true); });
+            check (opened, "its window opened from its process in " + String (roundToInt (Time::getMillisecondCounterHiRes() - opening)) + " ms");
+            waitMs (1000);
+            onMessageThreadVoid ([&] { proxy->closeWindowInHost(); });
+            check (! proxy->isWindowOpenInHost(), "and closed");
+
             if (args.has ("device"))
             {
                 onMessageThreadVoid ([this] { session->getEdit().getTransport().play (false); });

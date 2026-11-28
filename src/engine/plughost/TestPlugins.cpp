@@ -50,8 +50,16 @@ namespace carthage::engine::plughost
                 buffer.applyGain (gain->getValue());
 
                 for (const auto m : midi)
-                    if (m.getMessage().isNoteOn() && buffer.getNumChannels() > 0)
+                {
+                    const auto message = m.getMessage();
+
+                    if (message.isNoteOn() && buffer.getNumChannels() > 0)
                         buffer.addSample (0, m.samplePosition, 1.0f);
+
+                    // Controller 7 moves the gain as the plugin's own window would: the host hears it.
+                    if (message.isControllerOfType (7))
+                        gain->setValueNotifyingHost (static_cast<float> (message.getControllerValue()) / 127.0f);
+                }
             }
 
             double getTailLengthSeconds() const override   { return 0.0; }

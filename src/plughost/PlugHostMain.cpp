@@ -11,6 +11,8 @@
 #include <engine/plughost/Protocol.h>
 #include <engine/plughost/TestPlugins.h>
 
+#include "PluginWindow.h"
+
 #include <map>
 
 namespace
@@ -18,14 +20,71 @@ namespace
     using namespace carthage::engine;
     using namespace carthage::engine::plughost;
 
-    /** One loaded plugin: its processor, link and render thread. */
-    class Slot final : private juce::Thread
+    /** One loaded plugin: its processor, link, render thread and window. What the plugin does by
+        itself (its window's changes, its latency) goes to the app as notices (Protocol.h). */
+    class Slot final : private juce::Thread, private juce::AudioProcessorListener, private juce::Timer
     {
     public:
-        explicit Slot (std::unique_ptr<juce::AudioPluginInstance> p)
-            : juce::Thread ("Carthage plugin host render"), processor (std::move (p)), parameters (processor->getParameters()) {}
+        using Notify = std::function<void (juce::ValueTree)>;
 
-        ~Slot() override   { stop(); }
+        Slot (std::unique_ptr<juce::AudioPluginInstance> p, Notify n)
+            : juce::Thread ("Carthage plugin host render"), processor (std::move (p)), parameters (processor->getParameters()),
+              notify (std::move (n)), dirty (static_cast<size_t> (parameters.size()))
+        {
+            processor->addListener (this);
+            startTimerHz (30);   // a window's changes go over at most this often
+        }
+
+        ~Slot() override
+        {
+            *alive = false;
+            stopTimer();
+            window.reset();
+            stop();
+            processor->removeListener (this);
+        }
+
+        /** Shows the plugin's window (or brings it forward). */
+        void openEditor (const juce::String& title, juce::Colour background, bool onTop)
+        {
+            if (window == nullptr)
+                window = std::make_unique<carthage::plughost::PluginWindow> (*processor, title, background,
+                    [this, token = alive]
+                    {
+                        // After the click that asked for it: the window can not delete itself mid-callback.
+                        juce::MessageManager::callAsync ([this, token] { if (*token) closeEditor (true); });
+                    },
+                    [this] (const juce::KeyPress& key)
+                    {
+                        juce::ValueTree n (msg::notice);
+                        n.setProperty (msg::kind, msg::key.toString(), nullptr);
+                        n.setProperty (msg::keyCode, key.getKeyCode(), nullptr);
+                        n.setProperty (msg::modifiers, key.getModifiers().getRawFlags(), nullptr);
+                        n.setProperty (msg::character, juce::String::charToString (key.getTextCharacter()), nullptr);
+                        notify (n);
+                    });
+
+            window->setAlwaysOnTop (onTop);
+            window->setVisible (true);
+            juce::Process::makeForegroundProcess();
+            window->toFront (true);
+        }
+
+        /** Closes the window; `byItself` when it closed from here, so the app hears of it. */
+        void closeEditor (bool byItself = false)
+        {
+            if (window == nullptr)
+                return;
+
+            flush();
+            window.reset();
+
+            if (byItself)
+                notify (juce::ValueTree (msg::notice).setProperty (msg::kind, msg::editorClosed.toString(), nullptr));
+        }
+
+        void setOnTop (bool onTop)    { if (window != nullptr) window->setAlwaysOnTop (onTop); }
+        void setShown (bool shown)    { if (window != nullptr && window->isVisible() != shown) window->setVisible (shown); }
 
         juce::AudioPluginInstance& plugin()   { return *processor; }
 
@@ -78,6 +137,84 @@ namespace
     private:
         std::unique_ptr<juce::AudioPluginInstance> processor;
         juce::Array<juce::AudioProcessorParameter*> parameters;
+        Notify notify;
+        std::vector<std::atomic<bool>> dirty;            // set from any thread, sent from the message thread
+        std::atomic<bool> anyDirty { false };
+        std::shared_ptr<bool> alive = std::make_shared<bool> (true);
+        std::unique_ptr<carthage::plughost::PluginWindow> window;
+
+        /** Sends the values the plugin changed itself since the last time. Message thread. */
+        void flush()
+        {
+            if (! anyDirty.exchange (false))
+                return;
+
+            juce::StringArray indices;
+            juce::Array<float> values;
+
+            for (size_t i = 0; i < dirty.size(); ++i)
+                if (dirty[i].exchange (false))
+                {
+                    indices.add (juce::String (static_cast<int> (i)));
+                    values.add (parameters.getUnchecked (static_cast<int> (i))->getValue());
+                }
+
+            juce::ValueTree n (msg::notice);
+            n.setProperty (msg::kind, msg::values.toString(), nullptr);
+            n.setProperty (msg::indices, indices.joinIntoString (" "), nullptr);
+            n.setProperty (msg::values, valuesToText (values), nullptr);
+            notify (n);
+        }
+
+        void timerCallback() override   { flush(); }
+
+        // The plugin changed something itself (its window, its own logic); any thread.
+        void audioProcessorParameterChanged (juce::AudioProcessor*, int index, float) override
+        {
+            if (juce::isPositiveAndBelow (index, static_cast<int> (dirty.size())))
+            {
+                dirty[static_cast<size_t> (index)].store (true);
+                anyDirty.store (true);
+            }
+        }
+
+        void gesture (const juce::Identifier& kind, int index)
+        {
+            juce::MessageManager::callAsync ([this, token = alive, kind, index]
+            {
+                if (! *token)
+                    return;
+
+                flush();
+                juce::ValueTree n (msg::notice);
+                n.setProperty (msg::kind, kind.toString(), nullptr);
+                n.setProperty (msg::index, index, nullptr);
+                notify (n);
+            });
+        }
+
+        void audioProcessorParameterChangeGestureBegin (juce::AudioProcessor*, int index) override   { gesture (msg::gestureBegin, index); }
+        void audioProcessorParameterChangeGestureEnd (juce::AudioProcessor*, int index) override     { gesture (msg::gestureEnd, index); }
+
+        void audioProcessorChanged (juce::AudioProcessor*, const juce::AudioProcessorListener::ChangeDetails& details) override
+        {
+            juce::MessageManager::callAsync ([this, token = alive, details]
+            {
+                if (! *token)
+                    return;
+
+                if (details.latencyChanged)
+                {
+                    juce::ValueTree n (msg::notice);
+                    n.setProperty (msg::kind, msg::latency.toString(), nullptr);
+                    n.setProperty (msg::latency, processor->getLatencySamples(), nullptr);
+                    notify (n);
+                }
+
+                if (details.nonParameterStateChanged || details.programChanged)
+                    notify (juce::ValueTree (msg::notice).setProperty (msg::kind, msg::changed.toString(), nullptr));
+            });
+        }
         std::unique_ptr<platform::SharedMemory> memory;
         std::unique_ptr<platform::WakeSignal> wake;
         Link link;
@@ -103,12 +240,13 @@ namespace
         }
     };
 
-    class Host final : public juce::ChildProcessWorker
+    class Host final : public juce::ChildProcessWorker, private juce::Timer
     {
     public:
         Host()
         {
             juce::addDefaultFormatsToManager (formats);
+            startTimer (250);
         }
 
         ~Host() override   { slots.clear(); }
@@ -132,6 +270,23 @@ namespace
         juce::AudioPluginFormatManager formats;
         std::map<int, std::unique_ptr<Slot>> slots;
         int nextSlot = 1;
+        bool appInFront = true;
+        bool shown = true;
+
+        // The windows show while Carthage or this host is the app in front, and hide while the
+        // person is in another app, as Carthage's own plugin windows do.
+        void timerCallback() override
+        {
+            const auto wanted = appInFront || juce::Process::isForegroundProcess();
+
+            if (wanted == shown)
+                return;
+
+            shown = wanted;
+
+            for (auto& [id, slot] : slots)
+                slot->setShown (shown);
+        }
 
         void handle (const juce::ValueTree& request)
         {
@@ -183,7 +338,23 @@ namespace
 
                 reply.setProperty (msg::slot, nextSlot, nullptr);
                 describe (*processor, reply);
-                slots[nextSlot++] = std::make_unique<Slot> (std::move (processor));
+                const auto id = nextSlot++;
+                slots[id] = std::make_unique<Slot> (std::move (processor), [this, id] (juce::ValueTree n)
+                {
+                    n.setProperty (msg::slot, id, nullptr);
+                    sendMessageToCoordinator (toBlock (n));
+                });
+                return {};
+            }
+
+            if (type == msg::windows)
+            {
+                appInFront = request[msg::foreground];
+
+                for (auto& [id, slot] : slots)
+                    slot->setOnTop (request[msg::onTop]);
+
+                timerCallback();
                 return {};
             }
 
@@ -219,6 +390,20 @@ namespace
                 return {};
             }
 
+            if (type == msg::openEditor)
+            {
+                slot->openEditor (request[msg::name].toString(),
+                                  juce::Colour (static_cast<juce::uint32> (static_cast<juce::int64> (request[msg::colour]))),
+                                  request[msg::onTop]);
+                return {};
+            }
+
+            if (type == msg::closeEditor)
+            {
+                slot->closeEditor();
+                return {};
+            }
+
             if (type == msg::unload)
             {
                 slots.erase (static_cast<int> (request[msg::slot]));
@@ -245,6 +430,7 @@ public:
 
     void initialise (const juce::String& commandLine) override
     {
+        carthage::plughost::becomeAccessory();
         host = std::make_unique<Host>();
 
         if (! host->initialiseFromCommandLine (commandLine, commandLineID))

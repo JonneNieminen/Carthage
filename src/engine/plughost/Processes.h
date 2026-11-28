@@ -17,11 +17,11 @@ namespace carthage::engine::plughost
         process and the others back out. While off, plugins load in this process as before, and
         place() brings any proxy home. Message thread. Must outlive the engine: Tracktion lets plugin
         instances go as late as its own destructor. */
-    class Processes final
+    class Processes final : private juce::Timer
     {
     public:
         explicit Processes (juce::File hostExecutable);
-        ~Processes();
+        ~Processes() override;
 
         /** Takes over `engine`'s plugin creation (keeping its own for plugins that stay here). */
         void install (tracktion::Engine&);
@@ -31,7 +31,9 @@ namespace carthage::engine::plughost
 
         /** Puts every plugin of `edit` where it belongs: on a track in `live` (or on master or
             the Pre-Master while anything is live) in this process, the rest in their hosts. A
-            plugin whose window is open there stays until it closes. */
+            plugin whose editor is open in Carthage stays until it closes; one whose window is
+            open in its host moves in all the same (the live path comes first, F8) and its window
+            opens again here. */
         void place (tracktion::Edit&, const std::set<const tracktion::AudioTrack*>& live);
 
         /** The process a plugin's maker gets, started when first needed. */
@@ -42,9 +44,16 @@ namespace carthage::engine::plughost
 
         int numHosts() const noexcept   { return static_cast<int> (hosts.size()); }
 
+        /** The hosts' plugin windows: above other windows or not (Carthage's setting, F21). */
+        void setWindowsOnTop (bool);
+
     private:
         juce::File executable;
         bool enabled = false;
+        bool windowsOnTop = true, carthageInFront = true;
+
+        void timerCallback() override;   // follows which app is in front, for the hosts' windows
+        void tellHosts();
         std::map<juce::String, std::unique_ptr<HostProcess>> hosts;
         std::function<std::unique_ptr<juce::AudioPluginInstance> (const juce::PluginDescription&, double, int, juce::String&)> original;
 

@@ -341,6 +341,45 @@ public:
             }
         }
 
+        beginTest ("What the plugin changes by itself comes back as a notice; its window opens and closes there");
+        {
+            HostProcess host (executable);
+            expect (host.start().wasOk());
+            juce::String error;
+            auto plugin = host.load (testPlugin ("Half"), 48000.0, block, error);
+            expect (plugin != nullptr, error);
+
+            if (plugin != nullptr)
+            {
+                juce::WaitableEvent heard;
+                std::atomic<float> heardValue { -1.0f };
+                plugin->setNoticeHandler ([&] (const juce::ValueTree& n)
+                {
+                    if (n[msg::kind].toString() == msg::values.toString())
+                    {
+                        const auto values = valuesFromText (n[msg::values].toString());
+
+                        if (! values.isEmpty())
+                            heardValue.store (values.getFirst());
+
+                        heard.signal();
+                    }
+                });
+
+                juce::AudioBuffer<float> buffer (2, block);
+                juce::MidiBuffer cc;
+                cc.addEvent (juce::MidiMessage::controllerEvent (1, 7, 127), 0);
+                buffer.clear();
+                expect (plugin->processWaiting (buffer, cc, 5000));
+                expect (heard.wait (5000), "the change came back");
+                expectWithinAbsoluteError (heardValue.load(), 1.0f, 1.0e-6f);
+
+                expect (plugin->openEditor ("Half", juce::Colours::black, false), "its window opened in its process");
+                plugin->closeEditor();
+                plugin->setNoticeHandler (nullptr);
+            }
+        }
+
         beginTest ("A plugin the host can not load says why");
         {
             HostProcess host (executable);

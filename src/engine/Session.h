@@ -195,6 +195,9 @@ namespace carthage::engine
             the rest in their own (W65). After every mix change (syncMix). */
         void placePlugins (tracktion::Edit&, const tracktion::AudioTrack* liveChannel);
 
+        /** The same for every open project (after a plugin window closes, 5f-3). */
+        void placeAllPlugins();
+
         bool getFitLoopsToTempo() const;
         void setFitLoopsToTempo (bool);
 

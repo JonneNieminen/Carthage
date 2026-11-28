@@ -64,7 +64,8 @@ src/
     Motion.h         motion that answers an action: Host, allowedFor, Tween (W45)
     platform/        the system's reduce-motion setting (Motion_mac.mm, Motion_win.cpp)
   scan/              carthage-scan
-  plughost/          carthage-plughost: a JUCE application; each plugin a slot with its own link and render thread
+  plughost/          carthage-plughost: a JUCE application; each plugin a slot with its own link and render thread;
+                     PluginWindow (its window, like the app's); platform/HostApp_mac.mm (an accessory app: no Dock icon)
 tools/bench/         carthage-bench: latency, soak, align, takes, wgprobe, devices, plugins;
                      libcarthage_bench_workgroups counts os_workgroup_join (bench only)
 tools/snapshot/      carthage-snapshot: the window content rendered to PNG in fixed states
@@ -347,6 +348,11 @@ Rules that follow:
   live path (`editing::livePath`: channels with a heard input and everything downstream, master and
   the Pre-Master included) run here, the rest in their hosts. A move waits on the message thread for
   the block in flight; the audio thread never waits.
+- **Windows from the host** (5f-3, W68): a plugin in its host shows its window from there
+  (`plughost/PluginWindow`, made like `ui/PluginWindows`'s), opened through `PluginProxy::openWindowInHost`.
+  The host sends notices back over the same pipe: values its window changed (at most 30 a second),
+  gestures, latency, state changes, the window closing, and keys it did not use, which go to
+  Carthage's commands. Its windows hide while neither Carthage nor the host is the app in front.
 - **The monitored insert** in phase 1 is one `tracktion::ExternalPlugin` at index 0 of the track's
   plugin list, before the track's own volume/pan and meter, which are channel features.
 - **The plugin list, blocklist, favourites and last-used list** are files in the settings folder, with a

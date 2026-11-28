@@ -1652,6 +1652,12 @@ namespace carthage::engine
         }
     }
 
+    void Session::placeAllPlugins()
+    {
+        for (auto& p : projects)
+            placePlugins (*p->edit, p->track);
+    }
+
     void Session::placePlugins (tracktion::Edit& edit, const tracktion::AudioTrack* liveChannel)
     {
         processes->place (edit, editing::livePath (edit, liveChannel));

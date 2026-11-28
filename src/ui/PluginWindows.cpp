@@ -1,6 +1,8 @@
 #include "PluginWindows.h"
 #include "theme/Theme.h"
 
+#include <engine/plughost/PluginProxy.h>
+
 namespace carthage::ui
 {
     using namespace juce;
@@ -55,6 +57,9 @@ namespace carthage::ui
             return;
         }
 
+        if (openElsewhere (plugin))
+            return;
+
         auto* ext = dynamic_cast<tracktion::ExternalPlugin*> (&plugin);
         auto* instance = ext != nullptr ? ext->getAudioPluginInstance() : nullptr;
 
@@ -65,20 +70,115 @@ namespace carthage::ui
         auto window = std::make_unique<Window> (plugin, *instance, [this, id, token = std::weak_ptr<int> (alive)]
         {
             // After the click that asked for it: the window can not delete itself mid-callback.
-            MessageManager::callAsync ([this, id, token] { if (token.lock()) windows.erase (id); });
+            MessageManager::callAsync ([this, id, token]
+            {
+                if (token.lock())
+                {
+                    windows.erase (id);
+                    closed();
+                }
+            });
         });
 
         window->setAlwaysOnTop (keepOnTop == nullptr || keepOnTop());
         windows[id] = std::move (window);
     }
 
-    void PluginWindows::close (const tracktion::Plugin& plugin)   { windows.erase (plugin.itemID); }
-    bool PluginWindows::isOpen (const tracktion::Plugin& plugin) const   { return windows.contains (plugin.itemID); }
-    void PluginWindows::closeAll()   { windows.clear(); }
+    namespace
+    {
+        engine::plughost::PluginProxy* proxyOf (tracktion::Plugin& plugin)
+        {
+            auto* ext = dynamic_cast<tracktion::ExternalPlugin*> (&plugin);
+            return ext != nullptr ? dynamic_cast<engine::plughost::PluginProxy*> (ext->getAudioPluginInstance()) : nullptr;
+        }
+    }
+
+    bool PluginWindows::openElsewhere (tracktion::Plugin& plugin)
+    {
+        auto* proxy = proxyOf (plugin);
+
+        if (proxy == nullptr || ! proxy->isInHost())
+            return false;
+
+        const auto id = plugin.itemID;
+        proxy->onWindowClosed = [this, id, token = std::weak_ptr<int> (alive)] (bool reopenHere)
+        {
+            if (! token.lock())
+                return;
+
+            const auto found = elsewhere.find (id);
+
+            if (found == elsewhere.end())
+                return;
+
+            const tracktion::Plugin::Ptr p = found->second;
+            elsewhere.erase (found);
+
+            if (reopenHere)
+                open (*p);   // it moved into Carthage: its window opens here
+            else
+                closed();
+        };
+        proxy->onWindowKey = [this] (const KeyPress& key) { if (onKey) onKey (key); };
+
+        if (! proxy->openWindowInHost (plugin.getName(), theme::bg, keepOnTop == nullptr || keepOnTop()))
+            return false;   // the process could not show it: Carthage shows what it can
+
+        elsewhere[id] = &plugin;
+        return true;
+    }
+
+    void PluginWindows::closeElsewhere (const tracktion::EditItemID& id)
+    {
+        if (const auto found = elsewhere.find (id); found != elsewhere.end())
+        {
+            if (auto* proxy = proxyOf (*found->second))
+            {
+                proxy->onWindowClosed = nullptr;
+                proxy->closeWindowInHost();
+            }
+
+            elsewhere.erase (found);
+        }
+    }
+
+    void PluginWindows::closed()
+    {
+        if (onClosed)
+            onClosed();
+    }
+
+    void PluginWindows::close (const tracktion::Plugin& plugin)
+    {
+        windows.erase (plugin.itemID);
+        closeElsewhere (plugin.itemID);
+    }
+
+    bool PluginWindows::isOpen (const tracktion::Plugin& plugin) const
+    {
+        return windows.contains (plugin.itemID) || elsewhere.contains (plugin.itemID);
+    }
+
+    void PluginWindows::closeAll()
+    {
+        windows.clear();
+
+        while (! elsewhere.empty())
+            closeElsewhere (elsewhere.begin()->first);
+    }
 
     void PluginWindows::closeMissing()
     {
         std::erase_if (windows, [] (const auto& entry) { return entry.second->plugin->getOwnerList() == nullptr; });
+
+        std::vector<tracktion::EditItemID> gone;
+
+        for (const auto& [id, p] : elsewhere)
+            if (p->getOwnerList() == nullptr)
+                gone.push_back (id);
+
+        for (const auto& id : gone)
+            closeElsewhere (id);
     }
 
     bool PluginWindows::closeIfFront (const Component* front)
@@ -87,6 +187,7 @@ namespace carthage::ui
             if (static_cast<const Component*> (it->second.get()) == front)
             {
                 windows.erase (it);
+                closed();
                 return true;
             }
 
